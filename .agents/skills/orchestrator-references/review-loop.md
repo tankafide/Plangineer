@@ -1,6 +1,6 @@
 # Review loop
 
-Plan review and implementation review run the same loop. Each starts in a fresh session, so the reviewer does not share the author's context. The review runs in a new session of the same app the author used. Every plan gets at least one review, which the plan orchestrator starts on its own. After that, this repository runs at the manual level: the engineer decides every fix and every re-review. There is no auto-loop and no fixed number of rounds. A session that has fixed findings has seen its own reasoning, so it never reviews its work again.
+Plan review and implementation review run the same loop. Each review runs with fresh context, in a new session or in subagents, so the reviewer does not share the author's context. Every plan gets at least one review, which the plan orchestrator runs on its own through subagents, as [Review by subagent](#review-by-subagent) describes. After that, this repository runs at the manual level: the engineer decides every fix and every re-review. There is no auto-loop and no fixed number of rounds. A session that has fixed findings has seen its own reasoning, so it never reviews its work again.
 
 The review orchestrator runs every step, and the engineer chooses. No findings file is written.
 
@@ -12,15 +12,20 @@ The review orchestrator runs every step, and the engineer chooses. No findings f
 | 4. Fix | The review orchestrator | Fixes what the engineer picked and commits the round together. The commit body records every finding's outcome |
 | 5. Next | The engineer | Decides whether to review again, on the orchestrator's recommendation (see below). Another round always starts in a new fresh session, never in the one that just fixed |
 
-## Starting a review
+## Review by subagent
 
-An orchestrator that starts a review opens a new session in the same app, with the review prompt filled in. The session must be interactive, because the engineer selects the findings in step 3. Never start a review headless (`claude -p`, `codex exec`) or as a subagent.
+The plan orchestrator runs plan review through two subagents once the plan is committed, so the reviewer has fresh context and the engineer needs no extra session. A subagent cannot ask the engineer anything, so the planning session presents the choices and makes the fixes.
 
-Use the first of these the host offers:
+| Step | Who runs it | What happens |
+| --- | --- | --- |
+| 1. Review | A new subagent | Reads `.agents/skills/plan-review-orchestrator/SKILL.md` and follows its steps 1 to 5. It applies the skills that orchestrator routes to subagents itself, because a subagent cannot start subagents. It edits nothing and returns the candidate findings |
+| 2. Verify | A second new subagent | Runs `finding-verification` on the candidates, as the review orchestrator's step 6 describes, and returns the kept and dropped findings |
+| 3. Select | The engineer | Picks from the choices the planning session presents, as the review orchestrator's step 7 describes |
+| 4. Fix | The planning session | Updates and commits the plan, as the review orchestrator's steps 8 and 9 describe |
+| 5. Next | The engineer | Decides whether to review again, on the planning session's recommendation (see below). Another round runs two new subagents |
 
-1. **A tool that starts a new session** with a prompt, such as the desktop app's `start_session`.
-2. **A task suggestion** the engineer opens with one click, such as the desktop app's `spawn_task`. Title it `Review <plan or branch name>`.
-3. **The prompt as text.** End the reply with the prompt in its own code block, and tell the engineer to paste it into a new session.
+- **Handoff.** The review subagent gets only the plan path, the base commit and the review orchestrator's path. Pass no summary, decision or reasoning from the planning session, so the review stays independent.
+- **No filtering.** The planning session presents what verification returns, kept and dropped, and never judges, merges or drops a finding itself.
 
 ## How each review fixes
 
