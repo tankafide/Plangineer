@@ -66,10 +66,18 @@ Run `pnpm verify` before finishing. A change under `.agents/skills/` also runs `
 
 ### Review
 
-When the build is done and the checks have run, commit the pass as [git workflow](../orchestrator-references/git-workflow.md) describes. Implementation review then runs in a fresh session, as [review loop](../orchestrator-references/review-loop.md) describes, and fixes the findings the engineer picks. Finish the branch once the engineer wants no further review.
+Every implementation gets at least one review. When the build is done and the checks have run, commit the pass as [git workflow](../orchestrator-references/git-workflow.md) describes. Then, without asking, run implementation review through subagents, as [review loop](../orchestrator-references/review-loop.md#review-by-subagent) describes:
+
+1. A review subagent follows `implementation-review-orchestrator` steps 1 to 5 against the base and head commits and the plan path, and returns candidate findings.
+2. A verification subagent runs `finding-verification` on them and returns each kept finding with its recommendation and context.
+3. This session presents the verified findings as the [finding format](../orchestrator-references/finding-format.md#presenting-findings) describes, and the engineer picks.
+4. This session fixes the picks, runs the checks and commits the round, as `implementation-review-orchestrator` steps 8 to 10 describe.
+5. This session offers another round, as [review loop](../orchestrator-references/review-loop.md#offering-another-round) describes.
+
+Finish the branch once the engineer declines another round.
 
 ### Finish
 
 Finish the branch as [git workflow](../orchestrator-references/git-workflow.md) describes: write the pull request description, and push or open the pull request only when the engineer asks.
 
-The final report lists the changes, the decisions made without a plan, every deviation and extra, the checks that ran and the checks that did not run, and the skills used, per [execution](../orchestrator-references/execution.md).
+The final report lists the changes, the decisions made without a plan, every deviation and extra, each review round's outcome, the checks that ran and the checks that did not run, and the skills used, per [execution](../orchestrator-references/execution.md).

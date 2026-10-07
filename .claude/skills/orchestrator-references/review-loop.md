@@ -1,6 +1,6 @@
 # Review loop
 
-Plan review and implementation review run the same loop. Each review runs with fresh context, in a new session or in subagents, so the reviewer does not share the author's context. Every plan gets at least one review, which the plan orchestrator runs on its own through subagents, as [Review by subagent](#review-by-subagent) describes. After that, this repository runs at the manual level: the engineer decides every fix, and accepts or declines each further round the session offers. There is no auto-loop and no fixed number of rounds. A session that has fixed findings has seen its own reasoning, so it never reviews its work again.
+Plan review and implementation review run the same loop. Each review runs with fresh context, in a new session or in subagents, so the reviewer does not share the author's context. Every plan and every implementation gets at least one review, which the plan orchestrator or the implementation orchestrator runs on its own through subagents once its work is committed, as [Review by subagent](#review-by-subagent) describes. After that, this repository runs at the manual level: the engineer decides every fix, and accepts or declines each further round the session offers. There is no auto-loop and no fixed number of rounds. A session that has fixed findings has seen its own reasoning, so it never reviews its work again.
 
 The review orchestrator runs every step, and the engineer chooses. No findings file is written.
 
@@ -14,7 +14,7 @@ The review orchestrator runs every step, and the engineer chooses. No findings f
 
 ## Review by subagent
 
-Two subagents run the first plan review, which the plan orchestrator starts once the plan is committed, and every round after the first in either review. The reviewer has fresh context and the engineer needs no extra session. A subagent cannot ask the engineer anything, so the session that started the subagents presents the choices and makes the fixes.
+Two subagents run the first review of a plan or an implementation, which the plan orchestrator or the implementation orchestrator starts once its work is committed, and every round after the first in either review. The reviewer has fresh context and the engineer needs no extra session. A subagent cannot ask the engineer anything, so the session that started the subagents presents the choices and makes the fixes.
 
 | Step | Who runs it | What happens |
 | --- | --- | --- |
