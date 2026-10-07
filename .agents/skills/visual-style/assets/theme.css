@@ -1,0 +1,93 @@
+/*
+  Plangineer token seed. Copy the variable blocks into apps/web/src/styles/theme.css
+  over the colours shadcn generates, and keep its @theme inline mappings.
+  Every text pair here passes WCAG AA (4.5:1) in both modes.
+  Dark is the default: <html class="dark">. The sidebar-* aliases resolve
+  per mode and per palette, so they are never set anywhere else.
+*/
+
+:root {
+  --radius: 0.5rem;
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, monospace;
+
+  --sidebar: var(--background);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--accent-foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+
+  /* Light mode */
+  color-scheme: light;
+  --background: oklch(0.99 0.002 270);
+  --foreground: oklch(0.21 0.012 270);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.21 0.012 270);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.21 0.012 270);
+  --muted: oklch(0.965 0.004 270);
+  --muted-foreground: oklch(0.5 0.014 270);
+  --primary: oklch(0.52 0.2 275);
+  --primary-foreground: oklch(0.99 0 0);
+  --link: oklch(0.52 0.2 275);
+  --secondary: oklch(0.955 0.005 270);
+  --secondary-foreground: oklch(0.21 0.012 270);
+  --accent: oklch(0.955 0.005 270);
+  --accent-foreground: oklch(0.21 0.012 270);
+  --border: oklch(0.91 0.005 270);
+  --input: oklch(0.88 0.006 270);
+  --ring: oklch(0.52 0.2 275);
+  --destructive: oklch(0.53 0.2 25);
+  --destructive-foreground: oklch(0.99 0 0);
+  --success: oklch(0.5 0.12 155);
+  --success-foreground: oklch(0.99 0 0);
+  --warning: oklch(0.55 0.13 65);
+  --warning-foreground: oklch(0.99 0 0);
+  --info: oklch(0.51 0.13 240);
+  --info-foreground: oklch(0.99 0 0);
+}
+
+.dark {
+  color-scheme: dark;
+  --background: oklch(0.16 0.006 270);
+  --foreground: oklch(0.96 0.004 270);
+  --card: oklch(0.195 0.007 270);
+  --card-foreground: oklch(0.96 0.004 270);
+  --popover: oklch(0.215 0.008 270);
+  --popover-foreground: oklch(0.96 0.004 270);
+  --muted: oklch(0.235 0.008 270);
+  --muted-foreground: oklch(0.71 0.012 270);
+  --primary: oklch(0.55 0.18 275);
+  --primary-foreground: oklch(0.99 0 0);
+  --link: oklch(0.72 0.13 275);
+  --secondary: oklch(0.26 0.008 270);
+  --secondary-foreground: oklch(0.96 0.004 270);
+  --accent: oklch(0.27 0.01 270);
+  --accent-foreground: oklch(0.96 0.004 270);
+  --border: oklch(1 0 0 / 9%);
+  --input: oklch(1 0 0 / 14%);
+  --ring: oklch(0.72 0.13 275);
+  --destructive: oklch(0.68 0.19 25);
+  --destructive-foreground: oklch(0.16 0.006 270);
+  --success: oklch(0.74 0.15 155);
+  --success-foreground: oklch(0.16 0.006 270);
+  --warning: oklch(0.82 0.14 80);
+  --warning-foreground: oklch(0.16 0.006 270);
+  --info: oklch(0.74 0.12 235);
+  --info-foreground: oklch(0.16 0.006 270);
+}
+
+/* Roles shadcn does not generate. Add beside its own @theme inline mappings. */
+@theme inline {
+  --color-link: var(--link);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+}

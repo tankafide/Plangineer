@@ -1,0 +1,6 @@
+interface:
+  display_name: "API Contract Design"
+  short_description: "Design oRPC procedures and Zod 4 schemas in packages/contracts, including errors, pagination, the runner protocol and RunEvent"
+  default_prompt: "Use $api-contract-design when an orchestrator or the user asks for it."
+policy:
+  allow_implicit_invocation: false

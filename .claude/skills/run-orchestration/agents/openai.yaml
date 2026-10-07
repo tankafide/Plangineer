@@ -1,0 +1,6 @@
+interface:
+  display_name: "Run Orchestration"
+  short_description: "Run dispatch in the runs table, leases, heartbeats and cancel flags, and realtime delivery over SSE and one WebSocket per runner."
+  default_prompt: "Use $run-orchestration when an orchestrator or the user asks for it."
+policy:
+  allow_implicit_invocation: false

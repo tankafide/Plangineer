@@ -1,0 +1,6 @@
+interface:
+  display_name: "Frontend Data"
+  short_description: "The typed oRPC client and TanStack Query hooks in packages/api-client, query keys, invalidation, the SSE reader and optimistic updates."
+  default_prompt: "Use $frontend-data when an orchestrator or the user asks for it."
+policy:
+  allow_implicit_invocation: false

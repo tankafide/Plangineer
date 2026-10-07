@@ -1,0 +1,6 @@
+interface:
+  display_name: "Architecture Design"
+  short_description: "Where code belongs among the packages and apps, the import rules dependency-cruiser enforces, and the rules for pure logic in packages/domain"
+  default_prompt: "Use $architecture-design when an orchestrator or the user asks for it."
+policy:
+  allow_implicit_invocation: false

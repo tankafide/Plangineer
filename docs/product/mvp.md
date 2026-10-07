@@ -237,7 +237,15 @@ No repository leads: each contributes its own part. These orchestrators belong t
 
 Because skills sit in the repo, a skill change is reviewed like code, and every run uses the skills as they stand on its branch.
 
-**One format, two agents.** Claude Code and Codex read the same SKILL.md format but look in different folders: `.claude/skills/` and `.agents/skills/` ([comparison](https://mcp.directory/blog/cross-agent-skills-cursor-codex-cline-antigravity-gemini-mastra-portability)). Setup keeps one canonical copy and mirrors it to wherever each agent looks. The mirror is a copy, not a symlink, because symlinks need extra permissions on Windows and Git checks them out as plain files there by default.
+**One format, two agents.** Claude Code and Codex read the same SKILL.md format but look in different folders: Codex reads `.agents/skills/` and Claude Code reads only `.claude/skills/` ([comparison](https://mcp.directory/blog/cross-agent-skills-cursor-codex-cline-antigravity-gemini-mastra-portability)). Claude Code had no support for `.agents/skills/` as of October 2026 ([issue](https://github.com/anthropics/claude-code/issues/31005)). Skills are written once in `.agents/skills/`, the canonical folder, and mirrored one way to `.claude/skills/`. The mirror is a copy, not a symlink, because symlinks need extra permissions on Windows and Git checks them out as plain files there by default.
+
+**Keeping the mirror in step.** The local runner ships two commands, so any repository can use them without adopting Plangineer's own tooling.
+
+- **`skills sync`** copies every file from the canonical folder to the mirror, normalizes line endings to LF, deletes mirror files with no source, refuses symlinks and writes only files that changed. An agent that writes or edits a skill writes only the canonical copy and then runs it. It never reads or writes the mirror, so the copy costs no tokens.
+- **`skills check`** writes nothing. It fails on any missing, changed or stray mirror file, naming each one and the fix: edit the canonical copy, then sync. Differences only in line endings are not drift. Setup's pull request adds it to the repository's CI and marks the mirror as generated in `.gitattributes`, so it collapses in pull request diffs.
+- **Before every run** the runner runs `skills check` on its checkout. A drifted checkout fails the run instead of giving the two CLIs different skills.
+
+The check exists because Claude Code shows the mirror's path when it loads a skill, so the likeliest mistake is an agent or engineer editing the mirror. Without the check, the next sync would silently overwrite that edit. The same one-way mirror with a check mode is a pattern other projects already use ([example](https://github.com/RossGraeber/OAC/pull/237)).
 
 Step 4 is a log line, not an audit system. It costs almost nothing now and means later skill auditing needs no rework.
 
@@ -254,7 +262,7 @@ Repositories are the first thing configured, because everything else depends on 
 5. **Generate.** The app drafts each chosen skill from the codebase to a standard structure, and writes the orchestrators to reference both existing and new skills.
 6. **Review.** Everything arrives as one pull request, so the team reviews generated skills like any other change.
 
-Setup never rewrites an existing skill. The orchestrators reference existing skills as they are.
+Setup never rewrites an existing skill. The orchestrators reference existing skills as they are. An existing skill found only under `.claude/skills/` is moved unchanged to `.agents/skills/` in the setup pull request, and the mirror is generated from there.
 
 **Two specifications this depends on,** both written in Phase 0:
 
@@ -372,6 +380,7 @@ The web app talks only to the control plane. The control plane queues one job pe
 - **Platforms.** It runs on Windows, macOS and Linux, and is tested on all three for every release.
 - **Limits.** It runs a set number of jobs at once, queues the rest, and reports when the machine is offline or a plan limit is reached.
 - **Updates.** It updates through npm like any other package, and reports which CLI versions are installed.
+- **Skills mirror.** It provides `skills sync` and `skills check`, which keep `.claude/skills/` an exact copy of `.agents/skills/` (see Skill orchestration).
 
 **Running on a subscription.** Each engineer's own Claude or ChatGPT plan can pay for their runs, and the local runner is the path both vendors support. Hosted runs are possible on each, on terms that differ by vendor. Checked October 6, 2026.
 
@@ -408,7 +417,7 @@ The app keeps fifteen kinds of record, and the plan revision is the one everythi
 | Finding | The fields listed under Review and triage | Belongs to a review run and points at a plan revision or a diff |
 | Approval | Reviewer, plan revision, verdict | The peer approval |
 | Verification result | Criterion, verdict, links to evidence | One per acceptance criterion in each verification run |
-| Repository settings | Name, description, agent and model per role, where each role runs and how it signs in, automation level, canonical skills folder | One per repository. Planning and plan review of a multi-repository feature use the roles set for the cross-repository orchestrators |
+| Repository settings | Name, description, agent and model per role, where each role runs and how it signs in, automation level | One per repository. Planning and plan review of a multi-repository feature use the roles set for the cross-repository orchestrators |
 | Cross-repository orchestrator | Stage, content, revision number, author of each revision, agent and model per role | One per stage for the set of configured repositories. Regenerated from the repository descriptions at setup, edited by engineers, and versioned like a plan so each run records which revision it used |
 | Staleness dismissal | Plan revision, repository, the main commit it was dismissed at, the overlapping files, who dismissed it | Silences the warning for overlaps up to that commit. A later commit that touches a plan file raises it again |
 | Notification | Recipient, kind such as decision needed, approval requested or run failed, the record it points at, read state | Feeds the in-app inbox now and push notifications later. Created by the control plane from the same events the timeline shows |
@@ -517,7 +526,7 @@ These choices are still open, and the first one shapes the architecture more tha
 - [ ] **Licence.** Recommended: Apache-2.0, which adds an explicit patent grant over MIT.
 - [ ] **Plan review pipeline.** This proposal assumes plan review uses the same confirm step and triage rules as implementation review.
 - [ ] **Verification orchestrator.** Recommended: add a fifth orchestrator for verification, so testing conventions live in the repo too.
-- [ ] **Canonical skills folder.** Recommended: `.agents/skills/`, mirrored to `.claude/skills/` for Claude Code.
+- [x] **Canonical skills folder.** Decided: `.agents/skills/`, mirrored one way to `.claude/skills/` by the runner's `skills sync`, with `skills check` in each repository's CI.
 - [ ] **Baseline catalog.** Which skills setup recommends for every codebase.
 - [ ] **Mobile app approach.** Recommended: responsive web first, then choose between a native and a cross-platform app once usage shows which screens matter on a phone.
 - [ ] **One plan per feature tab.** This proposal assumes a tab yields one plan, and one pull request per repository involved. Epics that group several features come later.
@@ -532,6 +541,9 @@ These choices are still open, and the first one shapes the architecture more tha
 ## Sources
 
 - [Cross-agent skills: Cursor, Codex, Claude Code and others, MCP Directory](https://mcp.directory/blog/cross-agent-skills-cursor-codex-cline-antigravity-gemini-mastra-portability)
+- [Support for AGENTS.md and .agents/skills/, Claude Code issue 31005](https://github.com/anthropics/claude-code/issues/31005)
+- [Agent skills, Codex docs](https://learn.chatgpt.com/docs/build-skills)
+- [Skills sync with a drift check, OAC pull request 237](https://github.com/RossGraeber/OAC/pull/237)
 - [Top CLI tools for AI agents, DEV Community](https://dev.to/hassann/top-cli-tools-for-ai-agents-2j4c)
 - [Playwright CLI vs. Playwright MCP, Bug0](https://bug0.com/blog/playwright-cli-vs-playwright-mcp-ai-browser-testing-2026)
 - [Playwright vs. Chrome DevTools MCP, Steve Kinney](https://stevekinney.com/writing/driving-vs-debugging-the-browser)

@@ -1,0 +1,6 @@
+interface:
+  display_name: "Testing"
+  short_description: "Plan test coverage for each done when line, write tests across the repo, and review whether tests prove the plan"
+  default_prompt: "Use $testing when an orchestrator or the user asks for it."
+policy:
+  allow_implicit_invocation: false

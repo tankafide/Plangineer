@@ -10,7 +10,7 @@ Plangineer should be a single-language TypeScript monorepo on one runtime, Node 
 | Web frontend | React 19, Vite 8 SPA, TanStack Router (not Start), Tailwind v4, shadcn/ui on Base UI, TanStack Query, React Hook Form + Zod, dnd-kit core/sortable, fetch-based SSE | Next.js, SvelteKit/Vue/Solid, MUI | High |
 | Mobile path | Responsive installable PWA now; Expo with shared TS packages later | Capacitor (fallback), Flutter/KMP | Medium |
 | API | Hono + oRPC v1 (OpenAPI 3.1) with Zod contracts in `packages/contracts`; pin v1 while 2.0 is in beta | tRPC (no OpenAPI), GraphQL | Medium; oRPC 2.0 upgrade expected |
-| Database | Postgres + Drizzle 0.45.x (v1 is still a release candidate); plans as immutable revision rows with JSONB bodies; append-only `run_events` | Prisma 7, Kysely | High |
+| Database | Postgres 18 (native `uuidv7()` keys) + Drizzle 0.45.x at 0.45.2 or later (CVE-2026-39356; v1 is still a release candidate); plans as immutable revision rows with JSONB bodies; append-only `run_events` | Prisma 7, Kysely | High |
 | Run dispatch | The `runs` table is the queue: claim with `FOR UPDATE SKIP LOCKED`, lease, heartbeat, cancel flag, lost-runner sweep. No queue library | pg-boss (duplicates the `runs` table), Temporal, Hatchet, Inngest, BullMQ | Medium-high |
 | Realtime | SSE to browsers (resume by event id); one outbound WebSocket per runner | gRPC, WebSocket for browsers, Durable Objects | High |
 | Auth | Better Auth (Drizzle adapter, GitHub sign-in) behind a thin interface; users carry an admin or member role; no organization plugin, since one deployment serves one team | Clerk, WorkOS (hosted, wrong fit for self-hosting) | Medium-high |

@@ -1,0 +1,6 @@
+interface:
+  display_name: "Tech Stack"
+  short_description: "Loads the Plangineer stack decisions"
+  default_prompt: "Use $tech-stack to load the stack decisions."
+policy:
+  allow_implicit_invocation: false

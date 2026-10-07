@@ -1,0 +1,6 @@
+interface:
+  display_name: "UI Design System"
+  short_description: "Layout and components for apps/web: shadcn/ui on Base UI, the phone-first rules and the screenshot check at desktop and 375 px."
+  default_prompt: "Use $ui-design-system when an orchestrator or the user asks for it."
+policy:
+  allow_implicit_invocation: false

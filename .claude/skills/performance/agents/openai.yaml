@@ -1,0 +1,6 @@
+interface:
+  display_name: "Performance"
+  short_description: "Review a plan or diff for unbounded queries and lists, missing indexes, N+1 queries, SSE and dispatch load, and frontend bundle, request and render cost."
+  default_prompt: "Use $performance when an orchestrator or the user asks for it."
+policy:
+  allow_implicit_invocation: false

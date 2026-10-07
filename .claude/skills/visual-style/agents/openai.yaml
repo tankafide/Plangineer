@@ -1,0 +1,6 @@
+interface:
+  display_name: "Visual Style"
+  short_description: "Plangineer's dark-first look and feel: shadcn Nova, Geist, Lucide, semantic colour roles and swappable themes"
+  default_prompt: "Use $visual-style when an orchestrator or the user asks for it."
+policy:
+  allow_implicit_invocation: false

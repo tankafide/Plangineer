@@ -1,0 +1,6 @@
+interface:
+  display_name: "MVP Doc"
+  short_description: "Loads the Plangineer MVP document"
+  default_prompt: "Use $mvp-doc to load the MVP document."
+policy:
+  allow_implicit_invocation: false

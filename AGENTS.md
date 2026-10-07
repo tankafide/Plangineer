@@ -22,6 +22,21 @@ We are building a prototype as fast as possible. Optimize for one clean way of d
 - No fallbacks, defaults-on-failure or compatibility shims unless a recognized design best practice explicitly calls for one. Fail loudly instead.
 - No speculative abstraction or features beyond the task. Build what is asked, nothing more.
 
+## Skills
+
+Four orchestrator skills run the plan-driven workflow. Use the one that matches the request.
+
+- `plan-orchestrator`: plan a feature or change.
+- `plan-review-orchestrator`: review a plan in `docs/plans/`, then fix the findings you pick.
+- `implementation-orchestrator`: write or change code, tests, config, scripts or skills, fix bugs, and finish a branch.
+- `implementation-review-orchestrator`: review a diff, branch, commit or pull request, then fix the findings you pick.
+
+Answering questions, reading docs and editing docs that are not feature plans need none of them.
+
+Every other skill is a rule skill. Orchestrators load them by path, and you load one only when the user names it.
+
+Edit skills only under `.agents/skills/`, then run `pnpm skills:sync` and `pnpm skills:lint`. Never edit `.claude/skills/`; it is a generated copy.
+
 ## Working rules
 
 - Add tests for new behavior.
