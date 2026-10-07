@@ -53,4 +53,15 @@ One row per candidate finding, in the order received. A finding merged into anot
 | Recommendation | `address` or `skip` for a defect, `keep` or `revert` for a deviation or extra |
 | Reason | One line: why it was dropped, why the severity changed, or why you recommend it |
 
+For each kept finding, also return what the orchestrator needs to [present it](../orchestrator-references/finding-format.md#presenting-findings):
+
+| Field | Contents |
+| --- | --- |
+| Title | The finding in a few plain words |
+| What it says now | What the plan or code does at the location |
+| If not fixed | The concrete consequence: what fails, when, and who notices |
+| Evidence | What you checked or ran to confirm the claim |
+| Fix cost | How big the suggested change is |
+| Group | What it shares with other kept findings, such as "breaks the build" |
+
 Then list the files and skills you read, and the commands you ran.
