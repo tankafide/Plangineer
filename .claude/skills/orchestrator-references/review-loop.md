@@ -1,6 +1,6 @@
 # Review loop
 
-Plan review and implementation review run the same loop. Each starts in a fresh session, so the reviewer does not share the author's context. Run the review on the other CLI from the author where possible, so Codex reviews what Claude Code wrote. When only one CLI is available, use a fresh session on it. Every plan gets at least one review, which the plan orchestrator starts on its own. After that, this repository runs at the manual level: the engineer decides every fix and every re-review. There is no auto-loop and no fixed number of rounds. A session that has fixed findings has seen its own reasoning, so it never reviews its work again.
+Plan review and implementation review run the same loop. Each starts in a fresh session, so the reviewer does not share the author's context. The review runs in a new session of the same app the author used. Every plan gets at least one review, which the plan orchestrator starts on its own. After that, this repository runs at the manual level: the engineer decides every fix and every re-review. There is no auto-loop and no fixed number of rounds. A session that has fixed findings has seen its own reasoning, so it never reviews its work again.
 
 The review orchestrator runs every step, and the engineer chooses. No findings file is written.
 
@@ -14,11 +14,13 @@ The review orchestrator runs every step, and the engineer chooses. No findings f
 
 ## Starting a review
 
-An orchestrator that starts a review opens a new interactive session the engineer can see and type in. The session must be interactive, because the engineer selects the findings in step 3. Never start a review headless (`claude -p`, `codex exec`) or as a subagent.
+An orchestrator that starts a review opens a new session in the same app, with the review prompt filled in. The session must be interactive, because the engineer selects the findings in step 3. Never start a review headless (`claude -p`, `codex exec`) or as a subagent.
 
-1. **Pick the CLI.** Use the other CLI from the author: `codex` when Claude Code wrote the work, `claude` when Codex did. If `<cli> --version` fails, use the author's own CLI.
-2. **Build the command.** `<cli> "<prompt>"`, run from the repository root. Keep the prompt free of quotes, `$`, backticks and other shell characters, so the one line runs the same in PowerShell, bash and zsh.
-3. **Open the session.** Run the command in a new terminal tab or window, with any tool the host gives for that, such as the desktop app's terminal panel. If the host has no such tool, end the reply with the command in its own `bash` code block, and say that the review starts there.
+Use the first of these the host offers:
+
+1. **A tool that starts a new session** with a prompt, such as the desktop app's `start_session`.
+2. **A task suggestion** the engineer opens with one click, such as the desktop app's `spawn_task`. Title it `Review <plan or branch name>`.
+3. **The prompt as text.** End the reply with the prompt in its own code block, and tell the engineer to paste it into a new session.
 
 ## How each review fixes
 
