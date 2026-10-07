@@ -12,6 +12,7 @@ Put every prerequisite for MVP development in place: the machine toolchain, the 
 | --- | --- | --- |
 | Approve the Windows admin (UAC) prompt when step 1 installs Node 24.21.0 | Engineer | open |
 | Click "Create GitHub App" on github.com when step 5 opens the manifest page, signed in as `tankafide` | Engineer | open |
+| Approve, when step 13 asks, pushing `chore/project-scaffold`, opening its pull request and setting branch protection on `main` | Engineer | open |
 
 ## Steps
 
@@ -41,7 +42,13 @@ The agent prepares this Windows machine. Each command runs from the agent's shel
 **Files:** `package.json`, `pnpm-workspace.yaml`, `turbo.json`, `tsconfig.base.json`, `.gitignore`, `pnpm-lock.yaml`, `packages/domain/package.json`, `packages/domain/tsconfig.json`, `packages/domain/src/index.ts`, `apps/runner/package.json`, `apps/runner/tsconfig.json`, `apps/runner/src/cli.ts`, `apps/runner/src/cli.test.ts`
 
 - **Root `package.json`.** Sets `"packageManager": "pnpm@10.34.6"` and `"engines": { "node": ">=24 <25" }`. It adds `turbo@2.11.7` and `typescript@7.0.2`, and adds the `typecheck` script, which runs `turbo run typecheck`.
-- **`pnpm-workspace.yaml`.** Globs are `packages/*` and `apps/*`. It sets `engineStrict: true` and an `allowBuilds` map, starting empty. Each package whose install script must run is added there, by name, in the step that adds it (Decision D9).
+- **`pnpm-workspace.yaml`.** Globs are `packages/*` and `apps/*`. It sets `engineStrict: true` and an `allowBuilds` map (Decision D9). No dependency's install script runs, so each package that has one is listed as `false`, with its reason in a YAML comment:
+
+  | Package | Added by | Why its script is not needed |
+  | --- | --- | --- |
+  | `lefthook` | The root, already | The `prepare` script runs `lefthook install` |
+  | `@swc/core` | Step 3 | Its `postinstall` only checks the native binary, and the platform binary arrives as an optional dependency |
+  | `esbuild` | Step 7, through `drizzle-kit` | Its platform binary also arrives as an optional dependency |
 - **`turbo.json`.** Three tasks.
   - `transit` has `"dependsOn": ["^transit"]` and no command. It exists so a package's cache key includes the source of the packages it imports.
   - `typecheck` has `"dependsOn": ["transit"]` and `"outputs": []`, so a change in `@plangineer/contracts` invalidates the cached typecheck of every package that imports it.
@@ -52,7 +59,8 @@ The agent prepares this Windows machine. Each command runs from the agent's shel
   - Module settings: `"module": "nodenext"`, `"moduleResolution": "nodenext"`, `"target": "es2024"`, `"skipLibCheck": true` and `"types": []`.
 - **Package setup.**
   - A package is created in the step that adds its first source file, never empty, because `tsc` fails with TS18003 on a package with no inputs.
-  - Each package's `tsconfig.json` extends the base, adds `"types": ["node"]` where it runs on Node, and has a `typecheck` script that runs `tsc`.
+  - Each package's `package.json` sets `"type": "module"`. Under `"module": "nodenext"`, TypeScript treats a package without it as CommonJS, and `verbatimModuleSyntax` then rejects every `import`, `export` and `import.meta`.
+  - Each package's `tsconfig.json` extends the base, adds `"types": ["node"]` where it runs on Node, and has a `typecheck` script that runs `tsc`. A package with `.tsx` files (`packages/api-client` and `apps/web`) also sets `"jsx": "react-jsx"`.
   - Each package declares every dependency it imports, pinned to an exact version. Every package with tests declares `vitest@5.0.3`, and every package that runs on Node declares `@types/node@24.19.1`, both as dev dependencies.
   - Relative imports carry the `.ts` extension.
   - Each package under `packages/` exposes `"exports": { ".": "./src/index.ts" }`, per `architecture-design`.
@@ -104,21 +112,21 @@ The agent prepares this Windows machine. Each command runs from the agent's shel
 - **`.dependency-cruiser.cjs`.**
   - Sets `options.parser: 'swc'`. dependency-cruiser 18.5.0 supports only TypeScript below 7 for parsing, and TypeScript 7 ships no compiler API (Decision D20). `@swc/core` parses `.ts` and `.tsx`.
   - Encodes the stack's package layout table as one `forbidden` rule per package. The rules restrict imports between workspace packages (`@plangineer/*` and `apps/*`) only. npm packages are governed by each package's declared dependencies, not by these rules.
-  - Adds `no-circular` and a rule against importing another package's `src/`.
+  - Adds `no-circular`, and a rule that forbids a relative import (dependency type `local`) whose resolved path lies inside another workspace package. Imports through a package name (`aliased-workspace`) stay allowed, because each package's `exports` entry points at its own `src/index.ts`.
   - Each rule's `comment` names what to import instead, such as "domain may import only @plangineer/contracts. Move this code to the app that needs it."
 - **`knip.json`.**
   - One entry per workspace.
   - The root workspace lists `scripts/*.mjs` as entries.
   - `apps/api` lists `src/main.ts`, `src/db/reset.ts`, `src/db/migrate-cli.ts`, `src/auth/auth-cli.ts` and `drizzle.config.ts`.
   - `apps/runner` lists `src/cli.ts`.
-  - Unused files, exports and dependencies are errors, with no ignore lists.
+  - Unused files, exports and dependencies are errors. The only ignore entry is `ignoreDependencies: ["@swc/core"]`, because dependency-cruiser loads it at runtime and nothing imports it (Decision D20).
 - **Vitest projects.** The root `vitest.config.ts` sets `test.projects` to an inline `scripts` project (`scripts/**/*.test.mjs`) plus `packages/*` and `apps/*`. Each package's own `vitest.config.ts` sets its environment.
 
 **Done when:**
 
 - 3a. `pnpm verify` passes and runs all seven steps in the order above.
 - 3b. A file with a format break, a lint error, a type error, a layout violation, an unused export or a failing test each makes `pnpm verify` fail, naming the step and the file.
-- 3c. An import from `packages/domain` into `@plangineer/api-client` fails dependency-cruiser with the rule's `comment` in the output. This proves the `swc` parser reads `.ts` files before any later step relies on it.
+- 3c. A temporary import of `apps/runner/src/cli.ts` from `packages/domain/src/index.ts` fails dependency-cruiser with the domain rule's `comment` in the output. This proves the `swc` parser reads `.ts` files before any later step relies on it.
 
 ### 4. Local Postgres and the environment file
 
@@ -216,7 +224,7 @@ This step is the first to run GitHub's manifest flow, so it proves the field nam
 
 - `apps/api/package.json`, `apps/api/tsconfig.json`, `apps/api/vitest.config.ts`, `apps/api/drizzle.config.ts`
 - `apps/api/src/env.ts`, `apps/api/src/env.test.ts`, `apps/api/src/logger.ts`
-- `apps/api/src/db/client.ts`, `apps/api/src/db/schema.ts`, `apps/api/src/db/migrate.ts`, `apps/api/src/db/reset.ts`, `apps/api/src/db/reset.test.ts`, `apps/api/src/db/local-host.ts`, `apps/api/src/db/local-host.test.ts`
+- `apps/api/src/db/client.ts`, `apps/api/src/db/schema.ts`, `apps/api/src/db/migrate.ts`, `apps/api/src/db/reset.ts`, `apps/api/src/db/reset.test.ts`, `apps/api/src/db/reset-database.ts`, `apps/api/src/db/local-host.ts`, `apps/api/src/db/local-host.test.ts`
 - `package.json`
 
 - **Dependencies.**
@@ -241,7 +249,7 @@ This step is the first to run GitHub's manifest flow, so it proves the field nam
     - Both URLs are `z.url()`.
   - There are no defaults.
   - On failure it throws an error that lists every missing or invalid variable. `main.ts` catches it, logs it through `createLogger('error')` with a fixed level, because `LOG_LEVEL` may be the invalid variable, and exits 1.
-  - Every module that needs configuration calls `parseEnv(process.env)` and uses its result. No module reads a variable from `process.env` directly. Apps load `.env` with Node's `--env-file=../../.env` flag in their scripts.
+  - Each entry point (`main.ts`, `db/reset.ts`, `db/migrate-cli.ts`, `auth/auth-cli.ts` and `test/global-setup.ts`) calls `parseEnv(process.env)` once and passes the result down, per `api-server`. No other module reads `process.env`. Apps load `.env` with Node's `--env-file=../../.env` flag in their scripts.
 - **`logger.ts`.** Exports `createLogger(level)`.
   - One pino logger with `pino.transport({ targets })` that writes to stdout and to `pino/file` at `logs/api.log`, with `mkdir: true`. The path is built from the repository root with `node:path`.
   - `redact.paths` covers `req.headers.authorization`, `req.headers.cookie`, `res.headers["set-cookie"]`, `*.token`, `*.secret` and `*.clientSecret`.
@@ -252,9 +260,9 @@ This step is the first to run GitHub's manifest flow, so it proves the field nam
 - **`db/local-host.ts`.** Exports `isLocalDatabaseUrl(url)`, true only for the hosts `localhost`, `127.0.0.1` and `::1`.
 - **`db/reset.ts`** (`pnpm db:reset`, root script `pnpm --filter @plangineer/api db:reset`).
   - Parses the environment and refuses a non-local `DATABASE_URL` with exit 1.
-  - Connects to the `postgres` maintenance database on the same server and runs `DROP DATABASE IF EXISTS <name> WITH (FORCE)` and `CREATE DATABASE <name>`.
-  - Migrates the new database and logs "Database reset". There is no seed yet (Decision D7).
-  - Step 7 tests only the refusal (7c), which returns before any connection. Step 8 proves the full reset (8h).
+  - Otherwise calls `resetDatabase(env.DATABASE_URL, logger)` and exits 0.
+- **`db/reset-database.ts`.** Exports `resetDatabase(url, logger)`. It connects to the `postgres` maintenance database on the same server, runs `DROP DATABASE IF EXISTS <name> WITH (FORCE)` and `CREATE DATABASE <name>`, migrates the new database and logs "Database reset". There is no seed yet (Decision D7).
+  - Step 7 tests only the refusal (7c), which returns before any connection. Step 8 tests `resetDatabase` against a cloned test database (8h), never against `DATABASE_URL`, so `pnpm verify` never touches the dev database.
 
 **Done when:**
 
@@ -327,9 +335,11 @@ This step is the first to run GitHub's manifest flow, so it proves the field nam
 - 8e. `POST /api/auth/sign-in/social` with `{ "provider": "github" }` and an allowed `Origin` returns a URL on `https://github.com/login/oauth/authorize` that carries the configured client id.
 - 8f. `POST /rpc/me/get` without the CSRF header the plugin requires is rejected.
 - 8g. `pnpm --filter @plangineer/api start` with a variable missing from `.env` exits 1 and names the variable.
-- 8h. `pnpm db:reset` against local Postgres leaves a database with every migration applied.
+- 8h. `resetDatabase` run against the URL of a database from `createTestDatabase()` drops it, recreates it and leaves every migration applied.
 - 8i. Two test files that run in parallel each get their own cloned database, and no `plangineer_test_*` database except the template remains after the run.
 - 8j. A `POST /rpc/me/get` with a body over 1 MiB gets status 413.
+- 8k. `POST /rpc/me/get` through `app.request()` with the session cookie Better Auth issues for a stored user returns that user. Without a cookie it returns 401.
+- 8l. `POST /api/auth/update-user` with `{ "role": "admin" }` and a valid session leaves the user's role `member`, per `auth-and-access`.
 
 ### 9. API client
 
@@ -369,23 +379,26 @@ This step is the first to run GitHub's manifest flow, so it proves the field nam
   3. Pin the template's React packages and add the stack's packages: `react@19.3.0`, `react-dom@19.3.0`, `zod@4.6.5`, `vite@8.3.3`, `@vitejs/plugin-react@6.1.2`, `@tanstack/react-router@1.170.41`, `@tanstack/router-plugin@1.168.42`, `@tanstack/react-query@5.104.1`, `tailwindcss@4.3.3`, `@tailwindcss/vite@4.3.3`, `@base-ui/react@1.8.0`, `lucide-react@1.52.0`, `class-variance-authority@0.7.1`, `@fontsource-variable/geist@5.3.0`, `@fontsource-variable/geist-mono@5.3.0`, `better-auth@1.7.7`, `@plangineer/api-client` and `@plangineer/contracts`.
   4. Add the dev dependencies `@types/react@19.3.0`, `@types/react-dom@19.3.0`, `@types/node@24.19.1`, `vitest@5.0.3`, `@testing-library/react@16.3.3`, `@testing-library/user-event@14.6.7`, `jsdom@30.1.2` and `msw@3.0.2`.
 - **Theme** (`visual-style`).
-  - `components.json` has style `base-nova`.
+  - `components.json` has style `base-nova`, and `aliases.utils` set to `@/lib/cn`, since `lib/utils.ts` becomes `lib/cn.ts`.
   - `src/styles/theme.css` takes its color variables from `.agents/skills/visual-style/assets/theme.css`. It keeps the generated `@custom-variant dark` and `@theme inline` mappings, and adds `--color-link`, `--color-destructive-foreground` and `success`, `warning` and `info` with their foregrounds.
   - No `chart-*` variables.
   - `index.html` sets `class="dark"` on `<html>` and has an inline script that applies the stored mode before first paint.
-- **`tsconfig.json`.** Overrides the base with `"module": "esnext"`, `"moduleResolution": "bundler"`, `"jsx": "react-jsx"`, DOM libs and `"types": ["vite/client"]`.
+- **`tsconfig.json`.** Overrides the base with `"module": "esnext"`, `"moduleResolution": "bundler"`, `"jsx": "react-jsx"`, DOM libs, `"types": ["vite/client"]` and `"paths": { "@/*": ["./src/*"] }`, the alias the shadcn components import through.
 - **`vite.config.ts`.**
   - Plugins: TanStack Router with `autoCodeSplitting: true`, React and Tailwind.
+  - `resolve.alias` maps `@` to `src`, through `fileURLToPath`.
   - The dev server runs on port `5173` with `strictPort: true`.
   - `/api` and `/rpc` proxy to `http://localhost:<API_PORT>` (Decision D6). `API_PORT` comes from the root `.env` through Vite's `loadEnv`, parsed by a one-field Zod schema.
-- **`vitest.config.ts`.** Environment `jsdom`, setup file `src/test/setup.ts`, and `include: ['src/**/*.test.{ts,tsx}']`, so Vitest never picks up the Playwright specs in `e2e/`.
+- **`vitest.config.ts`.** Environment `jsdom`, setup file `src/test/setup.ts`, the same `@` alias as `vite.config.ts` (Vitest does not read `vite.config.ts` when it has its own config), and `include: ['src/**/*.test.{ts,tsx}']`, so Vitest never picks up the Playwright specs in `e2e/`.
 - **Routes.**
   - `__root.tsx` sets `notFoundComponent` and `errorComponent`.
   - `index.tsx` checks `authClient.getSession()` in `beforeLoad` and redirects to `/sign-in` when there is no session.
   - `sign-in.tsx` redirects to `/` when there is a session.
 - **`lib/auth-client.ts`.** Exports `authClient = createAuthClient()` from `better-auth/react`, on the page's own origin.
 - **`lib/api.ts`.** Exports the app's `queryClient = createQueryClient()` and `apiUrl = \`${window.location.origin}/rpc\``. `main.tsx` wraps the router in `QueryClientProvider` and `ApiProvider`.
-- **`SignInCard`.** A card titled "Sign in to Plangineer" with a "Sign in with GitHub" button. The button calls `authClient.signIn.social({ provider: 'github', callbackURL: '/' })`.
+- **`SignInCard`.** A card titled "Sign in to Plangineer" with a "Sign in with GitHub" button. The button calls `authClient.signIn.social({ provider: 'github', callbackURL: '/', errorCallbackURL: '/sign-in' })`.
+  - Without `errorCallbackURL`, Better Auth sends an OAuth error to its own `/api/auth/error` page, outside the app.
+  - `sign-in.tsx` reads the `error` search parameter. When it is present, the card shows an `Alert` above the button: "GitHub sign-in did not complete. Try again." The button stays as the retry.
 - **`AccountSummary`.** Reads `useMe()` and shows the user's name, email and role with a "Sign out" button.
   - Sign out calls `authClient.signOut()`, clears the query cache with `queryClient.clear()` and navigates to `/sign-in`.
   - It renders four of the five states from `frontend-react`:
@@ -407,7 +420,8 @@ This step is the first to run GitHub's manifest flow, so it proves the field nam
 
 **Done when:**
 
-- 10a. `SignInCard` renders the "Sign in with GitHub" button, and clicking it calls the social sign-in with provider `github`.
+- 10a. `SignInCard` renders the "Sign in with GitHub" button, and clicking it calls the social sign-in with provider `github` and `errorCallbackURL` `/sign-in`.
+- 10g. With an `error` search parameter, the sign-in page shows the alert above the GitHub button.
 - 10b. `AccountSummary` renders the skeleton, failed, stale and ready states, each found by role or label.
 - 10c. Clicking Retry in the failed state refetches and shows the user.
 - 10f. Clicking Sign out calls the sign-out endpoint, clears the cached user and lands on `/sign-in`.
@@ -423,15 +437,19 @@ This step is the first to run GitHub's manifest flow, so it proves the field nam
 - **`apps/web/playwright.config.ts`.**
   - Dev dependency `@playwright/test@1.63.0`.
   - Projects: `desktop-chromium` (1280 x 800) and `phone` (Chromium at 375 x 812, `isMobile: true`).
-  - Settings: `trace: 'retain-on-failure'`, and the `blob` reporter in CI.
-  - `webServer` starts the API with `pnpm --filter @plangineer/api start` and waits for `http://localhost:3000/api/auth/ok`. It also starts the web app with `pnpm --filter @plangineer/web dev` and waits for `http://localhost:5173`.
-- **`scripts/test-e2e.mjs`** (`pnpm test:e2e`). Runs `pnpm db:reset`, then the Playwright Test bin with the web app's config.
+  - Settings: `trace: 'retain-on-failure'`, and the `html` reporter with `open: 'never'`.
+  - The config loads the root `.env` with `process.loadEnvFile` and parses `API_PORT` with the same one-field Zod schema as `vite.config.ts`.
+  - `webServer` starts the API with `pnpm --filter @plangineer/api start` and waits for `http://localhost:<API_PORT>/api/auth/ok`. It also starts the web app with `pnpm --filter @plangineer/web dev` and waits for `http://localhost:5173`.
+- **`scripts/test-e2e.mjs`** (`pnpm test:e2e`).
+  - First checks that ports `5173` and `API_PORT` are free. If either is in use, it exits 1 with "Stop pnpm dev before running pnpm test:e2e." and touches nothing, because the reset would otherwise drop a running dev API's connections.
+  - Then runs `pnpm db:reset`, then the Playwright Test bin with the web app's config.
 - **`e2e/sign-in.spec.ts`.** A signed-out visit to `/` lands on `/sign-in` and shows the GitHub button. Clicking the button sends a request to `https://github.com/login/oauth/authorize` with the client id. The spec intercepts that request with `page.route` and aborts it, so no real GitHub call is made.
 
 **Done when:**
 
 - 11a. `pnpm dev` starts Postgres, applies migrations and serves the web app on `http://localhost:5173`, with the API reachable through its proxy.
 - 11c. `pnpm db:migrate` from the repository root applies pending migrations and exits 0.
+- 11d. With `pnpm dev` running, `pnpm test:e2e` exits 1 with the "Stop pnpm dev" message, and the dev database is untouched.
 - 11b. `pnpm test:e2e` passes the sign-in journey in both the `desktop-chromium` and `phone` projects.
 
 ### 12. Agent and git hooks
@@ -441,8 +459,9 @@ This step is the first to run GitHub's manifest flow, so it proves the field nam
 The "day one" guardrails from [tech stack](../engineering/tech-stack.md) apply here.
 
 - **`.claude/settings.json`.** Registers two hooks:
-  - `PostToolUse` with matcher `Edit|Write` runs `node scripts/claude-post-edit.mjs`.
-  - `Stop` runs `node scripts/claude-stop.mjs`.
+  - `PostToolUse` with matcher `Edit|Write` runs `node "${CLAUDE_PROJECT_DIR}/scripts/claude-post-edit.mjs"`.
+  - `Stop` runs `node "${CLAUDE_PROJECT_DIR}/scripts/claude-stop.mjs"`.
+  - Hooks run in the session's current directory, and only exit code 2 blocks. A relative path would fail with "Cannot find module" after the agent changes directory, and the guardrail would silently stop.
 - **`scripts/claude-hooks.mjs`.** Exports two pure functions:
   - `lintTargets(filePath)` returns the path when it ends in `.ts`, `.tsx`, `.mjs`, `.cjs` or `.json`, and returns nothing otherwise.
   - `shouldRunVerify({ stopHookActive, changedPaths })` returns false when `stopHookActive` is true, or when every changed path is under `docs/`.
@@ -457,6 +476,7 @@ The "day one" guardrails from [tech stack](../engineering/tech-stack.md) apply h
 
 - 12a. `lintTargets` and `shouldRunVerify` return the values above for each case: a stop that is already active, docs-only changes, code changes, and each file extension.
 - 12b. An edit that leaves a lint error in a `.ts` file makes the PostToolUse hook exit 2 with the Oxlint message.
+- 12e. Both hooks run the same way when the session's current directory is `apps/api`.
 - 12c. Ending a turn with a failing test in the working tree makes the Stop hook exit 2, naming the Vitest step.
 - 12d. `git push` runs `pnpm verify` first, and stops the push when the verify fails.
 
@@ -473,13 +493,26 @@ The "day one" guardrails from [tech stack](../engineering/tech-stack.md) apply h
   5. `node --eval "require('node:fs').copyFileSync('.env.example', '.env')"`.
   6. `pnpm install --frozen-lockfile`.
   7. `pnpm verify`.
-- **`e2e` job.** Runs on `ubuntu-latest` with steps 1 to 6 above. It then runs `pnpm --filter @plangineer/web exec playwright install --with-deps chromium` and `pnpm test:e2e`, and uploads the Playwright report when the job fails.
-- **Branch protection.** After the first green run, the agent asks the engineer in chat to make the three `verify` jobs and `e2e` required checks on `main`. With a yes, it sets them through `gh api --method PUT repos/tankafide/Plangineer/branches/main/protection`.
+- **`e2e` job.** Runs on `ubuntu-latest` with steps 1 to 6 above. It then runs `pnpm --filter @plangineer/web exec playwright install --with-deps chromium` and `pnpm test:e2e`. When the job fails, `actions/upload-artifact@v7` uploads `apps/web/playwright-report/` and `apps/web/test-results/` as `playwright-report`.
+- **Push and pull request.** Per `git-workflow`, the agent asks the engineer before pushing `chore/project-scaffold` and opening its pull request (Prerequisites).
+- **Branch protection.** After the first green run, and with the engineer's approval from Prerequisites, the agent runs `gh api --method PUT repos/tankafide/Plangineer/branches/main/protection --input <file>` with this body:
+
+  ```json
+  {
+    "required_status_checks": {
+      "strict": false,
+      "contexts": ["verify (ubuntu-latest)", "verify (macos-latest)", "verify (windows-latest)", "e2e"]
+    },
+    "enforce_admins": false,
+    "required_pull_request_reviews": null,
+    "restrictions": null
+  }
+  ```
 
 **Done when:**
 
 - 13a. The workflow passes on a pull request from `chore/project-scaffold`, with all three `verify` jobs and the `e2e` job green.
-- 13b. With the engineer's approval, `main` requires those four checks.
+- 13b. `gh api repos/tankafide/Plangineer/branches/main/protection` lists the four checks above as required.
 
 ### 14. Docs and rules
 
@@ -536,7 +569,7 @@ Decisions D1 to D4 and D18 came from the engineer on Oct 7, 2026. The rest the p
 - **D17. The skills sync scripts stay in `scripts/`.** `runner-adapters` moves them into the runner's `skills sync` and `skills check` commands when those commands are built. The runner stub has neither command yet.
 - **D18. Any GitHub user may sign in as `member` during the scaffold.** Decided by the engineer on Oct 7, 2026. `auth-and-access` requires the plan to decide who may sign in. Restricting sign-in, with a `databaseHooks.user.create.before` rule, is MVP auth work.
 - **D19. Oxfmt formats code and config, not Markdown.** Docs and skills are written by hand to `writing-style`, and reformatting their tables would churn every file for no gain. Generated files are ignored too.
-- **D20. dependency-cruiser parses with swc.** dependency-cruiser 18.5.0 parses TypeScript only through the compiler API of TypeScript below 7, and TypeScript 7.0.2 ships no compiler API. Its `swc` parser reads `.ts` and `.tsx` without one. Done-when 3c proves it.
+- **D20. dependency-cruiser parses with swc.** dependency-cruiser 18.5.0 parses TypeScript only through the compiler API of TypeScript below 7, and TypeScript 7.0.2 ships no compiler API. Its `swc` parser reads `.ts` and `.tsx` without one. Done-when 3c proves it. Knip cannot see that dependency-cruiser loads `@swc/core`, so `knip.json` ignores that one dependency.
 - **Left out.**
   - The `INPUT_VALIDATION_FAILED` error mapping in the API. `me.get` takes no input, so the mapping arrives with the first procedure that does.
   - MinIO and the S3 SDK, until evidence storage. That plan rechecks which S3-compatible image to pin.
@@ -584,13 +617,16 @@ Decisions D1 to D4 and D18 came from the engineer on Oct 7, 2026. The rest the p
 | 8e. Social sign-in returns the GitHub URL | | ✓ | | | | |
 | 8f. RPC without the CSRF header rejected | | ✓ | | | | |
 | 8g. API exits on a missing variable | | | | | ✓ | |
-| 8h. `db:reset` applies migrations | | ✓ | | | | |
+| 8h. `resetDatabase` recreates a cloned database with migrations | | ✓ | | | | |
 | 8i. Parallel test databases are isolated and dropped | | ✓ | | | | |
 | 8j. Oversized body gets 413 | | ✓ | | | | |
+| 8k. Session cookie resolves through the app, none gives 401 | | ✓ | | | | |
+| 8l. Client-sent role is ignored | | ✓ | | | | |
 | 9a. `useMe` resolves the user | | | ✓ | | | |
 | 9b. Bad response shape rejected | | | ✓ | | | |
 | 9c. Retry policy | | | ✓ | | | |
 | 10a. Sign-in button calls GitHub sign-in | | | ✓ | | | |
+| 10g. Sign-in error alert | | | ✓ | | | |
 | 10b. Account summary states | | | ✓ | | | |
 | 10c. Retry recovers | | | ✓ | | | |
 | 10f. Sign out clears the user and redirects | | | ✓ | | | |
@@ -599,8 +635,10 @@ Decisions D1 to D4 and D18 came from the engineer on Oct 7, 2026. The rest the p
 | 11a. `pnpm dev` serves the app | | | | | ✓ | |
 | 11b. Sign-in journey on desktop and phone | | | | ✓ | | |
 | 11c. Root `db:migrate` applies migrations | | | | | ✓ | |
+| 11d. `test:e2e` refuses while `pnpm dev` runs | | | | | ✓ | |
 | 12a. Hook decision functions | ✓ | | | | | |
 | 12b. PostToolUse hook blocks a lint error | | | | | ✓ | |
+| 12e. Hooks work from a subfolder | | | | | ✓ | |
 | 12c. Stop hook blocks a failing test | | | | | ✓ | |
 | 12d. Pre-push runs verify | | | | | ✓ | |
 | 13a. CI green on three systems and e2e | | | | | ✓ | |
@@ -630,6 +668,7 @@ Decisions D1 to D4 and D18 came from the engineer on Oct 7, 2026. The rest the p
 - Machine state: `node --version`, `docker info` and `playwright-cli --version` (1a to 1c).
 - Commands: `pnpm install --frozen-lockfile` and `pnpm typecheck` twice (2a, 2b).
 - Checks: one deliberate violation per check, each reverted after the run (3a to 3c).
+- Reset: the real `pnpm db:reset` against the dev database, run once by hand (the test for 8h uses a clone).
 - Postgres: `pnpm db:up` with Docker running and stopped (4a, 4b).
 - GitHub App: `GET https://api.github.com/apps/<slug>` (5b).
 - API: `pnpm --filter @plangineer/api start` with a variable removed from a copied `.env` (8g).
@@ -642,6 +681,8 @@ Decisions D1 to D4 and D18 came from the engineer on Oct 7, 2026. The rest the p
 - Dev stack: `pnpm dev` and the root `pnpm db:migrate` (11a, 11c).
 - Hooks: the PostToolUse, Stop and pre-push behavior (12b to 12d).
 - CI: results and branch protection (13a, 13b).
+- E2E guard: `pnpm test:e2e` with `pnpm dev` running (11d).
+- Hooks from a subfolder (12e).
 - Docs: the README commands, and `pnpm skills:check` and `pnpm skills:lint` (14a, 14b).
 - Speed: the timed verify run (C1).
 
