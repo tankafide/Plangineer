@@ -2,7 +2,7 @@
 
 Oct 6, 2026 · @Shane
 
-This proposes a web app that takes a feature from a reviewed plan to verified code. Engineers write and review plans; agents implement, review and test against the plan and the team's skills. Testing mobile apps and auditing skills are out of scope for this version. A mobile app for the product itself comes later, and the UI is designed now so it carries over.
+This proposes a web app that takes a feature from a reviewed plan to verified code. Engineers write and review plans; agents implement, review and test against the plan and the team's skills. It is an open-source project that each team self-hosts. Testing mobile apps and auditing skills are out of scope for this version. A mobile app for the product itself comes later, and the UI is designed now so it carries over.
 
 ## At a glance
 
@@ -22,8 +22,9 @@ The goal is a workflow where the plan is the unit of engineering review, and cod
 
 - Make plan-making the standout: interactive, mostly clicks and choices, with agent review and peer review in one place.
 - Settle every decision during planning through guided questions, so implementation never stops to ask.
-- Give engineers a GUI over the Claude Code, Codex or Cursor CLI for pre-planning work, organized as one tab per feature.
+- Give engineers a GUI over the Claude Code or Codex CLI for pre-planning work, organized as one tab per feature. Claude Code comes first, and Codex follows.
 - Set up any repository: detect its skills, recommend what is missing, and generate the four orchestrators.
+- Work across repositories: configure several, and let one feature and one plan span as many of them as it needs.
 - Run implementation and implementation review automatically once a plan is approved.
 - Apply the repo's skills at planning, implementation and review.
 - Support review by a different model, which is the recommended setup, and have the authoring model confirm each finding.
@@ -32,7 +33,9 @@ The goal is a workflow where the plan is the unit of engineering review, and cod
 - Keep the whole product point-and-click: checkboxes, buttons and choices over typed commands.
 - Design every screen to work at phone width, so a mobile app can follow without a redesign.
 - Show every place the implementation departs from the approved plan, and have the engineer decide each one.
-- Run on each engineer's existing Claude, ChatGPT or Cursor subscription, with API keys as an option and not a requirement.
+- Run on each engineer's existing Claude or ChatGPT subscription, with API keys as an option and not a requirement.
+- Ship as open source that any team can self-host with one container and a Postgres database.
+- Work the same on Windows, macOS and Linux: the local runner, the self-hosted deployment and development of Plangineer itself.
 
 **Non-goals for this version**
 
@@ -41,6 +44,8 @@ The goal is a workflow where the plan is the unit of engineering review, and cod
 - Keeping plans as long-lived documentation. A plan is a harness for one change and is discarded after merge.
 - Replacing the Git host, CI or deployment pipeline.
 - Shipping a mobile app. The UI is designed for one, and the app itself comes later.
+- Supporting the Cursor CLI. The adapter design allows it later.
+- Running a hosted, multi-tenant service. Each deployment serves one team.
 
 ## Workflow stages
 
@@ -48,7 +53,7 @@ A feature moves through eight stages, and each has one gate that must clear befo
 
 | Stage | Who acts | What happens | Gate |
 | --- | --- | --- | --- |
-| 1. Prepare | Engineer with agent CLIs | Submits a new feature with whatever they have; exploration and any requested research run in parallel, each producing a context file | Feature is plan ready and the engineer starts planning |
+| 1. Prepare | Engineer with agent CLIs | Submits a new feature with whatever they have and picks the repositories involved; exploration of each repository and any requested research run in parallel, each producing a context file | Feature is plan ready and the engineer starts planning |
 | 2. Plan | Engineer with the plan orchestrator | Works through a guided planning session: the agent asks questions until nothing is undecided, then drafts the plan from the ticked context files and the team template | No open questions, and the author marks it ready |
 | 3. Plan review | Plan review orchestrator, ideally on a different model, then the planning model, then triage rules | Findings are raised, confirmed and sorted; the plan is revised | No open findings |
 | 4. Peer approval | Other engineers | Read the plan, ask questions in the plan thread, then approve or request changes. Skipped for trivial changes | Approval |
@@ -56,6 +61,8 @@ A feature moves through eight stages, and each has one gate that must clear befo
 | 6. Implementation review | Implementation review orchestrator, ideally on a different model, then the implementing model, then triage rules | The diff is checked against the plan and the rule skills. Findings, including every deviation from the plan and every extra, are raised, confirmed and sorted; fixes are applied, and an agent recommends whether to review again | No open findings, and every deviation decided |
 | 7. Merge | Engineer | Pull request opens with the plan summary, findings history and deviation list attached | Merge |
 | 8. Verify | Test agent | On deploy, checks each acceptance criterion through the API and the web app and records evidence | Every criterion passes |
+
+**Features that span repositories.** A feature can involve several repositories, and it still has one plan and one approval. Every stage from planning to implementation review runs once for the whole feature, through a cross-repository orchestrator that calls each repository's own orchestrator for that stage. Each repository gets its own branch and pull request, so such a feature ends in one pull request per repository. Verification runs once every repository's change is live. The sections below mark where this changes a stage, and a feature with one repository behaves exactly as described.
 
 The plan revision is frozen at approval. Because every decision is settled during planning, implementation runs straight through without stopping to ask. If the agent still meets an undecided point, that is a defect in the plan: the run stops and returns to planning instead of guessing.
 
@@ -86,10 +93,13 @@ The plan workspace is where the product has to stand out: making a strong plan s
 | Description | Yes, any length | Becomes the feature brief and scopes the exploration. A full brain dump is encouraged: the more the engineer says up front, the better the context and the fewer questions later |
 | Ticket link | No | The ticket's contents are pulled into the brief |
 | Documents, screenshots, links | No | Attached to the brief |
-| Explore the codebase | Ticked by default | Starts an exploration task on submit |
+| Repositories | Yes, shown only when more than one repository is configured | The repositories the feature touches, or **Not sure**. See below |
+| Explore the codebase | Ticked by default | Starts an exploration task on submit, one per selected repository |
 | Research topics | No, one line per topic | Starts one research task per topic |
 
 On submit, the exploration and every research task run in parallel in the background. When they finish, the feature is marked **plan ready**: the engineer looks over the context files, unticks anything that missed, and clicks Start planning. Planning never starts on its own. The engineer can start before every task has finished, and a failed task does not block the plan.
+
+**Choosing repositories.** With one configured repository the picker is hidden and that repository is used. With several, the engineer ticks the ones involved. If they pick **Not sure**, a quick exploration runs across every configured repository, guided by each one's description, and proposes which are involved. The engineer confirms the list before the full exploration runs. Repositories can be added or removed while the plan is a draft. After approval, adding one is a scope amendment, because it adds steps.
 
 **Connecting Jira.** A ticket link is only useful if the app can read the ticket, so Jira is connected through its MCP server. The connection flow appears only when an engineer supplies a ticket link and Jira access is not set up yet: the app adds the MCP server to their agent CLI and walks them through sign-in, then reads the ticket. Atlassian's official [Rovo MCP Server](https://github.com/atlassian/atlassian-mcp-server) is hosted, signs in through the browser with OAuth, and covers Jira Cloud only, so self-hosted Jira needs a different server.
 
@@ -100,12 +110,12 @@ On submit, the exploration and every research task run in parallel in the backgr
 | Task | What the agent does | Context file it produces |
 | --- | --- | --- |
 | Intake | Reads the description, ticket and attachments the engineer submitted | The feature brief |
-| Explore the codebase | Reads the repo through Claude Code, Codex or Cursor to find how the affected area works today | Findings, with the files and functions involved, the open questions it could not settle, and risk flags such as performance or scale |
+| Explore the codebase | Reads each selected repo through Claude Code or Codex to find how the affected area works today. One task and one context file per repo | Findings, with the files and functions involved, the open questions it could not settle, and risk flags such as performance or scale |
 | Research | Looks into one requested topic outside the repo, such as a library, an API or an approach | A summary with its sources |
 
 **Context files** are short documents the engineer can open, edit, rename or delete. A checkbox on each decides whether it feeds the plan, and the plan records which files it was built from, so reviewers can see its inputs. Context files belong to the feature and are discarded with it; they are not committed to the repo.
 
-Claude Code, Codex and Cursor each have a non-interactive mode with structured output, so one task view can serve all three ([overview](https://dev.to/hassann/top-cli-tools-for-ai-agents-2j4c)).
+Claude Code and Codex each have a non-interactive mode with structured output, so one task view can serve both ([overview](https://dev.to/hassann/top-cli-tools-for-ai-agents-2j4c)).
 
 **The planning session.** Planning is a guided conversation, and its one job is to leave nothing undecided. Every question that could stop an implementer is asked and answered here, so implementation can always run straight through.
 
@@ -140,6 +150,8 @@ This workflow lives in the plan orchestrator, so a team can tune how its plans a
 | Test plan | Which unit, integration and end-to-end tests cover each "done when" line | Always |
 | Verification | How the result is proven: automated commands, agent-run checks through the API and Playwright, and checks only a person can make | Always |
 
+**Plans across repositories.** When a feature involves more than one repository, the plan is still one document. Its Steps are grouped by repository, and within each repository by phase. A phase is a set of steps that must land before the next begins. Phases can also order work across repositories, such as an API change before the client that uses it. Each repository's part is written with that repository's own plan orchestrator and rule skills, so its steps follow its own standards. Decisions that cross repositories, such as an API contract, are recorded once under Decisions and referenced from every step they affect. The test plan and verification rows are tagged with their repository. A single-repository plan has no grouping, and reads as before.
+
 Each step's "done when" line is its acceptance criterion, written as one plain sentence. It is what the review agent checks the code against and what the Verify stage tests, so the rest of this document calls these lines acceptance criteria.
 
 **The test plan is a coverage grid.** It has one row per "done when" line and a column each for unit, integration, end to end, agent check and human check. The agent fills it in from the repo's testing rules and the engineer changes ticks where they disagree. A row with nothing ticked is a gap, and the blocker check stops on it. Splitting verification into what an agent can run and what needs a person follows [HumanLayer's plan template](https://skills.sh/ferueda/agent-skills/create-plan).
@@ -162,7 +174,7 @@ When the section appears, the agent proposes targets from the standing rules and
 - **Stale markers.** Editing a step flags the tests and checks that depend on it, so nothing silently goes out of date.
 - **Revision diff.** Each new revision shows what was added and removed since the last, as [Plannotator](https://docs.plannotator.ai/open-source/workflows/plan-review.md) does for agent plans.
 
-**When main moves under the plan.** Exploration records the commit of the main branch it ran against, and the plan carries that as its base commit. Each time main changes, the app compares the files changed since the base commit with the files named in the plan's steps and in its exploration findings.
+**When main moves under the plan.** Exploration records the commit of the main branch it ran against, and the plan carries that as its base commit, one per repository when the feature spans several. Each time a repository's main changes, the app compares the files changed since the base commit with the files named in the plan's steps and in its exploration findings.
 
 | Main since the base commit | What the engineer sees |
 | --- | --- |
@@ -203,24 +215,37 @@ Skills live in the repository being worked on, beside the code, and four orchest
 | Implementation orchestrator | Implementation | How to work from an approved plan, including testing expectations and how to log any departure from it |
 | Implementation review orchestrator | Implementation review | What to check a diff for against the plan and the rule skills, including deviations and extras |
 
+**Cross-repository orchestrators.** When a feature spans several repositories, four more orchestrators run in place of the single-repository ones: a cross-repository plan orchestrator, plan review orchestrator, implementation orchestrator and implementation review orchestrator. Each mirrors its single-repository counterpart, and none holds standards of its own. They know the configured repositories and what each is for, and they reach into each one to run that repository's orchestrator for the same stage.
+
+| Orchestrator | What it adds across repositories |
+| --- | --- |
+| Plan | Has each repository contribute its part of the plan, orders work across repositories and records the contracts between them |
+| Plan review | Reviews each part with its repository's plan review orchestrator, then checks the parts fit together |
+| Implementation | Runs each repository's implementation in the order the plan's phases set, and logs any departure with its repository |
+| Implementation review | Reviews each repository's diff with its own orchestrator, then checks the changes still match the contracts in the plan |
+
+No repository leads: each contributes its own part. These orchestrators belong to the set of configured repositories rather than to any one of them, so the app keeps them and writes them at setup from the repository descriptions. The engineer can edit them.
+
 **Rule skills** hold the codebase's standards: architecture, best practices, migrations, performance, UI rules. Each orchestrator is told which rule skills exist and invokes the ones the task needs, at the point it needs them.
 
 **How a stage runs**
 
-1. The runner checks out the feature branch, and the skills come with it.
+1. The runner checks out the feature branch, and the skills come with it. For a multi-repository feature it checks out every involved repository.
 2. The stage's orchestrator skill is loaded as the agent's instructions.
 3. The orchestrator decides which rule skills to invoke and when.
 4. The run logs the commit and each skill that loaded.
 
 Because skills sit in the repo, a skill change is reviewed like code, and every run uses the skills as they stand on its branch.
 
-**One format, three agents.** Claude Code, Codex and Cursor all read the same SKILL.md format but look in different folders: `.claude/skills/`, `.agents/skills/`, and `.cursor/skills/` or `.agents/skills/` ([comparison](https://mcp.directory/blog/cross-agent-skills-cursor-codex-cline-antigravity-gemini-mastra-portability)). Setup keeps one canonical copy and mirrors it to wherever each agent looks.
+**One format, two agents.** Claude Code and Codex read the same SKILL.md format but look in different folders: `.claude/skills/` and `.agents/skills/` ([comparison](https://mcp.directory/blog/cross-agent-skills-cursor-codex-cline-antigravity-gemini-mastra-portability)). Setup keeps one canonical copy and mirrors it to wherever each agent looks. The mirror is a copy, not a symlink, because symlinks need extra permissions on Windows and Git checks them out as plain files there by default.
 
 Step 4 is a log line, not an audit system. It costs almost nothing now and means later skill auditing needs no rework.
 
 ## Repository setup
 
-Setup takes a repository from whatever agent guidance it has today to four orchestrators and a full set of rule skills, through checklists the engineer confirms.
+Repositories are the first thing configured, because everything else depends on them. Setup takes each repository from whatever agent guidance it has today to four orchestrators and a full set of rule skills, through checklists the engineer confirms. It runs once per repository, each with its own pull request, and repositories can be added at any time. A feature cannot start until at least one repository has finished setup.
+
+0. **Configure repositories.** The engineer adds every repository the team works in, each with a short description such as "backend API" or "web client". The descriptions are what the app uses to propose repositories when an engineer is not sure, and to write the cross-repository orchestrators. Steps 1 to 6 below then run for each repository. Once two or more are configured, the app writes the four cross-repository orchestrators.
 
 1. **Connect.** The engineer picks a repository.
 2. **Detect.** A scan lists the skills, rule files and agent instruction files already present, looking in the folders each agent uses.
@@ -276,6 +301,8 @@ Every automatic fix lands as its own commit, so it can be reverted with one clic
 
 Two sources feed the check. The implementation orchestrator has the implementer log each departure as it makes it, with its reason. The reviewer then finds departures on its own from the plan and the diff. A departure the reviewer found and the implementer did not log is marked unreported.
 
+For a multi-repository feature, this check runs per repository against that repository's part of the plan, then once more across repositories for the contracts between them. Each finding records its repository.
+
 Deviations and extras always go to the engineer. Triage rules cannot skip or accept them at any automation level. Each one gets one of three decisions:
 
 - **Accept.** The code stays, and the choice is recorded as an amendment at the level the change calls for, usually decision only, so the plan matches what was built.
@@ -311,7 +338,7 @@ When the change reaches an environment, a test agent checks each acceptance crit
 
 **How a verification run works**
 
-1. A deploy webhook tells the app which build is live and where.
+1. A deploy webhook tells the app which build is live and where. For a multi-repository feature, verification starts once every involved repository's change is live.
 2. The test agent reads the plan's acceptance criteria and writes one or more checks for each.
 3. It runs the checks and gives each criterion a verdict: pass, fail, or blocked when it could not be tested.
 4. The report goes to the author. A failure returns the feature to the author with the evidence attached.
@@ -332,26 +359,26 @@ The web app talks only to the control plane. The control plane queues one job pe
 
 - **Runners hold no state.** Each one starts from a fresh checkout of the feature branch, which brings the skills with it, and is thrown away when the run ends.
 - **A runner can sit in two places.** A local runner on the engineer's machine can serve every stage with their own CLI login, which is how the product runs on a subscription. Hosted runners serve implementation, review and verification in the background for teams that want runs to continue with the laptop closed.
-- **One adapter per agent CLI.** Claude Code, Codex and Cursor each run non-interactively and emit structured output. The adapter turns that into run events for the feature tab and the timeline.
+- **One adapter per agent CLI.** Claude Code and Codex each run non-interactively and emit structured output. The adapter turns that into run events for the feature tab and the timeline. The Claude Code adapter comes first; Codex is added once the workflow runs end to end on Claude Code.
 - **Webhooks drive the gates.** The Git host reports build results, merges and pushes to main; the deploy pipeline reports which build is live, which starts verification.
 - **The first hosted runners can be CI jobs.** That avoids building sandbox infrastructure before the workflow is proven.
 - **The web app is one client of the API.** Everything the UI does goes through the same API a mobile app will use, and the control plane emits the events that become notifications.
 
-**The local runner.** The local runner is a small program the engineer installs once, and it is a deliverable of its own in Phase 1.
+**The local runner.** The local runner is a small Node program the engineer installs from npm, and it is a deliverable of its own in Phase 1.
 
 - **Pairing.** The engineer signs it in to the app once. It then keeps an outbound connection to the control plane, so no inbound port is opened on the machine.
-- **Running a job.** It receives a job, creates a worktree of the repository for that feature, starts the installed CLI in non-interactive mode, and streams the events back.
+- **Running a job.** It receives a job, creates a worktree for that feature of each repository the job involves, starts the installed CLI in non-interactive mode, and streams the events back.
 - **Sign-in.** It runs the CLI exactly as the vendor ships it, under the login the engineer already has. It never reads, copies or uploads that login.
+- **Platforms.** It runs on Windows, macOS and Linux, and is tested on all three for every release.
 - **Limits.** It runs a set number of jobs at once, queues the rest, and reports when the machine is offline or a plan limit is reached.
-- **Updates.** It updates itself and reports which CLI versions are installed.
+- **Updates.** It updates through npm like any other package, and reports which CLI versions are installed.
 
-**Running on a subscription.** Each engineer's own Claude, ChatGPT or Cursor plan can pay for their runs, and the local runner is the path all three vendors support. Hosted runs are possible on each, on terms that differ by vendor. Checked October 6, 2026.
+**Running on a subscription.** Each engineer's own Claude or ChatGPT plan can pay for their runs, and the local runner is the path both vendors support. Hosted runs are possible on each, on terms that differ by vendor. Checked October 6, 2026.
 
 | CLI | Local runner, engineer's own login | Hosted runner |
 | --- | --- | --- |
 | Claude Code | Supported. `claude -p` draws on the engineer's plan limits. Anthropic paused a planned move of this usage to a separate monthly credit on June 15, 2026, and says it will give notice before any change ([help article](https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-claude-plan)) | Allowed only where each engineer signs in themselves, through Anthropic's own flow, to an unmodified Claude Code, and the usage bills to them. The app may not collect, store or relay Claude logins. Developers building products are pointed to API keys ([terms](https://code.claude.com/docs/en/legal-and-compliance)) |
 | Codex | Supported. `codex exec` uses the cached ChatGPT sign-in ([authentication](https://learn.chatgpt.com/docs/auth)) | OpenAI recommends an API key for automation. A ChatGPT login can run on a trusted private runner, with one `auth.json` per runner or serialized job stream, and Enterprise workspaces can issue access tokens ([CI/CD guide](https://learn.chatgpt.com/docs/auth/ci-cd-auth)) |
-| Cursor | Supported. The CLI uses the engineer's browser login or a user API key ([authentication](https://cursor.com/docs/cli/reference/authentication)) | A user API key in `CURSOR_API_KEY` runs the CLI headless under that engineer's account. Service accounts that draw on the team's usage pool are Enterprise only ([service accounts](https://cursor.com/docs/account/enterprise/service-accounts)) |
 
 OpenAI also runs a [Sign in with ChatGPT program](https://developers.openai.com/siwc/token-sharing-open-source) that lets open-source and locally hosted apps use a person's ChatGPT plan directly, with paid or remotely hosted apps by application.
 
@@ -362,29 +389,34 @@ What this means for the design:
 - **No silent fallback.** A run never switches from a subscription login to an API key on its own. Each run records which sign-in it used, and the timeline shows it.
 - **Plan limits are shared.** Parallel pre-planning tasks and several roles draw on one engineer's plan, so the runner queues work when a limit is reached. Review on a different model needs the engineer to hold a plan with a second vendor, or the team to supply a key for that role.
 - **Terms change.** Sign-in mode is set per role, so a vendor change means changing a setting, not the architecture.
-- **Product use adds conditions.** If this is offered to other companies, running Claude Code inside it also requires Anthropic's Commercial Terms, and hosted Claude Code on a subscription should be confirmed with Anthropic before it is built.
+- **Open source keeps the app out of the login path.** Each team self-hosts its own deployment, and the app never offers, holds or relays a vendor login; it only starts the CLI the engineer installed and signed in to. Anyone who runs a deployment as a service for others takes on the vendors' commercial terms themselves. Two points still need Anthropic's confirmation before the hosted path is built: hosted Claude Code under an engineer's own plan, and whether a third-party runner starting the engineer's installed `claude` counts as third-party app usage of their plan.
 
 ## Data model
 
-The app keeps ten kinds of record, and the plan revision is the one everything else points at.
+The app keeps fifteen kinds of record, and the plan revision is the one everything else points at.
 
 | Record | Holds | Notes |
 | --- | --- | --- |
-| Feature | Title, description, ticket link, repository, author, current state such as plan ready | One per change, shown as a tab |
-| Pre-planning task | Type, agent CLI used, goal, the commit it ran against, transcript, status | Produces one context file |
+| User | Name, email, GitHub identity, role (admin or member), notification preferences | One deployment serves one team, so there is no organization record and the role is the membership. Admins configure repositories, orchestrators and automation levels |
+| Runner | Owner, kind (local or hosted), name, hashed pairing token, installed CLI versions, concurrency limit, last heartbeat, status | A local runner belongs to one engineer, is paired once and can be revoked. Each run records the runner that served it |
+| Feature | Title, description, ticket link, repositories, author, current state such as plan ready | One per change, shown as a tab |
+| Pre-planning task | Type, repository for exploration, agent CLI used, goal, the commit it ran against, transcript, status | Produces one context file |
 | Context file | Title, content, the task it came from, whether it is ticked | Belongs to the feature and is discarded with it |
-| Plan revision | Full plan text, acceptance criteria, the context files it was built from, base commit, revision number, and for an amendment its level | Never edited in place; each round of edits makes a new one, and one is marked approved |
+| Plan revision | Full plan text, acceptance criteria, the context files it was built from, base commit per repository, revision number, and for an amendment its level | Never edited in place; each round of edits makes a new one, and one is marked approved |
 | Thread message | A question or answer on a plan, its author, any suggested change it produced | The plan thread |
-| Run | Stage, agent and model, runner and sign-in used, commit, skills loaded, status, cost, event log | One per agent execution |
+| Run | Stage, repository where the stage is per repository, agent and model, runner and sign-in used, commit, skills loaded, status, cost, event log | One per agent execution |
 | Finding | The fields listed under Review and triage | Belongs to a review run and points at a plan revision or a diff |
 | Approval | Reviewer, plan revision, verdict | The peer approval |
 | Verification result | Criterion, verdict, links to evidence | One per acceptance criterion in each verification run |
-| Repository settings | Agent and model per role, where each role runs and how it signs in, automation level, canonical skills folder | One per repository |
+| Repository settings | Name, description, agent and model per role, where each role runs and how it signs in, automation level, canonical skills folder | One per repository. Planning and plan review of a multi-repository feature use the roles set for the cross-repository orchestrators |
+| Cross-repository orchestrator | Stage, content, revision number, author of each revision, agent and model per role | One per stage for the set of configured repositories. Regenerated from the repository descriptions at setup, edited by engineers, and versioned like a plan so each run records which revision it used |
+| Staleness dismissal | Plan revision, repository, the main commit it was dismissed at, the overlapping files, who dismissed it | Silences the warning for overlaps up to that commit. A later commit that touches a plan file raises it again |
+| Notification | Recipient, kind such as decision needed, approval requested or run failed, the record it points at, read state | Feeds the in-app inbox now and push notifications later. Created by the control plane from the same events the timeline shows |
 
 **Where each thing lives**
 
-- Plans, threads, findings and run history: the app's database.
-- Code, skills, orchestrators and triage rules: the repository, on the Git host.
+- Users, runners, plans, threads, findings, run history, cross-repository orchestrators and notifications: the app's database.
+- Code, skills, orchestrators and triage rules: each repository, on the Git host. The cross-repository orchestrators are kept by the app.
 - Evidence files: object storage, linked from the verification result.
 
 When implementation starts, the runner writes the approved plan revision into the agent's workspace. It is not committed to the main branch, which keeps plans out of the codebase.
@@ -395,8 +427,8 @@ Engineers work in eight views, and the plan workspace is where most of the time 
 
 | Screen | What the engineer does there |
 | --- | --- |
-| Repository setup | Ticks which detected and recommended skills to use, then opens the setup pull request |
-| Feature tab | Submits the intake for a new feature, watches its tasks run, manages the context files, and starts planning once it is plan ready |
+| Repository setup | Adds and describes repositories, then for each one ticks which detected and recommended skills to use and opens its setup pull request |
+| Feature tab | Submits the intake for a new feature and picks its repositories, watches its tasks run, manages the context files, and starts planning once it is plan ready |
 | Plan workspace | Builds and revises the plan with section actions, inline findings, revision history and the plan thread |
 | Review queue | Sees plans waiting for their approval and findings waiting for their decision |
 | Triage | Works through the findings that need a person, and sets the repository's automation level |
@@ -439,14 +471,14 @@ Each diamond is an exit gate: the next phase starts only when its condition is m
 | Phase | Scope | Exit gate | Rough size |
 | --- | --- | --- | --- |
 | 0. Prove the loop | Hand-write the four orchestrators and the triage rules in one repo. Run the full loop from the command line, including the confirm step and the deviation check. Write the skill specification and the baseline catalog | Engineers judge the reviews useful on 3 to 5 real features, and the finding format and skill specification are settled | 2 to 3 weeks |
-| 1. Setup and plan | Repository setup, the feature intake with the Jira connection flow, feature tabs with parallel pre-planning tasks and context files over the three agent CLIs, the local runner with subscription sign-in for each, the plan workspace with staleness warnings, the plan review pipeline at the manual level, the plan thread, peer approval and amendments, all responsive and built on the same API a mobile app will use | Plans for real features are approved through the app | 7 to 10 weeks |
-| 2. Automated runs | Job queue and hosted runners, isolated workspaces, pull request creation, the implementation review pipeline at the manual level with deviation detection, the plan audit, and the run timeline | An approved plan becomes a reviewed pull request with nobody driving the agent | 5 to 7 weeks |
+| 1. Setup and plan | Repository configuration and per-repository setup, the four cross-repository orchestrators, the feature intake with repository selection and the Jira connection flow, feature tabs with parallel pre-planning tasks and context files on Claude Code, the local runner on the engineer's Claude Code login, GitHub sign-in, the plan workspace with staleness warnings, the plan review pipeline at the manual level, the plan thread, peer approval and amendments, all responsive and built on the same API a mobile app will use | Plans for real features are approved through the app, with the local runner working on Windows, macOS and Linux | 7 to 10 weeks |
+| 2. Automated runs | The Codex adapter, so review can run on a different model, run dispatch and hosted runners, isolated workspaces, pull request creation, the implementation review pipeline at the manual level with deviation detection, the plan audit, and the run timeline | An approved plan becomes a reviewed pull request with nobody driving the agent | 5 to 7 weeks |
 | 3. Verification | Deploy webhook, API checks, Playwright CLI web checks, evidence storage and the report | Every feature gets an evidence report | 2 to 3 weeks |
-| 4. Auto-fix and rollout | Assisted and automatic triage levels, auto-loop re-review, revertible fix commits, sign-in and permissions, notifications, cost and cycle-time metrics | A team runs at the assisted level and rarely reverts a fix | 3 to 4 weeks |
+| 4. Auto-fix and rollout | Assisted and automatic triage levels, auto-loop re-review, revertible fix commits, roles and permissions, push notifications, cost and cycle-time metrics | A team runs at the assisted level and rarely reverts a fix | 3 to 4 weeks |
 
 Sizes are rough estimates for one or two engineers, 19 to 27 weeks in total, and should be re-cut after Phase 0.
 
-**Left for later:** skill auditing and line-level provenance, testing of mobile apps, alternative approaches in the plan workspace, and the mobile app itself.
+**Left for later:** skill auditing and line-level provenance, testing of mobile apps, alternative approaches in the plan workspace, the Cursor CLI, and the mobile app itself.
 
 ## Risks
 
@@ -458,11 +490,13 @@ The two risks most likely to sink adoption are noisy reviews and slow plan appro
 | An automatic fix is wrong | A bad fix applied without review erodes trust in the whole system | Start at the manual level; every automatic fix is its own revertible commit; rules name what always needs a person |
 | Plan approval becomes the bottleneck | Review effort moves rather than shrinks. One [study of about 22,000 developers](https://briefhq.ai/blog/why-spec-driven-development-isnt-enough/) found 98% more merged pull requests and 91% more review time | Trivial changes skip peer approval; the plan thread answers questions without a meeting; the queue shows how long each plan has waited |
 | Generated skills are generic | Setup that writes bland skills adds noise instead of standards | Skills are drafted from the repo's own code to the skill specification, and arrive as a pull request the team edits |
-| Three agent CLIs behave differently | Output formats, permissions and skill folders differ between Claude Code, Codex and Cursor | One adapter per CLI; one canonical skills folder mirrored to the others; start with one CLI and add the rest |
+| Platform differences break the runner | Engineers run Windows, macOS and Linux, and paths, shells, line endings, process control and CLI install shapes differ between them. Plangineer is developed on Windows, so Windows-only assumptions are the likeliest to slip in | No shell scripts; platform-neutral paths and line endings; every check runs in CI on all three systems |
+| Two agent CLIs behave differently | Output formats, permissions and skill folders differ between Claude Code and Codex | One adapter per CLI; one canonical skills folder mirrored to the other; start with Claude Code and add Codex once the workflow runs end to end |
 | Verification has nothing to test against | Without test accounts and safe seed data, every check comes back blocked | Environment checklist completed before Phase 3; start with one project |
 | Runners hold real access | An agent that runs code has repository and environment credentials | Isolated workspace per run, short-lived scoped credentials, no production secrets |
 | Cost per feature | Each feature uses several model runs across four roles, and the confirm step adds more | Cost recorded per run and shown on the timeline; the engineer approves each extra review, and auto-loop stops at 3 rounds |
 | The runner outgrows the product | Companies such as Stripe and Ramp [built whole platforms](https://newsletter.pragmaticengineer.com/p/why-ramp-built-inspect) for background agents | Start on CI runners and defer dedicated infrastructure until usage demands it |
+| Multi-repository work drifts apart | Changes in separate repositories can each pass review and still not fit together, such as an API and its client | One plan with cross-repository phases and contracts recorded under Decisions; verification waits until every repository's change is live |
 | Planning feels like an interrogation | A long run of questions wears engineers down, and they start clicking through without thinking | The agent acts as a senior engineer and decides wherever a best practice is clear, asking only about real trade-offs and business context; a fuller intake means fewer questions; each question comes with a recommended option |
 | The agent guesses instead of stopping | An unplanned choice ships under a plan that was approved without it | The implementer logs each departure; the reviewer checks the diff against the plan on its own; every deviation and extra needs an engineer's decision and appears in the plan audit and on the pull request |
 | Amendments reopen the approval bottleneck | If every change after approval needs a full review, engineers stop amending and let deviations stand | Three amendment levels set by which sections changed; review covers the diff only; only a scope change needs an approver |
@@ -474,18 +508,22 @@ These choices are still open, and the first one shapes the architecture more tha
 
 - [ ] **Where agents run.** This proposal assumes shared background runners for implementation, review and verification, plus a local runner on the engineer's machine. The local runner can serve every stage on the engineer's own subscription, so what is open is which stages default to hosted runners.
 - [ ] **Git host.** This proposal assumes GitHub.
-- [ ] **Agent and model for each role.** Which CLI and model fills each of planner, plan reviewer, implementer and implementation reviewer, and which of the three CLIs to support first.
+- [ ] **Agent and model for each role.** Which CLI and model fills each of planner, plan reviewer, implementer and implementation reviewer, Claude Code is supported first and Codex second.
 - [ ] **Verification environment.** Recommended: a preview environment before merge where one exists, otherwise staging after merge.
 - [ ] **What counts as trivial.** Recommended: the author proposes it, and named paths such as migrations always need peer approval.
 - [ ] **Runner base.** Recommended: CI runners first. The alternative is an open-source background agent framework such as [Open-Inspect](https://github.com/ColeMurray/background-agents/wiki) or [Open SWE](https://github.com/langchain-ai/open-swe).
 - [ ] **Auto-loop limit.** Proposed at 3 rounds, and only when auto-loop is on. At the default setting the engineer decides each time.
-- [ ] **Internal tool or product.** Whether this serves one team or other companies changes sign-in, tenancy and how setup is delivered.
+- [x] **Internal tool or product.** Decided: an open-source project that each team self-hosts, one deployment per team. There is no tenancy, the runner ships through npm, and the app never holds a vendor login.
+- [ ] **Licence.** Recommended: Apache-2.0, which adds an explicit patent grant over MIT.
 - [ ] **Plan review pipeline.** This proposal assumes plan review uses the same confirm step and triage rules as implementation review.
 - [ ] **Verification orchestrator.** Recommended: add a fifth orchestrator for verification, so testing conventions live in the repo too.
 - [ ] **Canonical skills folder.** Recommended: `.agents/skills/`, mirrored to `.claude/skills/` for Claude Code.
 - [ ] **Baseline catalog.** Which skills setup recommends for every codebase.
 - [ ] **Mobile app approach.** Recommended: responsive web first, then choose between a native and a cross-platform app once usage shows which screens matter on a phone.
-- [ ] **One plan per feature tab.** This proposal assumes a tab yields one plan and one pull request. Epics that group several features come later.
+- [ ] **One plan per feature tab.** This proposal assumes a tab yields one plan, and one pull request per repository involved. Epics that group several features come later.
+- [ ] **Cross-repository orchestrators' home.** Proposed: the app keeps them, since they belong to no single repository. The alternative is a dedicated workspace repository.
+- [ ] **Roles for multi-repository work.** Proposed: the cross-repository orchestrators use roles set once for them, and each repository's own orchestrator runs with that repository's settings.
+- [ ] **Merge and deploy order across repositories.** Proposed: the plan's phases set the order, and the app shows it. Whether the app should enforce it is open.
 - [ ] **Ticket tracker integration.** Jira through its MCP server comes first. Which trackers follow is open, as is support for self-hosted Jira. Pasting the ticket text remains the fallback.
 - [ ] **Deviation handling.** Proposed: every deviation and extra needs an engineer's decision at every automation level. The alternative lets triage rules accept named kinds of extra, such as added tests.
 - [ ] **Amendment levels.** Proposed: three levels set by which sections changed. Whether a decision-only amendment should need an approver is open.
@@ -508,5 +546,3 @@ These choices are still open, and the first one shapes the architecture more tha
 - [Codex authentication, OpenAI](https://learn.chatgpt.com/docs/auth)
 - [Maintain Codex account auth in CI/CD, OpenAI](https://learn.chatgpt.com/docs/auth/ci-cd-auth)
 - [ChatGPT plan usage with Sign in with ChatGPT, OpenAI](https://developers.openai.com/siwc/token-sharing-open-source)
-- [Cursor CLI authentication](https://cursor.com/docs/cli/reference/authentication)
-- [Cursor service accounts](https://cursor.com/docs/account/enterprise/service-accounts)

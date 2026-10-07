@@ -1,0 +1,73 @@
+# Stack decisions
+
+The decided stack, for agents working in this repo. The reasoning is in [tech-stack.md](tech-stack.md); read it only when a decision needs revisiting.
+
+## Context
+
+- Open source, self-hosted, one deployment per team. No tenancy and no organization model.
+- The runner supports Claude Code first, then Codex. No Cursor.
+
+## Versions
+
+Pin these majors. Versions checked against npm on 6 October 2026.
+
+| Area | Choice |
+| --- | --- |
+| Runtime | Node 24 everywhere (server and runner). pnpm workspaces, Turborepo |
+| Language | TypeScript 7, strictest tsconfig |
+| Web | React 19, Vite 8, TanStack Router (not Start), TanStack Query, Tailwind v4, shadcn/ui on Base UI (never Radix), React Hook Form, dnd-kit, CodeMirror 6, `diff`, react-diff-view |
+| API | Hono 4, oRPC 1.x (not the 2.0 beta), Zod 4 |
+| Database | Postgres, Drizzle ORM 0.45.x and Drizzle Kit (not the v1 release candidate) |
+| Auth | Better Auth 1.x with the Drizzle adapter and GitHub sign-in. No organization or SSO plugin |
+| GitHub | One GitHub App per deployment, Octokit |
+| Storage | Any S3-compatible store through the AWS S3 SDK; MinIO locally |
+| Logging | pino |
+| Lint and format | Oxlint with tsgolint (type-aware), Oxfmt. No ESLint or Prettier |
+| Boundaries | dependency-cruiser, Knip |
+| Tests | Vitest 5, MSW, Playwright Test, `playwright-cli` for UI checks |
+| Git hooks | lefthook |
+
+## Package layout
+
+| Path | Holds | May import |
+| --- | --- | --- |
+| `packages/contracts` | Zod schemas: API contracts, RunEvent, runner protocol | Zod only |
+| `packages/domain` | Pure logic: triage, staleness, amendment level, deviation matching | `contracts`, Zod |
+| `packages/api-client` | Typed oRPC client and TanStack Query hooks | `contracts` |
+| `apps/api` | Hono + oRPC control plane, Drizzle schema, run dispatch, webhooks | `contracts`, `domain` |
+| `apps/web` | React SPA | `contracts`, `domain`, `api-client` |
+| `apps/runner` | Local runner npm package and CLI adapters | `contracts`, `domain` |
+
+Nothing imports from another `apps/*` package.
+
+## Commands
+
+| Command | Does |
+| --- | --- |
+| `pnpm dev` | Starts Postgres and MinIO (Docker Compose), API, web and the fake agent, with seed data |
+| `pnpm db:reset` | Drops, migrates and reseeds the dev database |
+| `pnpm verify` | Format check, Oxlint, typecheck, dependency-cruiser, Knip, Vitest. Must pass before work is done |
+
+## Conventions
+
+- Run dispatch lives in the `runs` table (`FOR UPDATE SKIP LOCKED`, lease, heartbeat, cancel flag). No queue library.
+- Realtime: SSE to browsers, tailing the append-only `run_events` table and resuming by event id. One outbound WebSocket per runner.
+- Plan revisions are immutable rows with JSONB bodies.
+- Each app parses its environment with a Zod schema at startup and exits on any missing or invalid variable. Every variable is listed in `.env.example`.
+- The API and runner log JSON with pino to stdout and `logs/<app>.log`.
+- Hooks and repo scripts are Node scripts (`node scripts/<name>.mjs`), never bash or PowerShell. No shell syntax in `package.json` scripts.
+- Integration tests use real Postgres through template databases, never PGlite or mocks of the database.
+- Tests never call a real model; runner tests use the fake agent and recorded JSONL fixtures.
+- UI work is checked with screenshots at desktop and phone (375 px) widths before it is done.
+- Claude Code runs as `claude -p --output-format stream-json`; Codex runs as `codex exec --json`. The runner never reads, stores or sends a vendor login.
+
+## Cross-platform
+
+Windows, macOS and Linux are equal targets. CI runs `pnpm verify` on all three.
+
+- Paths through `node:path` and `fileURLToPath`; runner data under `env-paths`. No hard-coded separators, drive letters or `~`.
+- LF everywhere, pinned by `.gitattributes` (`* text=auto eol=lf`). Parsers accept CRLF input.
+- Kebab-case filenames; import paths match file case exactly.
+- Spawn CLIs with execa, never `shell: true`.
+- Stop a run by signalling its process group on macOS and Linux, and with `taskkill /T /F` on Windows.
+- No symlinks. Copy files instead.
