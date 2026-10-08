@@ -13,7 +13,7 @@ Commit once per pass, not after every change:
 
 | Pass | Commit |
 | --- | --- |
-| Planning | The plan, when it is saved |
+| Planning | The plan, once the engineer confirms its summary |
 | Implementation | All of the pass's work, once the checks have run |
 | Review round | The round's fixes, named for the round, such as `Fix implementation review round 1`, so the round can be reverted alone |
 
