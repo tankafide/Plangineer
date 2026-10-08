@@ -22,12 +22,15 @@ export async function readSession() {
   return data;
 }
 
-/** Starts GitHub sign-in. On success, Better Auth sends the browser to GitHub. */
-export async function signInWithGitHub(): Promise<void> {
+/**
+ * Starts GitHub sign-in. On success, Better Auth sends the browser to GitHub, and back to
+ * `redirect` afterwards. A failure returns to sign-in with the same `redirect`.
+ */
+export async function signInWithGitHub(redirect: string): Promise<void> {
   const { error } = await authClient.signIn.social({
     provider: 'github',
-    callbackURL: '/',
-    errorCallbackURL: '/sign-in',
+    callbackURL: redirect,
+    errorCallbackURL: `/sign-in?redirect=${encodeURIComponent(redirect)}`,
   });
   throwIfFailed('GitHub sign-in', error);
 }

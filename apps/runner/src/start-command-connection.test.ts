@@ -20,7 +20,7 @@ import {
 } from './test/test-runner.ts';
 
 const REVOKED =
-  'This runner was revoked or its token is invalid. Pair it again with pnpm runner pair.';
+  'This runner was revoked or its token is invalid. Pair it again with plangineer-runner login.';
 
 let remote: GitRemote;
 let plane: FakeControlPlane;
@@ -192,7 +192,7 @@ describe('startCommand', () => {
 
     expect(await startCommand(parsed.env)).toEqual({
       ok: false,
-      message: 'This runner is not paired. Run pnpm runner pair first.',
+      message: 'This runner is not paired. Run plangineer-runner login --server <url> first.',
     });
     await rm(dataDir, { recursive: true, force: true, maxRetries: 5 });
   });

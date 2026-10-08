@@ -16,7 +16,7 @@ import { queueRun, startedEvent } from '../test/runs.ts';
 import { startTestServer } from '../test/test-app.ts';
 import { createTestDatabase, type TestDatabase } from '../test/test-database.ts';
 
-const RpcBody = z.object({ json: z.record(z.string(), z.string()) });
+const RpcBody = z.object({ json: z.record(z.string(), z.unknown()) });
 
 function hello() {
   return {
@@ -116,7 +116,7 @@ describe('runner socket liveness and shutdown', () => {
     expect(rest.done).toBe(true);
   });
 
-  it('never logs the pairing code or the runner token through pairing and connection', async () => {
+  it('never logs the device secret, the user code or the runner token through pairing and connection', async () => {
     const lines: string[] = [];
     const logger = pino({ level: 'trace' }, { write: (line: string) => lines.push(line) });
     const server = await startTestServer(database, {}, logger);
@@ -130,14 +130,15 @@ describe('runner socket liveness and shutdown', () => {
         });
         return RpcBody.parse(await response.json());
       };
-      const { json: created } = await rpc('runner/createPairingCode', undefined, { cookie });
-      const code = created['code'] ?? '';
-      const { json: paired } = await rpc('runner/pair', {
-        code,
+      const { json: started } = await rpc('runner/startLogin', {
         name: 'logged',
         platform: 'linux',
       });
-      const token = paired['token'] ?? '';
+      const deviceSecret = String(started['deviceSecret']);
+      const userCode = String(started['userCode']);
+      await rpc('runner/approveLogin', { userCode }, { cookie });
+      const { json: polled } = await rpc('runner/pollLogin', { deviceSecret });
+      const token = String(polled['token']);
       const client = await TestRunnerClient.connect(server.port, token);
       client.send(hello());
       await client.next('welcome');
@@ -145,11 +146,13 @@ describe('runner socket liveness and shutdown', () => {
       await client.closed;
 
       const output = lines.join('\n');
-      expect(code).not.toBe('');
+      expect(deviceSecret).not.toBe('');
+      expect(userCode).not.toBe('');
       expect(token).not.toBe('');
       expect(output).toContain('Runner connected');
-      expect(output).not.toContain(code);
-      expect(output).not.toContain(code.replaceAll('-', ''));
+      expect(output).not.toContain(deviceSecret);
+      expect(output).not.toContain(userCode);
+      expect(output).not.toContain(userCode.replaceAll('-', ''));
       expect(output).not.toContain(token);
     } finally {
       await server.close();

@@ -2,10 +2,15 @@ import { QueryClient } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { describe, expect, it } from 'vitest';
-import { isApiError } from './api-error.ts';
 import { useApiUtils } from './api-provider.tsx';
 import { useRunList } from './runs.ts';
-import { useCreatePairingCode, useRevokeRunner, useRunnerList } from './runners.ts';
+import {
+  useApproveRunnerLogin,
+  useDenyRunnerLogin,
+  useRevokeRunner,
+  useRunnerList,
+  useRunnerLogin,
+} from './runners.ts';
 import { runFixture, RUNNER_ID, runnerFixture } from './test-fixtures.ts';
 import { apiWrapper, RPC_URL, rpcBody, server } from './test-utils.tsx';
 
@@ -62,37 +67,75 @@ describe('useRunnerList', () => {
   });
 });
 
-describe('useCreatePairingCode', () => {
-  it('returns the code from runner.createPairingCode', async () => {
-    answer('runner/createPairingCode', () =>
-      HttpResponse.json(rpcBody({ code: 'ABCD-EFGH-JKMN', expiresAt: '2026-10-07T10:10:00.000Z' })),
+const USER_CODE = 'ABCD-EFGH-JKMN';
+
+function loginFixture(status: 'pending' | 'approved' | 'denied') {
+  return {
+    name: 'ada-laptop',
+    platform: 'linux',
+    status,
+    requestedAt: '2026-10-08T10:00:00.000Z',
+    expiresAt: '2026-10-08T10:10:00.000Z',
+  };
+}
+
+describe('useRunnerLogin', () => {
+  it('loads the login request by its user code', async () => {
+    const inputs = answer('runner/getLogin', () =>
+      HttpResponse.json(rpcBody(loginFixture('pending'))),
     );
-    const { result } = renderHook(() => useCreatePairingCode(), {
+    const { result } = renderHook(() => useRunnerLogin(USER_CODE), {
       wrapper: apiWrapper(newQueryClient()),
     });
 
-    const pairing = await act(() => result.current.mutateAsync(undefined));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(pairing.code).toBe('ABCD-EFGH-JKMN');
+    expect(inputs).toEqual([{ userCode: USER_CODE }]);
+    expect(result.current.data?.status).toBe('pending');
   });
 
-  it('reports TOO_MANY_REQUESTS as that defined error', async () => {
-    answer('runner/createPairingCode', () =>
-      HttpResponse.json(
-        rpcBody({ defined: true, code: 'TOO_MANY_REQUESTS', status: 429, message: 'Slow down' }),
-        { status: 429 },
-      ),
+  it('sends nothing while the user code is undefined', () => {
+    const inputs = answer('runner/getLogin', () =>
+      HttpResponse.json(rpcBody(loginFixture('pending'))),
     );
-    const { result } = renderHook(() => useCreatePairingCode(), {
+    const { result } = renderHook(() => useRunnerLogin(undefined), {
       wrapper: apiWrapper(newQueryClient()),
     });
 
-    act(() => result.current.mutate(undefined));
-
-    await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(isApiError(result.current.error, 'TOO_MANY_REQUESTS')).toBe(true);
-    expect(isApiError(result.current.error, 'NOT_FOUND')).toBe(false);
+    expect(result.current.fetchStatus).toBe('idle');
+    expect(inputs).toEqual([]);
   });
+});
+
+describe('useApproveRunnerLogin and useDenyRunnerLogin', () => {
+  it.each([
+    ['approving', 'runner/approveLogin', 'approved', useApproveRunnerLogin],
+    ['denying', 'runner/denyLogin', 'denied', useDenyRunnerLogin],
+  ] as const)(
+    '%s updates the cached login request and leaves the runner list alone',
+    async (_name, path, status, useDecision) => {
+      answer('runner/getLogin', () => HttpResponse.json(rpcBody(loginFixture('pending'))));
+      const runnerLists = answer('runner/list', () =>
+        HttpResponse.json(rpcBody({ items: [], nextCursor: null })),
+      );
+      answer(path, () => HttpResponse.json(rpcBody(loginFixture(status))));
+      const { result } = renderHook(
+        () => ({
+          login: useRunnerLogin(USER_CODE),
+          decide: useDecision(),
+          runners: useRunnerList(),
+        }),
+        { wrapper: apiWrapper(newQueryClient()) },
+      );
+      await waitFor(() => expect(result.current.login.data?.status).toBe('pending'));
+      await waitFor(() => expect(result.current.runners.isSuccess).toBe(true));
+
+      await act(() => result.current.decide.mutateAsync({ userCode: USER_CODE }));
+
+      await waitFor(() => expect(result.current.login.data?.status).toBe(status));
+      expect(runnerLists).toHaveLength(1);
+    },
+  );
 });
 
 describe('useRevokeRunner', () => {

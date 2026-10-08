@@ -129,6 +129,9 @@ importers:
       execa:
         specifier: 10.1.0
         version: 10.1.0
+      open:
+        specifier: 11.0.4
+        version: 11.0.4
       pino:
         specifier: 10.4.0
         version: 10.4.0

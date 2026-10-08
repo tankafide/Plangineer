@@ -24,6 +24,8 @@ export function createLogger(level: Level): Logger {
           '*.token',
           '*.secret',
           '*.clientSecret',
+          '*.deviceSecret',
+          '*.userCode',
         ],
       },
     },

@@ -1,19 +1,11 @@
 import { call } from '@orpc/server';
-import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { runnerPairingCodes, runners } from '../db/schema.ts';
 import type { InitialContext } from '../rpc/context.ts';
 import { router } from '../rpc/router.ts';
 import { storeRunner, storeUser, testAuth, testDeps } from '../test/fixtures.ts';
 import { appendRunnerEvents, queueRun, runRow, startedEvent, storedEvents } from '../test/runs.ts';
 import { createTestDatabase, type TestDatabase } from '../test/test-database.ts';
 import { claimRuns } from '../runs/dispatch.ts';
-import { hashSecret } from './pairing.ts';
-
-const CODE_FORMAT = /^[0-9A-HJKMNP-TV-Z]{4}-[0-9A-HJKMNP-TV-Z]{4}-[0-9A-HJKMNP-TV-Z]{4}$/;
-
-const createCode = (context: InitialContext) =>
-  call(router.runner.createPairingCode, undefined, { context });
 
 describe('runner procedures', () => {
   let database: TestDatabase;
@@ -34,87 +26,6 @@ describe('runner procedures', () => {
     };
     return { id: user.id, context };
   }
-
-  const publicContext = (): InitialContext => ({ ...testDeps(database.db), session: null });
-  const pair = (code: string, name = 'workstation') =>
-    call(router.runner.pair, { code, name, platform: 'linux' }, { context: publicContext() });
-
-  describe('pairing', () => {
-    it('pairs a runner once with a code and stores only the token hash', async () => {
-      const { id: userId, context } = await member();
-
-      const { code, expiresAt } = await createCode(context);
-      const { runnerId, token } = await pair(code);
-
-      expect(code).toMatch(CODE_FORMAT);
-      expect(Date.parse(expiresAt)).toBeGreaterThan(Date.now());
-      expect(Buffer.from(token, 'base64url')).toHaveLength(32);
-      const [row] = await database.db.select().from(runners).where(eq(runners.id, runnerId));
-      expect(row).toMatchObject({
-        userId,
-        name: 'workstation',
-        platform: 'linux',
-        status: 'active',
-      });
-      expect(row?.tokenHash).toBe(hashSecret(token));
-      expect(JSON.stringify(row)).not.toContain(token);
-      const [codeRow] = await database.db
-        .select()
-        .from(runnerPairingCodes)
-        .where(eq(runnerPairingCodes.userId, userId));
-      expect(codeRow?.usedAt).not.toBeNull();
-      expect(JSON.stringify(codeRow)).not.toContain(code.replaceAll('-', ''));
-    });
-
-    it('accepts the code without dashes and in lower case', async () => {
-      const { context } = await member();
-      const { code } = await createCode(context);
-
-      await expect(pair(code.replaceAll('-', '').toLowerCase())).resolves.toHaveProperty('token');
-    });
-
-    it('rejects a second use of a code', async () => {
-      const { context } = await member();
-      const { code } = await createCode(context);
-      await pair(code);
-
-      await expect(pair(code)).rejects.toMatchObject({ code: 'PAIRING_CODE_REJECTED' });
-    });
-
-    it('rejects an expired code', async () => {
-      const { id: userId, context } = await member();
-      const { code } = await createCode(context);
-      await database.db
-        .update(runnerPairingCodes)
-        .set({ expiresAt: sql`now() - interval '1 second'` })
-        .where(eq(runnerPairingCodes.userId, userId));
-
-      await expect(pair(code)).rejects.toMatchObject({ code: 'PAIRING_CODE_REJECTED' });
-    });
-
-    it('rejects an unknown code with the same message', async () => {
-      const { context } = await member();
-      const { code } = await createCode(context);
-      await pair(code);
-      const reused: unknown = await pair(code).catch((error: unknown) => error);
-
-      const unknown: unknown = await pair('ZZZZ-ZZZZ-ZZZZ').catch((error: unknown) => error);
-
-      expect(unknown).toMatchObject({ code: 'PAIRING_CODE_REJECTED', status: 401 });
-      expect(reused).toBeInstanceOf(Error);
-      expect(unknown).toHaveProperty('message', reused instanceof Error ? reused.message : '');
-    });
-
-    it('rejects a sixth pairing code inside 10 minutes', async () => {
-      const { context } = await member();
-      for (let index = 0; index < 5; index += 1) await createCode(context);
-
-      await expect(createCode(context)).rejects.toMatchObject({
-        code: 'TOO_MANY_REQUESTS',
-        status: 429,
-      });
-    });
-  });
 
   describe('runner.list', () => {
     it("returns only the caller's runners, pages with nextCursor, and shows online", async () => {

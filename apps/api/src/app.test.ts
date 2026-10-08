@@ -81,6 +81,26 @@ describe('createApp', () => {
     });
   });
 
+  describe('sign-in return paths', () => {
+    // Better Auth's origin check middleware skips itself when NODE_ENV is "test", so these
+    // assert on the trust rule it calls for the callback and error callback URLs.
+    it.each([
+      '/runners/approve?code=ABCD-EFGH-JKMN',
+      '/sign-in?redirect=%2Frunners%2Fapprove%3Fcode%3DABCD-EFGH-JKMN',
+    ])('trusts the same-origin path %s as a callback URL', async (url) => {
+      const context = await auth.$context;
+      expect(context.isTrustedOrigin(url, { allowRelativePaths: true })).toBe(true);
+    });
+
+    it.each(['https://example.com', '//example.com'])(
+      'does not trust %s as a callback URL',
+      async (url) => {
+        const context = await auth.$context;
+        expect(context.isTrustedOrigin(url, { allowRelativePaths: true })).toBe(false);
+      },
+    );
+  });
+
   describe('RPC routes', () => {
     it('returns the signed-in user for the session cookie', async () => {
       const stored = await storeUser(auth, { name: 'Grace Hopper', role: 'member' });

@@ -27,7 +27,7 @@ function source(overrides: Record<string, string | undefined> = {}) {
     RUN_SWEEP_INTERVAL_MS: '5000',
     RUN_MAX_ATTEMPTS: '3',
     SSE_KEEPALIVE_INTERVAL_MS: '15000',
-    RUNNER_PAIRING_CODE_TTL_MS: '600000',
+    RUNNER_LOGIN_TTL_MS: '600000',
     ...overrides,
   };
 }
@@ -45,7 +45,7 @@ describe('parseEnv', () => {
       RUN_SWEEP_INTERVAL_MS: 5_000,
       RUN_MAX_ATTEMPTS: 3,
       SSE_KEEPALIVE_INTERVAL_MS: 15_000,
-      RUNNER_PAIRING_CODE_TTL_MS: 600_000,
+      RUNNER_LOGIN_TTL_MS: 600_000,
     });
   });
 
@@ -82,7 +82,7 @@ describe('parseEnv', () => {
     'RUN_SWEEP_INTERVAL_MS',
     'RUN_MAX_ATTEMPTS',
     'SSE_KEEPALIVE_INTERVAL_MS',
-    'RUNNER_PAIRING_CODE_TTL_MS',
+    'RUNNER_LOGIN_TTL_MS',
   ];
 
   it.each(RUN_VARIABLES)('names %s when it is missing', (name) => {
@@ -97,8 +97,8 @@ describe('parseEnv', () => {
     ['RUN_MAX_ATTEMPTS', '0'],
     ['RUN_MAX_ATTEMPTS', '11'],
     ['SSE_KEEPALIVE_INTERVAL_MS', '60001'],
-    ['RUNNER_PAIRING_CODE_TTL_MS', '59999'],
-    ['RUNNER_PAIRING_CODE_TTL_MS', '3600001'],
+    ['RUNNER_LOGIN_TTL_MS', '59999'],
+    ['RUNNER_LOGIN_TTL_MS', '3600001'],
     ['RUN_LEASE_DURATION_MS', '1.5'],
   ])('names %s when it is %s', (name, value) => {
     expect(() => parseEnv(source({ [name]: value }))).toThrow(name);

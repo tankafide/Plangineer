@@ -10,11 +10,13 @@ import {
   removeRepository,
 } from '../repositories/repository-service.ts';
 import {
-  createPairingCode,
-  listRunners,
-  pairRunner,
-  revokeRunner,
-} from '../runners/runner-service.ts';
+  approveLogin,
+  denyLogin,
+  getLogin,
+  pollLogin,
+  startLogin,
+} from '../runners/runner-login-service.ts';
+import { listRunners, revokeRunner } from '../runners/runner-service.ts';
 import { cancelRun, createRun, getRun, listRuns } from '../runs/run-service.ts';
 import { refreshSetup, scanRepository, startSetup } from '../setup/setup-service.ts';
 import type { InitialContext } from './context.ts';
@@ -58,12 +60,21 @@ export const router = os.router({
     })),
   },
   runner: {
-    createPairingCode: authed.runner.createPairingCode.handler(async ({ context, errors }) =>
-      unwrap(await createPairingCode(context, context.user.id), errors),
+    // startLogin and pollLogin are public: a runner has no token or session until it is paired.
+    startLogin: os.runner.startLogin.handler(async ({ context, input, errors }) =>
+      unwrap(await startLogin(context, input), errors),
     ),
-    // Public: the runner pairs with a one-time code before it has a token or a session.
-    pair: os.runner.pair.handler(async ({ context, input, errors }) =>
-      unwrap(await pairRunner(context, input), errors),
+    pollLogin: os.runner.pollLogin.handler(({ context, input }) =>
+      pollLogin(context, input.deviceSecret),
+    ),
+    getLogin: authed.runner.getLogin.handler(async ({ context, input, errors }) =>
+      unwrap(await getLogin(context, input.userCode), errors),
+    ),
+    approveLogin: authed.runner.approveLogin.handler(async ({ context, input, errors }) =>
+      unwrap(await approveLogin(context, context.user.id, input.userCode), errors),
+    ),
+    denyLogin: authed.runner.denyLogin.handler(async ({ context, input, errors }) =>
+      unwrap(await denyLogin(context, input.userCode), errors),
     ),
     list: authed.runner.list.handler(({ context, input }) =>
       listRunners(context, context.user.id, input),

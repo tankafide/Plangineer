@@ -1,5 +1,5 @@
 import { useRevokeRunner } from '@plangineer/api-client';
-import { CLAUDE_CODE_MIN_VERSION, type Runner, type RunnerPlatform } from '@plangineer/contracts';
+import { CLAUDE_CODE_MIN_VERSION, type Runner } from '@plangineer/contracts';
 import { CircleAlert } from 'lucide-react';
 import { useState } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -7,12 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatDateTime } from '@/lib/date-time';
-
-const PLATFORM_LABELS: Record<RunnerPlatform, string> = {
-  win32: 'Windows',
-  darwin: 'macOS',
-  linux: 'Linux',
-};
+import { PLATFORM_LABELS } from './platform-labels';
 
 function RunnerStatusBadge({ runner }: { runner: Runner }) {
   if (runner.status === 'revoked') return <Badge variant="muted">Revoked</Badge>;

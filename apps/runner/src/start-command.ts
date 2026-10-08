@@ -23,9 +23,11 @@ import { createWorktrees } from './worktrees/worktrees.ts';
 const FLUSH_INTERVAL_MS = 100;
 /** How long shutdown waits for the server to acknowledge the stopped runs' last events. */
 const SHUTDOWN_ACK_WAIT_MS = 5_000;
-const NOT_PAIRED_MESSAGE = 'This runner is not paired. Run pnpm runner pair first.';
+const NOT_PAIRED_MESSAGE =
+  'This runner is not paired. Run plangineer-runner login --server <url> first.';
 const FATAL_MESSAGES: Record<SocketFatal['kind'], string> = {
-  revoked: 'This runner was revoked or its token is invalid. Pair it again with pnpm runner pair.',
+  revoked:
+    'This runner was revoked or its token is invalid. Pair it again with plangineer-runner login.',
   replaced:
     'Another runner process using this pairing took over. Stop that process, or pair this machine as a second runner.',
   protocol: 'The runner and the control plane disagree on the protocol, so the runner stopped.',

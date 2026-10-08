@@ -16,7 +16,7 @@ The app never reads, stores or relays a vendor login. A vendor login is the cred
 
 - The control plane never holds a vendor credential. No field, table, column, log line, event payload, contract, control-plane environment variable or runner message carries one.
 - The runner never opens a CLI's credential files, and never reads, logs, stores or sends a vendor credential's value.
-- The runner starts the CLI with an explicit allowlist of variables from its own environment: what the CLI needs to run (such as `PATH`, the home and temp variables, locale and proxy settings) and the CLI's own documented configuration variables, which may include its API key. Those pass through by name, unread. The runner's own secrets, such as its pairing token, never reach the child.
+- The runner starts the CLI with an explicit allowlist of variables from its own environment: what the CLI needs to run (such as `PATH`, the home and temp variables, locale and proxy settings) and the CLI's own documented configuration variables, which may include its API key. Those pass through by name, unread. The runner's own secrets, such as its token, never reach the child.
 - Agent output that contains something shaped like a credential is treated as untrusted data, not forwarded as configuration.
 
 ## Implement mode
@@ -48,21 +48,22 @@ The app never reads, stores or relays a vendor login. A vendor login is the cred
 
 ### Runner pairing
 
-The plan that adds pairing defines the exchange. It must keep these properties, shown here as one possible shape:
+The plan that adds pairing defines the exchange. It must keep these properties, shown here as one possible shape, a device authorization flow after RFC 8628:
 
-1. A signed-in member asks the API to pair a runner. The API creates a one-time pairing code that expires in minutes, is bound to that user, and is stored only as a hash.
-2. The runner presents the code. In one transaction the API checks it, marks it used and issues a runner token of at least 32 bytes from `crypto.randomBytes`, shown once.
-3. The API stores only the token's SHA-256 hash under a unique index, with the runner id, the owning user, a label, and created, last-seen and revoked times. SHA-256 suffices for a random token.
-4. The runner stores the token under its `env-paths` data directory and sends it in the WebSocket handshake's `Authorization` header. The API looks the token up by hash on every connection. Any direct comparison of raw secret values uses `crypto.timingSafeEqual`.
-5. Revoking a runner sets its revoked time. The next handshake fails, and a live connection is closed.
+1. The runner starts a login request on a public procedure and gets a device secret that only it holds and a user code. The request expires in minutes, belongs to no user yet, and is stored only as hashes.
+2. A signed-in member approves the request in the browser, with the user code in the link. The request is then bound to the member who approves it.
+3. The runner polls with its device secret. In one transaction, under a row lock, the API completes an approved request once and issues a runner token of at least 32 bytes from `crypto.randomBytes`, shown once.
+4. The API stores only the token's SHA-256 hash under a unique index, with the runner id, the owning user, a label, and created, last-seen and revoked times. SHA-256 suffices for a random token.
+5. The runner stores the token under its `env-paths` data directory and sends it in the WebSocket handshake's `Authorization` header. The API looks the token up by hash on every connection. Any direct comparison of raw secret values uses `crypto.timingSafeEqual`.
+6. Revoking a runner sets its revoked time. The next handshake fails, and a live connection is closed.
 
 - A runner token authorizes one runner for its owner's work only. It never grants a user session, and a user session never acts as a runner.
-- Pairing codes and tokens are never logged, put in a URL query string or returned a second time. Redact them in pino.
-- Pairing procedures are rate-limited per user. Better Auth's limiter covers only its own routes.
+- Device secrets and tokens are never logged, put in a URL or returned a second time. The user code may appear in the approval link, since it grants nothing without a signed-in approval. None of the three is logged. Redact them in pino.
+- The public login procedures are bounded by a global cap on pending login requests. The user code has 60 bits, so the member procedures need no per-user limit. Better Auth's limiter covers only its own routes.
 
 ### Tests
 
-- Integration tests on real Postgres cover: each role on an admin procedure, a client-sent role ignored at sign-up, a revoked session refused on its next request, a pairing code used twice, an expired code, a revoked runner refused, and a token that does not match its hash.
+- Integration tests on real Postgres cover: each role on an admin procedure, a client-sent role ignored at sign-up, a revoked session refused on its next request, a login request polled twice, an expired login request, an approved login request polled after expiry, a revoked runner refused, and a token that does not match its hash.
 - Better Auth's GitHub call is mocked with MSW.
 
 ## Review mode
@@ -72,12 +73,12 @@ Check a diff against these rules. Report each breach as a finding in the shared 
 | Rule | Severity if broken |
 | --- | --- |
 | Any breach of [the vendor login rule](#the-vendor-login-rule) | blocker |
-| A runner token or pairing code stored in plaintext, logged, placed in a URL, or returned more than once | blocker |
+| A device secret or token placed in a URL, or any of the device secret, user code and token stored in plaintext, logged, or returned more than once | blocker |
 | A token generated with `Math.random` or a short length | blocker |
 | A raw secret compared with `===` instead of `timingSafeEqual` | should fix |
 | A role taken from client input, a role field without `input: false`, or authorization done only in the web app | blocker |
 | A procedure that changes access with no role check | blocker |
-| A pairing code that does not expire, is reusable, or is not bound to a user | blocker |
+| A login request that does not expire, completes twice, or issues a token before a signed-in member approves it | blocker |
 | A revoked runner that can still connect, or a runner token accepted as a user session | blocker |
 | `disableCSRFCheck` or `disableOriginCheck` set, or a wildcard or `localhost` trusted origin in production | blocker |
 | The user's GitHub token stored unencrypted, used for repository calls, or sent to the browser or a runner | blocker |

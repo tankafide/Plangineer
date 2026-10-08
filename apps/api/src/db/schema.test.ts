@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { count, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { brokenConstraint } from '../test/broken-constraint.ts';
 import { storeRunner, storeUser, testAuth } from '../test/fixtures.ts';
 import { storeRepository, testScan, testSelection, testSetupJob } from '../test/setup-fixtures.ts';
 import { createTestDatabase, type TestDatabase } from '../test/test-database.ts';
@@ -8,23 +9,11 @@ import {
   repositories,
   repositorySetups,
   runEvents,
-  runnerPairingCodes,
+  runnerLogins,
   runners,
   runs,
   user,
 } from './schema.ts';
-
-/** Resolves to the name of the constraint a failed write broke. */
-async function brokenConstraint(write: Promise<unknown>): Promise<string | undefined> {
-  const error: unknown = await write.then(
-    () => undefined,
-    (thrown: unknown) => thrown,
-  );
-  const cause = error instanceof Error ? error.cause : undefined;
-  return typeof cause === 'object' && cause !== null && 'constraint' in cause
-    ? String(cause.constraint)
-    : undefined;
-}
 
 const event = (runId: string, overrides: Partial<typeof runEvents.$inferInsert> = {}) => ({
   runId,
@@ -137,12 +126,16 @@ describe('schema constraints', () => {
     await expect(write).resolves.toBeDefined();
   });
 
-  it('cascades a user delete to their pairing codes, runners, runs and run events', async () => {
+  it('cascades a user delete to the login requests they approved, their runners, runs and run events', async () => {
     const owner = await storeUser(testAuth(database.db));
     const ownRunner = await storeRunner(database.db, { userId: owner.id });
-    await database.db.insert(runnerPairingCodes).values({
+    await database.db.insert(runnerLogins).values({
+      deviceSecretHash: randomBytes(32).toString('hex'),
+      userCodeHash: randomBytes(32).toString('hex'),
+      name: 'workstation',
+      platform: 'linux',
+      status: 'approved',
       userId: owner.id,
-      codeHash: randomBytes(32).toString('hex'),
       expiresAt: new Date(),
     });
     const [ownRun] = await database.db
@@ -157,8 +150,8 @@ describe('schema constraints', () => {
     const counts = await Promise.all([
       database.db
         .select({ n: count() })
-        .from(runnerPairingCodes)
-        .where(eq(runnerPairingCodes.userId, owner.id)),
+        .from(runnerLogins)
+        .where(eq(runnerLogins.userId, owner.id)),
       database.db.select({ n: count() }).from(runners).where(eq(runners.userId, owner.id)),
       database.db.select({ n: count() }).from(runs).where(eq(runs.userId, owner.id)),
       database.db.select({ n: count() }).from(runEvents).where(eq(runEvents.runId, ownRun.id)),

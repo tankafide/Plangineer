@@ -1,5 +1,4 @@
-import type { PageInput, Runner, RunnerPlatform } from '@plangineer/contracts';
-import { sql } from 'drizzle-orm';
+import type { PageInput, Runner } from '@plangineer/contracts';
 import type { Database } from '../db/client.ts';
 import { toPage } from '../lib/page.ts';
 import { fail, ok, type Result } from '../lib/result.ts';
@@ -7,70 +6,15 @@ import type { ServiceDeps } from '../lib/service-deps.ts';
 import { appendRunEvents } from '../runs/run-events-repository.ts';
 import { lockOpenRunsOfRunner } from '../runs/run-repository.ts';
 import { advanceSetupOfRun } from '../setup/setup-advance.ts';
+import { hashSecret } from './pairing.ts';
 import {
-  generatePairingCode,
-  generateRunnerToken,
-  hashSecret,
-  normalizePairingCode,
-  PAIRING_CODE_LIMIT,
-  PAIRING_CODE_WINDOW_MS,
-} from './pairing.ts';
-import {
-  countPairingCodesSince,
   findActiveRunnerByTokenHash,
   findRunnerForUser,
-  insertPairingCode,
-  insertRunner,
   listRunnersForUser,
   lockRunnerForUser,
   markRunnerRevoked,
-  usePairingCode,
   wakeRunner,
 } from './runner-repository.ts';
-
-/** Issues a one-time pairing code, returned this once and stored only as a hash. */
-export async function createPairingCode(
-  { db, env }: ServiceDeps,
-  userId: string,
-): Promise<Result<{ code: string; expiresAt: string }, 'TOO_MANY_REQUESTS'>> {
-  const code = generatePairingCode();
-  return db.transaction(async (tx) => {
-    // Serializes one user's requests, so two at once cannot both pass the count.
-    await tx.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtextextended(${`pairing:${userId}`}, 0))`,
-    );
-    const recent = await countPairingCodesSince(tx, userId, PAIRING_CODE_WINDOW_MS);
-    if (recent >= PAIRING_CODE_LIMIT) return fail('TOO_MANY_REQUESTS');
-    const expiresAt = await insertPairingCode(tx, {
-      userId,
-      codeHash: hashSecret(normalizePairingCode(code)),
-      ttlMs: env.RUNNER_PAIRING_CODE_TTL_MS,
-    });
-    return ok({ code, expiresAt: expiresAt.toISOString() });
-  });
-}
-
-/**
- * Exchanges an unused, unexpired code for a new runner and its token, shown this once. A
- * missing, used or expired code gets the same answer, so the error tells a guesser nothing.
- */
-export async function pairRunner(
-  { db }: ServiceDeps,
-  input: { code: string; name: string; platform: RunnerPlatform },
-): Promise<Result<{ runnerId: string; token: string }, 'PAIRING_CODE_REJECTED'>> {
-  const token = generateRunnerToken();
-  return db.transaction(async (tx) => {
-    const userId = await usePairingCode(tx, hashSecret(normalizePairingCode(input.code)));
-    if (userId === undefined) return fail('PAIRING_CODE_REJECTED');
-    const runnerId = await insertRunner(tx, {
-      userId,
-      name: input.name,
-      platform: input.platform,
-      tokenHash: hashSecret(token),
-    });
-    return ok({ runnerId, token });
-  });
-}
 
 export async function listRunners({ db, env }: ServiceDeps, userId: string, page: PageInput) {
   const rows = await listRunnersForUser(db, userId, page, env.RUNNER_OFFLINE_AFTER_MS);

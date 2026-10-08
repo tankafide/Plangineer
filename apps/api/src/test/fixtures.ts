@@ -39,7 +39,7 @@ export function testEnv(overrides: Partial<Env> = {}): Env {
     RUN_SWEEP_INTERVAL_MS: 5_000,
     RUN_MAX_ATTEMPTS: 3,
     SSE_KEEPALIVE_INTERVAL_MS: 15_000,
-    RUNNER_PAIRING_CODE_TTL_MS: 600_000,
+    RUNNER_LOGIN_TTL_MS: 600_000,
     ...overrides,
   };
 }

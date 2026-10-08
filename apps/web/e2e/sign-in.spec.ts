@@ -17,7 +17,7 @@ test('a signed-out visit lands on sign-in, and the button starts GitHub sign-in'
 
   await page.goto('/');
 
-  await expect(page).toHaveURL(/\/sign-in$/);
+  await expect(page).toHaveURL(/\/sign-in\?redirect=%2F$/);
   const button = page.getByRole('button', { name: 'Sign in with GitHub' });
   await expect(button).toBeVisible();
 

@@ -51,7 +51,7 @@ Nothing imports from another `apps/*` package.
 | `pnpm db:up` | Starts Postgres (Docker Compose) and waits for its healthcheck |
 | `pnpm db:migrate` | Applies pending migrations to the dev database |
 | `pnpm dev` | Starts Postgres, applies migrations, seeds, then runs the API and web. MinIO joins it with the feature that needs it. For runs without a model, start `pnpm runner:fake` beside it |
-| `pnpm runner` | Runs the runner's CLI from the checkout: `pnpm runner pair --server <url> --code <code>`, then `pnpm runner start` |
+| `pnpm runner` | Runs the runner's CLI from the checkout: `pnpm runner login --server <url>`, then `pnpm runner start` |
 | `pnpm runner:fake` | Starts the paired runner with the fake agent in place of `claude` |
 | `pnpm runner:build` | Builds the runner's published CLI to `apps/runner/dist/cli.mjs` |
 | `pnpm runner:publish` | Refuses a dirty working tree, builds, runs the runner's tests, then publishes `plangineer-runner` to npm. The engineer runs it |

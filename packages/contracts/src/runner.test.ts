@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   Runner,
-  RunnerCreatePairingCodeOutput,
-  RunnerPairInput,
-  RunnerPairOutput,
+  RunnerLogin,
+  RunnerPollLoginInput,
+  RunnerPollLoginOutput,
   RunnerRevokeInput,
+  RunnerStartLoginInput,
+  RunnerStartLoginOutput,
+  RunnerUserCodeInput,
 } from './runner.ts';
 
 const ID = '0199c1a2-7b3c-7d4e-8f90-a1b2c3d4e5f6';
@@ -27,8 +30,21 @@ function runner(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function pairInput(overrides: Record<string, unknown> = {}) {
-  return { code: 'ABCD-EFGH-JKMN', name: 'workstation', platform: 'linux', ...overrides };
+const DEVICE_SECRET = 'A'.repeat(43);
+
+function startInput(overrides: Record<string, unknown> = {}) {
+  return { name: 'workstation', platform: 'linux', ...overrides };
+}
+
+function login(overrides: Record<string, unknown> = {}) {
+  return {
+    name: 'workstation',
+    platform: 'linux',
+    status: 'pending',
+    requestedAt: AT,
+    expiresAt: AT,
+    ...overrides,
+  };
 }
 
 describe('Runner', () => {
@@ -54,13 +70,12 @@ describe('Runner', () => {
   });
 });
 
-describe('RunnerPairInput', () => {
-  it.each(['ABCD-EFGH-JKMN', 'abcdefghjkmn', 'ABCDEFGH-JKMN'])('accepts the code %s', (code) => {
-    expect(RunnerPairInput.safeParse(pairInput({ code })).success).toBe(true);
-  });
-
-  it.each(['ABCD-EFGH-JKM', 'ABCD_EFGH_JKMN', 'ABCD-EFGH-JKMN-'])('rejects the code %s', (code) => {
-    expect(RunnerPairInput.safeParse(pairInput({ code })).success).toBe(false);
+describe('RunnerStartLoginInput', () => {
+  it('accepts a valid input, and a name of 100 characters', () => {
+    expect(RunnerStartLoginInput.safeParse(startInput()).success).toBe(true);
+    expect(RunnerStartLoginInput.safeParse(startInput({ name: 'x'.repeat(100) })).success).toBe(
+      true,
+    );
   });
 
   it.each([
@@ -68,15 +83,50 @@ describe('RunnerPairInput', () => {
     ['name', 'x'.repeat(101)],
     ['platform', 'freebsd'],
   ])('rejects an invalid %s', (key, value) => {
-    expect(RunnerPairInput.safeParse(pairInput({ [key]: value })).success).toBe(false);
-  });
-
-  it('accepts a name of 100 characters', () => {
-    expect(RunnerPairInput.safeParse(pairInput({ name: 'x'.repeat(100) })).success).toBe(true);
+    expect(RunnerStartLoginInput.safeParse(startInput({ [key]: value })).success).toBe(false);
   });
 
   it('rejects an unknown key', () => {
-    expect(RunnerPairInput.safeParse(pairInput({ token: 'x' })).success).toBe(false);
+    expect(RunnerStartLoginInput.safeParse(startInput({ token: 'x' })).success).toBe(false);
+  });
+});
+
+describe('RunnerUserCodeInput', () => {
+  it.each(['ABCD-EFGH-JKMN', 'abcdefghjkmn', 'ABCDEFGH-JKMN'])(
+    'accepts the code %s',
+    (userCode) => {
+      expect(RunnerUserCodeInput.safeParse({ userCode }).success).toBe(true);
+    },
+  );
+
+  it.each(['ABCD-EFGH-JKM', 'ABCD_EFGH_JKMN', 'ABCD-EFGH-JKMN-'])(
+    'rejects the code %s',
+    (userCode) => {
+      expect(RunnerUserCodeInput.safeParse({ userCode }).success).toBe(false);
+    },
+  );
+
+  it('rejects an unknown key', () => {
+    expect(RunnerUserCodeInput.safeParse({ userCode: 'ABCD-EFGH-JKMN', x: 1 }).success).toBe(false);
+  });
+});
+
+describe('RunnerPollLoginInput', () => {
+  it('accepts a 43-character base64url device secret', () => {
+    expect(RunnerPollLoginInput.safeParse({ deviceSecret: DEVICE_SECRET }).success).toBe(true);
+  });
+
+  it.each(['A'.repeat(42), 'A'.repeat(44), `${'A'.repeat(42)}=`])(
+    'rejects the device secret %s',
+    (deviceSecret) => {
+      expect(RunnerPollLoginInput.safeParse({ deviceSecret }).success).toBe(false);
+    },
+  );
+
+  it('rejects an unknown key', () => {
+    expect(RunnerPollLoginInput.safeParse({ deviceSecret: DEVICE_SECRET, x: 1 }).success).toBe(
+      false,
+    );
   });
 });
 
@@ -86,22 +136,35 @@ describe('RunnerRevokeInput', () => {
   });
 });
 
-describe('runner outputs', () => {
+describe('runner login outputs', () => {
   it('strip an unknown key', () => {
-    expect(RunnerPairOutput.parse({ runnerId: ID, token: 't', tokenHash: 'h' })).toEqual({
-      runnerId: ID,
-      token: 't',
-    });
-    expect(
-      RunnerCreatePairingCodeOutput.parse({ code: 'ABCD-EFGH-JKMN', expiresAt: AT, codeHash: 'h' }),
-    ).toEqual({ code: 'ABCD-EFGH-JKMN', expiresAt: AT });
+    const start = {
+      deviceSecret: DEVICE_SECRET,
+      userCode: 'ABCD-EFGH-JKMN',
+      approveUrl: 'http://localhost:5173/runners/approve?code=ABCD-EFGH-JKMN',
+      expiresAt: AT,
+      pollIntervalMs: 2000,
+    };
+    expect(RunnerStartLoginOutput.parse({ ...start, userCodeHash: 'h' })).toEqual(start);
+    expect(RunnerLogin.parse({ ...login(), userId: 'u' })).toEqual(login());
   });
 
-  it('have no hash field', () => {
-    const keys = [
-      ...Object.keys(RunnerPairOutput.shape),
-      ...Object.keys(RunnerCreatePairingCodeOutput.shape),
-    ];
-    expect(keys.filter((key) => /hash/i.test(key))).toEqual([]);
+  it.each([
+    [{ status: 'pending' }],
+    [{ status: 'approved', runnerId: ID, token: 't' }],
+    [{ status: 'denied' }],
+    [{ status: 'expired' }],
+  ])('RunnerPollLoginOutput parses %j', (output) => {
+    expect(RunnerPollLoginOutput.parse({ ...output, tokenHash: 'h' })).toEqual(output);
+  });
+
+  it('RunnerPollLoginOutput strips a token from a status that has none', () => {
+    expect(RunnerPollLoginOutput.parse({ status: 'denied', token: 't' })).toEqual({
+      status: 'denied',
+    });
+  });
+
+  it('RunnerLogin rejects the status completed', () => {
+    expect(RunnerLogin.safeParse(login({ status: 'completed' })).success).toBe(false);
   });
 });

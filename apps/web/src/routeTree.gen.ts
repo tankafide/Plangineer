@@ -12,9 +12,10 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
-import { Route as AppRunnersRouteImport } from './routes/_app/runners'
 import { Route as AppRepositoriesIndexRouteImport } from './routes/_app/repositories/index'
 import { Route as AppRepositoriesRepositoryIdRouteImport } from './routes/_app/repositories/$repositoryId'
+import { Route as AppRunnersIndexRouteImport } from './routes/_app/runners/index'
+import { Route as AppRunnersApproveRouteImport } from './routes/_app/runners/approve'
 import { Route as AppRunsIndexRouteImport } from './routes/_app/runs/index'
 import { Route as AppRunsRunIdRouteImport } from './routes/_app/runs/$runId'
 
@@ -32,11 +33,6 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRoute,
 } as any)
-const AppRunnersRoute = AppRunnersRouteImport.update({
-  id: '/runners',
-  path: '/runners',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppRepositoriesIndexRoute = AppRepositoriesIndexRouteImport.update({
   id: '/repositories/',
   path: '/repositories/',
@@ -48,6 +44,16 @@ const AppRepositoriesRepositoryIdRoute =
     path: '/repositories/$repositoryId',
     getParentRoute: () => AppRoute,
   } as any)
+const AppRunnersIndexRoute = AppRunnersIndexRouteImport.update({
+  id: '/runners/',
+  path: '/runners/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppRunnersApproveRoute = AppRunnersApproveRouteImport.update({
+  id: '/runners/approve',
+  path: '/runners/approve',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppRunsIndexRoute = AppRunsIndexRouteImport.update({
   id: '/runs/',
   path: '/runs/',
@@ -62,30 +68,33 @@ const AppRunsRunIdRoute = AppRunsRunIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/sign-in': typeof SignInRoute
-  '/runners': typeof AppRunnersRoute
   '/repositories/$repositoryId': typeof AppRepositoriesRepositoryIdRoute
+  '/runners/approve': typeof AppRunnersApproveRoute
   '/runs/$runId': typeof AppRunsRunIdRoute
   '/repositories/': typeof AppRepositoriesIndexRoute
+  '/runners/': typeof AppRunnersIndexRoute
   '/runs/': typeof AppRunsIndexRoute
 }
 export interface FileRoutesByTo {
   '/sign-in': typeof SignInRoute
-  '/runners': typeof AppRunnersRoute
   '/': typeof AppIndexRoute
   '/repositories/$repositoryId': typeof AppRepositoriesRepositoryIdRoute
+  '/runners/approve': typeof AppRunnersApproveRoute
   '/runs/$runId': typeof AppRunsRunIdRoute
   '/repositories': typeof AppRepositoriesIndexRoute
+  '/runners': typeof AppRunnersIndexRoute
   '/runs': typeof AppRunsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/sign-in': typeof SignInRoute
-  '/_app/runners': typeof AppRunnersRoute
   '/_app/': typeof AppIndexRoute
   '/_app/repositories/$repositoryId': typeof AppRepositoriesRepositoryIdRoute
+  '/_app/runners/approve': typeof AppRunnersApproveRoute
   '/_app/runs/$runId': typeof AppRunsRunIdRoute
   '/_app/repositories/': typeof AppRepositoriesIndexRoute
+  '/_app/runners/': typeof AppRunnersIndexRoute
   '/_app/runs/': typeof AppRunsIndexRoute
 }
 export interface FileRouteTypes {
@@ -93,29 +102,32 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/sign-in'
-    | '/runners'
     | '/repositories/$repositoryId'
+    | '/runners/approve'
     | '/runs/$runId'
     | '/repositories/'
+    | '/runners/'
     | '/runs/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/sign-in'
-    | '/runners'
     | '/'
     | '/repositories/$repositoryId'
+    | '/runners/approve'
     | '/runs/$runId'
     | '/repositories'
+    | '/runners'
     | '/runs'
   id:
     | '__root__'
     | '/_app'
     | '/sign-in'
-    | '/_app/runners'
     | '/_app/'
     | '/_app/repositories/$repositoryId'
+    | '/_app/runners/approve'
     | '/_app/runs/$runId'
     | '/_app/repositories/'
+    | '/_app/runners/'
     | '/_app/runs/'
   fileRoutesById: FileRoutesById
 }
@@ -147,13 +159,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/runners': {
-      id: '/_app/runners'
-      path: '/runners'
-      fullPath: '/runners'
-      preLoaderRoute: typeof AppRunnersRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/repositories/': {
       id: '/_app/repositories/'
       path: '/repositories'
@@ -166,6 +171,20 @@ declare module '@tanstack/react-router' {
       path: '/repositories/$repositoryId'
       fullPath: '/repositories/$repositoryId'
       preLoaderRoute: typeof AppRepositoriesRepositoryIdRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/runners/': {
+      id: '/_app/runners/'
+      path: '/runners'
+      fullPath: '/runners/'
+      preLoaderRoute: typeof AppRunnersIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/runners/approve': {
+      id: '/_app/runners/approve'
+      path: '/runners/approve'
+      fullPath: '/runners/approve'
+      preLoaderRoute: typeof AppRunnersApproveRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/runs/': {
@@ -186,20 +205,22 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppRouteChildren {
-  AppRunnersRoute: typeof AppRunnersRoute
   AppIndexRoute: typeof AppIndexRoute
   AppRepositoriesRepositoryIdRoute: typeof AppRepositoriesRepositoryIdRoute
+  AppRunnersApproveRoute: typeof AppRunnersApproveRoute
   AppRunsRunIdRoute: typeof AppRunsRunIdRoute
   AppRepositoriesIndexRoute: typeof AppRepositoriesIndexRoute
+  AppRunnersIndexRoute: typeof AppRunnersIndexRoute
   AppRunsIndexRoute: typeof AppRunsIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
-  AppRunnersRoute: AppRunnersRoute,
   AppIndexRoute: AppIndexRoute,
   AppRepositoriesRepositoryIdRoute: AppRepositoriesRepositoryIdRoute,
+  AppRunnersApproveRoute: AppRunnersApproveRoute,
   AppRunsRunIdRoute: AppRunsRunIdRoute,
   AppRepositoriesIndexRoute: AppRepositoriesIndexRoute,
+  AppRunnersIndexRoute: AppRunnersIndexRoute,
   AppRunsIndexRoute: AppRunsIndexRoute,
 }
 

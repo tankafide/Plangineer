@@ -44,7 +44,7 @@ const EnvSchema = z
     RUN_SWEEP_INTERVAL_MS: intervalMs,
     RUN_MAX_ATTEMPTS: integer(1, 10),
     SSE_KEEPALIVE_INTERVAL_MS: intervalMs,
-    RUNNER_PAIRING_CODE_TTL_MS: integer(60_000, 3_600_000),
+    RUNNER_LOGIN_TTL_MS: integer(60_000, 3_600_000),
   })
   .superRefine((env, context) => {
     // A lease and the online window must each survive two missed heartbeats.

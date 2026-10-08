@@ -19,7 +19,7 @@ describe('SignInCard', () => {
         });
       }),
     );
-    render(<SignInCard failed={false} />);
+    render(<SignInCard failed={false} redirect="/" />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Sign in with GitHub' }));
 
@@ -27,7 +27,30 @@ describe('SignInCard', () => {
       expect.objectContaining({
         provider: 'github',
         callbackURL: '/',
-        errorCallbackURL: '/sign-in',
+        errorCallbackURL: '/sign-in?redirect=%2F',
+      }),
+    ]);
+  });
+
+  it('starts sign-in with the return path as the callback and in the error callback', async () => {
+    const requests: unknown[] = [];
+    server.use(
+      http.post(`${AUTH_URL}/sign-in/social`, async ({ request }) => {
+        requests.push(await request.json());
+        return HttpResponse.json({
+          url: 'https://github.com/login/oauth/authorize',
+          redirect: false,
+        });
+      }),
+    );
+    render(<SignInCard failed={false} redirect="/runners/approve?code=ABCD-EFGH-JKMN" />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in with GitHub' }));
+
+    expect(requests).toEqual([
+      expect.objectContaining({
+        callbackURL: '/runners/approve?code=ABCD-EFGH-JKMN',
+        errorCallbackURL: '/sign-in?redirect=%2Frunners%2Fapprove%3Fcode%3DABCD-EFGH-JKMN',
       }),
     ]);
   });
@@ -38,7 +61,7 @@ describe('SignInCard', () => {
         HttpResponse.json({ message: 'Provider not configured' }, { status: 500 }),
       ),
     );
-    render(<SignInCard failed={false} />);
+    render(<SignInCard failed={false} redirect="/" />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Sign in with GitHub' }));
 
@@ -49,13 +72,13 @@ describe('SignInCard', () => {
   });
 
   it('shows no alert before a failed attempt', () => {
-    render(<SignInCard failed={false} />);
+    render(<SignInCard failed={false} redirect="/" />);
 
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('shows the error alert above the GitHub button after a failed attempt', () => {
-    render(<SignInCard failed />);
+    render(<SignInCard failed redirect="/" />);
 
     const alert = screen.getByRole('alert');
     const button = screen.getByRole('button', { name: 'Sign in with GitHub' });

@@ -20,6 +20,7 @@ import {
   type RunEvent,
   RunEventType,
   RunKind,
+  RunnerLoginStatus,
   RunnerPlatform,
   RunnerStatus,
   RunStatus,
@@ -34,6 +35,7 @@ export * from './auth-schema.ts';
 
 export const runnerStatus = pgEnum('runner_status', RunnerStatus.enum);
 export const runnerPlatform = pgEnum('runner_platform', RunnerPlatform.enum);
+export const runnerLoginStatus = pgEnum('runner_login_status', RunnerLoginStatus.enum);
 export const runStatus = pgEnum('run_status', RunStatus.enum);
 export const runEventType = pgEnum('run_event_type', RunEventType.enum);
 export const runKind = pgEnum('run_kind', RunKind.enum);
@@ -49,26 +51,6 @@ const id = () =>
   uuid()
     .default(sql`uuidv7()`)
     .primaryKey();
-
-/** Immutable apart from used_at. Stored only as a hash, used once, and expires. */
-export const runnerPairingCodes = pgTable(
-  'runner_pairing_codes',
-  {
-    id: id(),
-    userId: uuid()
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
-    codeHash: text().notNull(),
-    expiresAt: timestamp({ withTimezone: true }).notNull(),
-    usedAt: timestamp({ withTimezone: true }),
-    createdAt: createdAt(),
-  },
-  (table) => [
-    unique('runner_pairing_codes_code_hash_key').on(table.codeHash),
-    // Serves the per-user rate-limit count.
-    index('runner_pairing_codes_user_id_created_at_idx').on(table.userId, table.createdAt),
-  ],
-);
 
 /** A revoked runner keeps its row, because runs point at it. */
 export const runners = pgTable(
@@ -107,6 +89,43 @@ export const runners = pgTable(
     ),
     // Serves runner.list.
     index('runners_user_id_id_idx').on(table.userId, table.id),
+  ],
+);
+
+/**
+ * A runner's request to pair. Belongs to no user until a member approves it, and completes once,
+ * when the runner's poll collects its token. Secrets are stored only as hashes.
+ */
+export const runnerLogins = pgTable(
+  'runner_logins',
+  {
+    id: id(),
+    deviceSecretHash: text().notNull(),
+    userCodeHash: text().notNull(),
+    name: text().notNull(),
+    platform: runnerPlatform().notNull(),
+    status: runnerLoginStatus().default('pending').notNull(),
+    userId: uuid().references(() => user.id, { onDelete: 'cascade' }),
+    runnerId: uuid().references(() => runners.id, { onDelete: 'cascade' }),
+    expiresAt: timestamp({ withTimezone: true }).notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    unique('runner_logins_device_secret_hash_key').on(table.deviceSecretHash),
+    unique('runner_logins_user_code_hash_key').on(table.userCodeHash),
+    unique('runner_logins_runner_id_key').on(table.runnerId),
+    check('runner_logins_name_length_check', sql`char_length(${table.name}) BETWEEN 1 AND 100`),
+    check(
+      'runner_logins_user_id_check',
+      sql`(${table.userId} IS NOT NULL) = (${table.status} IN ('approved', 'completed'))`,
+    ),
+    check(
+      'runner_logins_runner_id_check',
+      sql`(${table.runnerId} IS NOT NULL) = (${table.status} = 'completed')`,
+    ),
+    index('runner_logins_user_id_idx').on(table.userId),
+    // Serves the pending count and the cleanup delete.
+    index('runner_logins_expires_at_idx').on(table.expiresAt),
   ],
 );
 

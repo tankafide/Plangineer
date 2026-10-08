@@ -6,6 +6,7 @@ import type { InitialContext } from './context.ts';
 import { router } from './router.ts';
 
 const ID = '0199c1a2-7b3c-7d4e-8f90-a1b2c3d4e5f6';
+const USER_CODE = 'ABCD-EFGH-JKMN';
 
 describe('router', () => {
   let database: TestDatabase;
@@ -39,8 +40,16 @@ describe('router', () => {
   const SESSION_PROCEDURES = [
     ['me.get', () => call(router.me.get, undefined, { context: context(null) })],
     [
-      'runner.createPairingCode',
-      () => call(router.runner.createPairingCode, undefined, { context: context(null) }),
+      'runner.getLogin',
+      () => call(router.runner.getLogin, { userCode: USER_CODE }, { context: context(null) }),
+    ],
+    [
+      'runner.approveLogin',
+      () => call(router.runner.approveLogin, { userCode: USER_CODE }, { context: context(null) }),
+    ],
+    [
+      'runner.denyLogin',
+      () => call(router.runner.denyLogin, { userCode: USER_CODE }, { context: context(null) }),
     ],
     ['runner.list', () => call(router.runner.list, {}, { context: context(null) })],
     [
@@ -68,13 +77,13 @@ describe('router', () => {
     await expect(result).rejects.toMatchObject({ code: 'UNAUTHORIZED', status: 401 });
   });
 
-  it('runner.pair needs no session, and rejects an unknown code', async () => {
-    const result = call(
-      router.runner.pair,
-      { code: 'ABCD-EFGH-JKMN', name: 'workstation', platform: 'linux' },
+  it('runner.pollLogin needs no session, and answers expired for an unknown device secret', async () => {
+    const result = await call(
+      router.runner.pollLogin,
+      { deviceSecret: 'A'.repeat(43) },
       { context: context(null) },
     );
 
-    await expect(result).rejects.toMatchObject({ code: 'PAIRING_CODE_REJECTED', status: 401 });
+    expect(result).toEqual({ status: 'expired' });
   });
 });

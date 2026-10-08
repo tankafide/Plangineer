@@ -88,36 +88,18 @@ describe('RunnersScreen', () => {
     expect(card.queryByRole('button', { name: 'Revoke' })).toBeNull();
   });
 
-  it('shows the pairing command after Pair a runner, and hides it on Done', async () => {
+  it('shows the login command for the current origin with a copy button', async () => {
     answerProcedure('runner/list', answerJson(page([])));
-    answerProcedure(
-      'runner/createPairingCode',
-      answerJson({ code: 'ABCD-EFGH-JKMN', expiresAt: '2026-10-07T10:10:00.000Z' }),
-    );
+
     await renderPage(RunnersScreen);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Pair a runner' }));
-
-    const command = `pnpm runner pair --server ${window.location.origin} --code ABCD-EFGH-JKMN`;
-    expect(await screen.findByText(command)).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Add a runner' })).toBeTruthy();
+    const command = `npx plangineer-runner login --server ${window.location.origin}`;
+    expect(screen.getByText(command)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Copy command' })).toBeTruthy();
-    expect(screen.getByText(/The code works once and expires at .+\./)).toBeTruthy();
-
-    await userEvent.click(screen.getByRole('button', { name: 'Done' }));
-
-    expect(screen.queryByText(command)).toBeNull();
-    expect(screen.getByRole('button', { name: 'Pair a runner' })).toBeTruthy();
-  });
-
-  it('says to wait when too many pairing codes were created', async () => {
-    answerProcedure('runner/list', answerJson(page([])));
-    answerProcedure('runner/createPairingCode', rpcError('TOO_MANY_REQUESTS', 429));
-    await renderPage(RunnersScreen);
-
-    await userEvent.click(screen.getByRole('button', { name: 'Pair a runner' }));
-
-    const alert = await screen.findByRole('alert');
-    expect(alert.textContent).toContain('Too many pairing codes. Try again in a few minutes.');
+    expect(
+      screen.getByText('Run it on the machine, then approve the request it opens in your browser.'),
+    ).toBeTruthy();
   });
 
   it('revokes a runner only after Revoke runner is confirmed', async () => {
@@ -148,6 +130,9 @@ describe('RunnersScreen', () => {
     await renderPage(RunnersScreen);
 
     expect(await screen.findByText('No runners yet')).toBeTruthy();
+    expect(
+      screen.getByText('Pair your first runner with the Add a runner card above.'),
+    ).toBeTruthy();
   });
 
   it('shows the error and Retry when the runners fail to load, and recovers', async () => {

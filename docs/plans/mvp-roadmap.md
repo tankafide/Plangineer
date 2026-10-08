@@ -14,9 +14,10 @@ Chunks 1 to 9 cover MVP Phases 1 to 3. Chunk 10 is Phase 4, which is rollout and
 | Skill specification and baseline catalog | Written on Oct 8, 2026 as the [skill specification](../product/skill-specification.md) and the [baseline catalog](../product/baseline-catalog.md) |
 | Project scaffold | Merged to `main` on Oct 7, 2026. It includes the workspace, every check, CI on three systems, local Postgres, GitHub sign-in, the user record with its admin or member role, and the development GitHub App |
 | Skills mirror | The runner's `skills sync` and `skills check` commands sync and check this repository, through `pnpm skills:sync`, `pnpm verify` and the pre-commit hook. A run fails with `skills_drift` when its worktree's mirror drifts |
-| Runner | Chunk 1 built it: pairing with a one-time code, one WebSocket to the API, dispatch from the `runs` table with leases and a sweeper, the Claude Code adapter in plan mode, a worktree per run, plan limits, and SSE to the Runs screens. It runs from the checkout with `pnpm runner`, and `pnpm runner:fake` runs it with the fake agent |
+| Runner | Chunk 1 built it: pairing by a copied one-time code, one WebSocket to the API, dispatch from the `runs` table with leases and a sweeper, the Claude Code adapter in plan mode, a worktree per run, plan limits, and SSE to the Runs screens. It runs from the checkout with `pnpm runner`, and `pnpm runner:fake` runs it with the fake agent |
 | Repository setup | Chunk 2 built it on Oct 8, 2026, as the [repository setup plan](2026-10-08-repository-setup.md) describes: adding a repository, the scan, the three checklists, and one setup pull request with the four orchestrators and the chosen rule skills. Each repository's workflow settings are on its settings card |
 | Runner on npm | The runner is prepared for publishing to npm as `plangineer-runner`. The engineer publishes it with `pnpm runner:publish` |
+| Browser pairing | Replaced the copied code with `plangineer-runner login --server <url>`, which opens an approval page in the browser, as the [runner browser pairing plan](2026-10-08-runner-browser-pairing.md) describes. The engineer publishes runner 0.2.0 with `pnpm runner:publish` |
 | Cross-repository orchestrators | Not built. They get their own plan |
 
 ## Chunks

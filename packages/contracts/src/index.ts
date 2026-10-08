@@ -11,7 +11,15 @@ import {
   repositoryUpdate,
 } from './repository.ts';
 import { runCancel, runCreate, runGet, runList } from './run.ts';
-import { runnerCreatePairingCode, runnerList, runnerPair, runnerRevoke } from './runner.ts';
+import {
+  runnerApproveLogin,
+  runnerDenyLogin,
+  runnerGetLogin,
+  runnerList,
+  runnerPollLogin,
+  runnerRevoke,
+  runnerStartLogin,
+} from './runner.ts';
 
 export { MeGetOutput, UserRole } from './me.ts';
 export { PageInput } from './pagination.ts';
@@ -96,10 +104,14 @@ export {
 export {
   CLAUDE_CODE_MIN_VERSION,
   CliStatus,
-  PAIRING_CODE_PATTERN,
   Runner,
+  RunnerLogin,
+  RunnerLoginStatus,
   RunnerPlatform,
+  RunnerPollLoginOutput,
+  RunnerStartLoginOutput,
   RunnerStatus,
+  RunnerUserCode,
 } from './runner.ts';
 export {
   MAX_ACTIVE_RUNS,
@@ -120,8 +132,11 @@ export {
 export const contract = {
   me: { get: meGet },
   runner: {
-    createPairingCode: runnerCreatePairingCode,
-    pair: runnerPair,
+    startLogin: runnerStartLogin,
+    pollLogin: runnerPollLogin,
+    getLogin: runnerGetLogin,
+    approveLogin: runnerApproveLogin,
+    denyLogin: runnerDenyLogin,
     list: runnerList,
     revoke: runnerRevoke,
   },

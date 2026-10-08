@@ -14,7 +14,7 @@ npm install --global plangineer-runner
 
 | Command | Does |
 | --- | --- |
-| `plangineer-runner pair --server <url> --code <code> [--name <name>]` | Pairs this machine with a deployment, using a pairing code from its Runners screen. `--name` defaults to the machine's host name |
+| `plangineer-runner login --server <url> [--name <name>] [--no-browser]` | Pairs this machine with a deployment: opens the approval page in your browser, and finishes when you click **Approve**. `--name` defaults to the machine's host name. `--no-browser` prints the link and does not open it |
 | `plangineer-runner start` | Connects to the deployment and runs the jobs it assigns until stopped |
 | `plangineer-runner skills sync` | Writes the `.claude/skills/` mirror from `.agents/skills/` |
 | `plangineer-runner skills check [--staged]` | Fails on any missing, changed or stray mirror file, writing nothing. `--staged` checks the git index |

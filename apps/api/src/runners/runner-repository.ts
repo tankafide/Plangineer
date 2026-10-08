@@ -1,8 +1,8 @@
 import { CliStatus, type PageInput, Runner, type RunnerPlatform } from '@plangineer/contracts';
-import { and, desc, eq, gt, isNull, lt, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, lt, sql, type SQL } from 'drizzle-orm';
 import type { Executor, Transaction } from '../db/client.ts';
 import { toIsoOrNull } from '../lib/dates.ts';
-import { runnerPairingCodes, runners } from '../db/schema.ts';
+import { runners } from '../db/schema.ts';
 import { RUNNER_WAKE_CHANNEL } from '../realtime/notifications.ts';
 
 /** True while the runner was seen within the offline window, by the database clock. */
@@ -49,58 +49,6 @@ function toRunner(row: RunnerRow): Runner {
     revokedAt: toIsoOrNull(row.revokedAt),
     clis: CliStatus.array().parse(row.clis),
   });
-}
-
-export async function countPairingCodesSince(
-  tx: Transaction,
-  userId: string,
-  windowMs: number,
-): Promise<number> {
-  const [row] = await tx
-    .select({ count: sql<number>`count(*)::int` })
-    .from(runnerPairingCodes)
-    .where(
-      and(
-        eq(runnerPairingCodes.userId, userId),
-        gt(runnerPairingCodes.createdAt, sql`now() - make_interval(secs => ${windowMs / 1000})`),
-      ),
-    );
-  return row?.count ?? 0;
-}
-
-export async function insertPairingCode(
-  tx: Transaction,
-  { userId, codeHash, ttlMs }: { userId: string; codeHash: string; ttlMs: number },
-): Promise<Date> {
-  const [row] = await tx
-    .insert(runnerPairingCodes)
-    .values({
-      userId,
-      codeHash,
-      expiresAt: sql`now() + make_interval(secs => ${ttlMs / 1000})`,
-    })
-    .returning({ expiresAt: runnerPairingCodes.expiresAt });
-  if (row === undefined) throw new Error('Pairing code insert returned no row');
-  return row.expiresAt;
-}
-
-/** Marks an unused, unexpired code used and returns its user, or undefined for any other code. */
-export async function usePairingCode(
-  tx: Transaction,
-  codeHash: string,
-): Promise<string | undefined> {
-  const [row] = await tx
-    .update(runnerPairingCodes)
-    .set({ usedAt: sql`now()` })
-    .where(
-      and(
-        eq(runnerPairingCodes.codeHash, codeHash),
-        isNull(runnerPairingCodes.usedAt),
-        gt(runnerPairingCodes.expiresAt, sql`now()`),
-      ),
-    )
-    .returning({ userId: runnerPairingCodes.userId });
-  return row?.userId;
 }
 
 export async function insertRunner(

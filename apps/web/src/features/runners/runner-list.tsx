@@ -40,7 +40,7 @@ export function RunnerList() {
           <EmptyHeader>
             <EmptyTitle>No runners yet</EmptyTitle>
             <EmptyDescription>
-              Pair your first runner with the Pair a runner card above.
+              Pair your first runner with the Add a runner card above.
             </EmptyDescription>
           </EmptyHeader>
         </Empty>

@@ -2,7 +2,7 @@ import { pino, type Level, type Logger } from 'pino';
 
 export type { Logger };
 
-/** The runner's logger: JSON to stdout and to `logFile`, with tokens, codes and auth redacted. */
+/** The runner's logger: JSON to stdout and to `logFile`, with tokens, login secrets and auth redacted. */
 export function createRunnerLogger(level: Level, logFile: string): Logger {
   const transport = pino.transport({
     targets: [
@@ -14,7 +14,16 @@ export function createRunnerLogger(level: Level, logFile: string): Logger {
     {
       level,
       redact: {
-        paths: ['token', 'code', 'authorization', '*.token', '*.code', '*.authorization'],
+        paths: [
+          'token',
+          'deviceSecret',
+          'userCode',
+          'authorization',
+          '*.token',
+          '*.deviceSecret',
+          '*.userCode',
+          '*.authorization',
+        ],
       },
     },
     transport,

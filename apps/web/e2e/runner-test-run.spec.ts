@@ -58,25 +58,41 @@ function spawnRunner(env: Record<string, string>): RunningRunner {
   };
 }
 
-/** Pairs a runner through the Runners screen and starts it with the fake agent. */
-async function startRunner(page: Page, root: string, name: string): Promise<RunningRunner> {
+/** Reads the subprocess's stdout, line by line, until the approval link appears. */
+async function readApprovalLink(lines: AsyncIterable<string>): Promise<string> {
+  const printed: string[] = [];
+  for await (const line of lines) {
+    printed.push(line);
+    const link = /approve it in Plangineer: (\S+)$/.exec(line)?.[1];
+    if (link !== undefined) return link;
+  }
+  throw new Error(`The login ended before it printed an approval link: ${printed.join(' | ')}`);
+}
+
+/** Pairs a runner through the approval page and starts it with the fake agent. */
+async function startRunner(
+  page: Page,
+  baseURL: string,
+  root: string,
+  name: string,
+): Promise<RunningRunner> {
   const env = {
     PLANGINEER_RUNNER_DATA_DIR: path.join(root, 'runner'),
     PLANGINEER_GIT_BASE_URL: await createRemote(root),
     PLANGINEER_CLAUDE_COMMAND: JSON.stringify([process.execPath, FAKE_AGENT]),
   };
-  await page.goto('/runners');
-  await page.getByRole('button', { name: 'Pair a runner' }).click();
-  const command = await page.getByText('pnpm runner pair --server').textContent();
-  const [, server, code] = /--server (\S+) --code (\S+)/.exec(command ?? '') ?? [];
-  if (server === undefined || code === undefined) throw new Error('No pairing command shown');
-  await execa(
+  const login = execa(
     process.execPath,
-    [RUNNER_CLI, 'pair', '--server', server, '--code', code, '--name', name],
-    {
-      env,
-    },
+    [RUNNER_CLI, 'login', '--server', baseURL, '--name', name, '--no-browser'],
+    { env },
   );
+  await page.goto(await readApprovalLink(login.iterable({ from: 'stdout', binary: false })));
+  await expect(page.getByRole('heading', { name: `Pair ${name}?` })).toBeVisible();
+  await page.getByRole('button', { name: 'Approve' }).click();
+  await expect(
+    page.getByText('Approved. Your terminal finishes pairing on its own.'),
+  ).toBeVisible();
+  await login;
   return spawnRunner(env);
 }
 
@@ -106,10 +122,11 @@ test.describe('a test run on a paired runner', () => {
   let runnerName: string;
   let runner: RunningRunner;
 
-  test.beforeEach(async ({ page }, testInfo) => {
+  test.beforeEach(async ({ page, baseURL }, testInfo) => {
+    if (baseURL === undefined) throw new Error('The Playwright config has no baseURL');
     root = await mkdtemp(path.join(os.tmpdir(), 'plangineer-e2e-'));
     runnerName = `e2e-${testInfo.project.name}-${randomUUID().slice(0, 8)}`;
-    runner = await startRunner(page, root, runnerName);
+    runner = await startRunner(page, baseURL, root, runnerName);
   });
 
   test.afterEach(async ({ page }) => {

@@ -5,8 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { signInWithGitHub } from '@/lib/auth-client';
 
-/** The sign-in card. failed is set when GitHub sent the user back with an error. */
-export function SignInCard({ failed }: { failed: boolean }) {
+/**
+ * The sign-in card. failed is set when GitHub sent the user back with an error, and redirect is
+ * the same-origin path to return to after sign-in.
+ */
+export function SignInCard({ failed, redirect }: { failed: boolean; redirect: string }) {
   const [pending, startTransition] = useTransition();
   const [startFailed, setStartFailed] = useState(false);
 
@@ -14,7 +17,7 @@ export function SignInCard({ failed }: { failed: boolean }) {
     setStartFailed(false);
     startTransition(async () => {
       try {
-        await signInWithGitHub();
+        await signInWithGitHub(redirect);
       } catch {
         setStartFailed(true);
       }

@@ -4,14 +4,15 @@ import { parseArgs } from 'node:util';
 import type { CommandResult } from './command-result.ts';
 import { parseRunnerEnv, type RunnerEnv } from './config/runner-env.ts';
 import { packageVersion } from './package-version.ts';
-import { pairCommand } from './pair-command.ts';
+import open from 'open';
+import { loginCommand } from './login-command.ts';
 import { lintSkills } from './skills/skill-lint.ts';
 import { checkSkills, syncSkills } from './skills/skills-mirror.ts';
 import { startCommand } from './start-command.ts';
 
 const USAGE = [
   'Usage: plangineer-runner <command>',
-  '  pair --server <url> --code <code> [--name <name>]',
+  '  login --server <url> [--name <name>] [--no-browser]',
   '  start',
   '  skills sync',
   '  skills check [--staged]',
@@ -29,11 +30,15 @@ async function withEnv(
   return parsed.ok ? command(parsed.env) : { ok: false, message: parsed.message };
 }
 
-function parsePairArgs(args: string[]) {
+function parseLoginArgs(args: string[]) {
   try {
     return parseArgs({
       args,
-      options: { server: { type: 'string' }, code: { type: 'string' }, name: { type: 'string' } },
+      options: {
+        server: { type: 'string' },
+        name: { type: 'string' },
+        'no-browser': { type: 'boolean' },
+      },
     }).values;
   } catch (error) {
     if (error instanceof TypeError && 'code' in error) return null;
@@ -41,16 +46,15 @@ function parsePairArgs(args: string[]) {
   }
 }
 
-async function pair(args: string[]): Promise<CommandResult> {
-  const values = parsePairArgs(args);
-  if (values?.server === undefined || values.code === undefined) return usage();
-  if (!URL.canParse(values.server)) return usage();
+async function login(args: string[]): Promise<CommandResult> {
+  const values = parseLoginArgs(args);
+  if (values?.server === undefined || !URL.canParse(values.server)) return usage();
   const options = {
     serverUrl: values.server,
-    code: values.code,
     name: values.name ?? os.hostname(),
+    openBrowser: values['no-browser'] !== true,
   };
-  return withEnv((env) => pairCommand(env, options));
+  return withEnv((env) => loginCommand(env, options, open));
 }
 
 async function runCommand(args: string[]): Promise<CommandResult> {
@@ -65,7 +69,7 @@ async function runCommand(args: string[]): Promise<CommandResult> {
   if (command === 'skills' && restIs('check', '--staged')) {
     return checkSkills(cwd, { staged: true });
   }
-  if (command === 'pair') return pair(rest);
+  if (command === 'login') return login(rest);
   if (command === 'start' && restIs()) return withEnv(startCommand);
   return usage();
 }

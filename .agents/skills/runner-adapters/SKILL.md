@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Runner adapters
 
-Rules for `apps/runner`, the npm package an engineer installs to run agents on their own machine. It imports `contracts` and `domain` only. Its protocol with the control plane is in [run-orchestration](../run-orchestration/SKILL.md), pairing and the vendor login rule in [auth-and-access](../auth-and-access/SKILL.md), and spawning, stopping, paths and line endings in [cross-platform](../cross-platform/SKILL.md).
+Rules for `apps/runner`, the npm package an engineer installs to run agents on their own machine. It imports `contracts` and `domain` only. Its protocol with the control plane is in [run-orchestration](../run-orchestration/SKILL.md), pairing with `plangineer-runner login` and the vendor login rule in [auth-and-access](../auth-and-access/SKILL.md), and spawning, stopping, paths and line endings in [cross-platform](../cross-platform/SKILL.md).
 
 ## Implement mode
 
@@ -15,7 +15,7 @@ Rules for `apps/runner`, the npm package an engineer installs to run agents on t
 | Part | Rule |
 | --- | --- |
 | Package | Node 24, published to npm as `plangineer-runner` with `pnpm runner:publish`, one `bin` entry. It ships JavaScript built by tsdown, with `contracts` bundled in. The plan that adds the CLI names its commands |
-| Config and data | Under `env-paths`. The runner holds no state beyond its pairing token and worktrees |
+| Config and data | Under `env-paths`. The runner holds no state beyond its token and worktrees |
 | Environment | Parsed with a Zod schema at startup. A missing or invalid variable exits with a message |
 | Logs | pino as JSON to stdout and `logs/runner.log` |
 

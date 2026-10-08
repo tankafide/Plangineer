@@ -13,5 +13,11 @@ export { useRefreshSetup, useScanRepository, useStartSetup } from './repository-
 export { createQueryClient } from './query-client.ts';
 export type { RunEventStreamState } from './run-event-stream.ts';
 export { useRunEvents } from './run-events.ts';
-export { useCreatePairingCode, useRevokeRunner, useRunnerList } from './runners.ts';
+export {
+  useApproveRunnerLogin,
+  useDenyRunnerLogin,
+  useRevokeRunner,
+  useRunnerList,
+  useRunnerLogin,
+} from './runners.ts';
 export { useCancelRun, useCreateRun, useRun, useRunList } from './runs.ts';

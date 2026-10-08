@@ -48,9 +48,10 @@ describe('plangineer-runner CLI', () => {
     [['skills', 'sync', '--staged']],
     [['skills', 'chek']],
     [['skills', 'check', '--extra']],
-    [['pair', '--code', 'ABCD-EFGH-JKMN']],
-    [['pair', '--server', 'not a url', '--code', 'ABCD-EFGH-JKMN']],
-    [['pair', '--server', 'http://localhost', '--code', 'ABCD-EFGH-JKMN', '--bogus']],
+    [['login']],
+    [['login', '--server', 'not a url']],
+    [['login', '--server', 'http://localhost', '--bogus']],
+    [['pair', '--server', 'http://localhost', '--code', 'ABCD-EFGH-JKMN']],
     [['start', 'now']],
   ])('prints the usage and exits 1 for arguments %j', async (args) => {
     const result = await cli(args);

@@ -53,16 +53,18 @@ describe('routes', () => {
   );
 
   it('re-runs the session check when Retry is clicked on the error page', async () => {
-    let calls = 0;
-    answerSession(() => {
-      calls += 1;
-      return calls === 1
+    let failing = true;
+    answerSession(() =>
+      failing
         ? HttpResponse.json({ message: 'Database down' }, { status: 500 })
-        : HttpResponse.json(null);
-    });
-    await renderRoute('/sign-in');
+        : HttpResponse.json(null),
+    );
+    // The canonical URL, so the router does not navigate to add the default redirect parameter.
+    await renderRoute('/sign-in?redirect=%2F');
+    const retry = await screen.findByRole('button', { name: 'Retry' });
+    failing = false;
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+    await userEvent.click(retry);
 
     expect(await screen.findByRole('button', { name: 'Sign in with GitHub' })).toBeTruthy();
     expect(screen.queryByRole('heading', { name: 'Something went wrong' })).toBeNull();
@@ -75,6 +77,54 @@ describe('routes', () => {
 
     expect(await screen.findByRole('button', { name: 'Sign in with GitHub' })).toBeTruthy();
     expect(router.state.location.pathname).toBe('/sign-in');
+  });
+
+  it('sends a signed-out visit to the approval link on to /sign-in, keeping the link as the return path', async () => {
+    answerSession(() => HttpResponse.json(null));
+    const requests: unknown[] = [];
+    server.use(
+      http.post(`${AUTH_URL}/sign-in/social`, async ({ request }) => {
+        requests.push(await request.json());
+        return HttpResponse.json({
+          url: 'https://github.com/login/oauth/authorize',
+          redirect: false,
+        });
+      }),
+    );
+    const { router } = await renderRoute('/runners/approve?code=ABCD-EFGH-JKMN');
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Sign in with GitHub' }));
+
+    expect(router.state.location.pathname).toBe('/sign-in');
+    expect(router.state.location.search).toEqual({
+      redirect: '/runners/approve?code=ABCD-EFGH-JKMN',
+    });
+    expect(requests).toEqual([
+      expect.objectContaining({
+        callbackURL: '/runners/approve?code=ABCD-EFGH-JKMN',
+        errorCallbackURL: '/sign-in?redirect=%2Frunners%2Fapprove%3Fcode%3DABCD-EFGH-JKMN',
+      }),
+    ]);
+  });
+
+  it('sends a signed-in visit to /sign-in on to its same-origin redirect', async () => {
+    answerSignedIn();
+    answerProcedure('runner/list', answerJson(page([])));
+
+    const { router } = await renderRoute('/sign-in?redirect=/runners');
+
+    expect(await screen.findByRole('heading', { name: 'Runners' })).toBeTruthy();
+    expect(router.state.location.pathname).toBe('/runners');
+  });
+
+  it('sends a signed-in visit to /sign-in with an external redirect to /', async () => {
+    answerSignedIn();
+    answerProcedure('run/list', answerJson(page([])));
+
+    const { router } = await renderRoute('/sign-in?redirect=//example.com');
+
+    await screen.findByRole('navigation', { name: 'Main' });
+    expect(router.state.location.pathname).toBe('/');
   });
 
   it('shows the header with Account, Runners, Repositories and Runs above a signed-in screen', async () => {

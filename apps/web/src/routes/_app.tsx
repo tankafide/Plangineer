@@ -14,9 +14,14 @@ function AppLayout() {
 }
 
 export const Route = createFileRoute('/_app')({
-  beforeLoad: async () => {
+  beforeLoad: async ({ location }) => {
     const session = await readSession();
-    if (session === null) throw redirect({ to: '/sign-in' });
+    if (session === null) {
+      throw redirect({
+        to: '/sign-in',
+        search: { redirect: `${location.pathname}${location.searchStr}` },
+      });
+    }
   },
   component: AppLayout,
 });
