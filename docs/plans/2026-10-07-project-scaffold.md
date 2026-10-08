@@ -4,7 +4,7 @@ Oct 7, 2026
 
 ## Goal
 
-Put every prerequisite for MVP development in place: the machine toolchain, the pnpm workspace with all six packages, every check in `pnpm verify`, local Postgres, the agent and git hooks, CI on three systems, and one signed-in slice through every layer that proves the stack works together. MVP features, seed data, MinIO, the fake agent and runner behavior are left out.
+Put every prerequisite for MVP development in place: the machine toolchain, the pnpm workspace with five of its six packages, every check in `pnpm verify`, local Postgres, the agent and git hooks, CI on three systems, and one signed-in slice through every layer that proves the stack works together. MVP features, seed data, MinIO, the fake agent and runner behavior are left out.
 
 ## Prerequisites
 
@@ -39,7 +39,7 @@ The agent prepares this Windows machine. Each command runs from the agent's shel
 
 ### 2. Workspace, TypeScript and the empty packages
 
-**Files:** `package.json`, `pnpm-workspace.yaml`, `turbo.json`, `tsconfig.base.json`, `.gitignore`, `pnpm-lock.yaml`, `packages/domain/package.json`, `packages/domain/tsconfig.json`, `packages/domain/src/index.ts`, `apps/runner/package.json`, `apps/runner/tsconfig.json`, `apps/runner/src/cli.ts`, `apps/runner/src/cli.test.ts`
+**Files:** `package.json`, `pnpm-workspace.yaml`, `turbo.json`, `tsconfig.base.json`, `.gitignore`, `pnpm-lock.yaml`, `apps/runner/package.json`, `apps/runner/tsconfig.json`, `apps/runner/src/cli.ts`, `apps/runner/src/cli.test.ts`
 
 - **Root `package.json`.** Sets `"packageManager": "pnpm@10.34.6"` and `"engines": { "node": ">=24 <25" }`. It adds `turbo@2.11.7` and `typescript@7.0.2`, and adds the `typecheck` script, which runs `turbo run typecheck`.
 - **`pnpm-workspace.yaml`.** Globs are `packages/*` and `apps/*`. It sets `engineStrict: true` and an `allowBuilds` map (Decision D9). No dependency's install script runs, so each package that has one is listed as `false`, with its reason in a YAML comment:
@@ -64,7 +64,7 @@ The agent prepares this Windows machine. Each command runs from the agent's shel
   - Each package declares every dependency it imports, pinned to an exact version. Every package with tests declares `vitest@5.0.3`, and every package that runs on Node declares `@types/node@24.19.1`, both as dev dependencies.
   - Relative imports carry the `.ts` extension.
   - Each package under `packages/` exposes `"exports": { ".": "./src/index.ts" }`, per `architecture-design`.
-- **`packages/domain`.** Holds only `src/index.ts` with `export {};`. The first MVP decision fills it.
+- **`packages/domain`.** Not created. The first MVP decision creates it with real code. A package with no code cannot pass the checks: `tsc` fails with TS18003 on a package with no inputs, Oxlint's `unicorn/require-module-specifiers` rejects `export {};`, and `unicorn/no-empty-file` rejects an empty file. The dependency-cruiser layout rule for `domain` is already in place.
 - **`apps/runner`.** Dev dependencies `execa@10.1.0`, `vitest@5.0.3` and `@types/node@24.19.1`.
   - The package is named `plangineer-runner`, with `"bin": { "plangineer-runner": "./src/cli.ts" }`.
   - `src/cli.ts` prints the package version for `--version` and exits 0.
@@ -126,7 +126,7 @@ The agent prepares this Windows machine. Each command runs from the agent's shel
 
 - 3a. `pnpm verify` passes and runs all seven steps in the order above.
 - 3b. A file with a format break, a lint error, a type error, a layout violation, an unused export or a failing test each makes `pnpm verify` fail, naming the step and the file.
-- 3c. A temporary import of `apps/runner/src/cli.ts` from `packages/domain/src/index.ts` fails dependency-cruiser with the domain rule's `comment` in the output. This proves the `swc` parser reads `.ts` files before any later step relies on it.
+- 3c. A temporary `packages/domain/src/index.ts` that imports `apps/runner/src/cli.ts` fails dependency-cruiser with the domain rule's `comment` in the output. This proves the `swc` parser reads `.ts` files before any later step relies on it.
 
 ### 4. Local Postgres and the environment file
 
@@ -562,7 +562,7 @@ Decisions D1 to D4 and D18 came from the engineer on Oct 7, 2026. The rest the p
 - **D10. Turborepo runs `typecheck` and `dev` only.** The root-level tools (Oxfmt, Oxlint, dependency-cruiser, Knip, Vitest projects) already cover the whole workspace in one process. The per-package typecheck gains Turborepo's cache, and the `transit` task keeps that cache correct when an imported package changes. Nothing builds yet, so there is no `build` task.
 - **D11. The `pg` driver.** `pg` gives a dedicated `Client` for the `LISTEN` connection that `api-server` requires later, and Drizzle's `node-postgres` driver uses it.
 - **D12. No health endpoint.** Better Auth's `GET /api/auth/ok` tells Playwright that the API is up. Postgres readiness comes from the Compose healthcheck. An HTTP health route arrives with deployment work.
-- **D13. `me.get` is the proving slice.** One authenticated procedure exercises contracts, the oRPC `authed` middleware, the API, the API client, TanStack Query and the web app. `packages/domain` stays empty until the first business decision lands. The runner is a `--version` stub until runner work starts.
+- **D13. `me.get` is the proving slice.** One authenticated procedure exercises contracts, the oRPC `authed` middleware, the API, the API client, TanStack Query and the web app. `packages/domain` is created by the first business decision. The runner is a `--version` stub until runner work starts.
 - **D14. `.env` loading is explicit.** Apps load `../../.env` with Node's `--env-file`, and test setup uses `process.loadEnvFile`. Both fail loudly when the file is missing. CI copies `.env.example`, whose placeholders pass the schema and never reach GitHub, because every GitHub call in tests is intercepted.
 - **D15. The Stop hook skips docs-only turns.** Running `pnpm verify` after a planning or docs turn costs time and proves nothing.
 - **D16. `playwright-cli` installs globally.** No repository code imports it, so Knip would reject it as a dev dependency. Agents run it as a machine tool, like `claude`.

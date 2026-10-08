@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from '@tanstack/react-router';
 import { z } from 'zod';
 import { SignInCard } from '@/features/auth/sign-in-card';
-import { authClient } from '@/lib/auth-client';
+import { readSession } from '@/lib/auth-client';
 
 const SignInSearch = z.object({ error: z.string().optional().catch(undefined) });
 
@@ -17,8 +17,8 @@ function SignInPage() {
 export const Route = createFileRoute('/sign-in')({
   validateSearch: SignInSearch,
   beforeLoad: async () => {
-    const { data } = await authClient.getSession();
-    if (data !== null) throw redirect({ to: '/' });
+    const session = await readSession();
+    if (session !== null) throw redirect({ to: '/' });
   },
   component: SignInPage,
 });

@@ -1,8 +1,9 @@
 import { cleanup } from '@testing-library/react';
 import { afterAll, afterEach } from 'vitest';
-import { server } from './app-harness.tsx';
+import { server } from './msw-server.ts';
 
-// Listen before any test module loads: Better Auth's client keeps the fetch it sees at import.
+// Listen before any app module loads: Better Auth's client keeps the fetch it sees at import.
+// So this file imports nothing that imports the app.
 server.listen({ onUnhandledFrame: 'error' });
 
 afterEach(() => {

@@ -3,13 +3,14 @@ import { fileURLToPath } from 'node:url';
 import { parseEnv as parseEnvFile } from 'node:util';
 import { Client } from 'pg';
 import type { TestProject } from 'vitest/node';
-import { maintenanceUrl, resetDatabase } from '../db/reset-database.ts';
+import { databaseUrl, MAINTENANCE_DATABASE } from '../db/database-url.ts';
+import { resetDatabase } from '../db/reset-database.ts';
 import { parseEnv } from '../env.ts';
 import { createLogger } from '../logger.ts';
-import { databaseUrl, TEMPLATE_DATABASE } from './test-database.ts';
+import { TEMPLATE_DATABASE } from './test-database.ts';
 
 async function leftoverTestDatabases(serverUrl: string): Promise<string[]> {
-  const client = new Client({ connectionString: maintenanceUrl(serverUrl) });
+  const client = new Client({ connectionString: databaseUrl(serverUrl, MAINTENANCE_DATABASE) });
   await client.connect();
   try {
     const { rows } = await client.query<{ datname: string }>(

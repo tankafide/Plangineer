@@ -5,6 +5,7 @@ import path from 'node:path';
 import open from 'open';
 import { setEnvValues } from './env-file.mjs';
 import { checkCallback } from './github-app-callback.mjs';
+import { readConversion } from './github-app-conversion.mjs';
 import { buildManifest } from './github-app-manifest.mjs';
 import { isEntryPoint, repoRoot } from './script-entry.mjs';
 
@@ -43,11 +44,7 @@ async function convertManifest(code) {
     method: 'POST',
     headers: { accept: 'application/vnd.github+json', 'x-github-api-version': '2022-11-28' },
   });
-  const body = await response.json();
-  if (!response.ok) {
-    throw new Error(`GitHub answered ${response.status}: ${body.message ?? 'no message'}`);
-  }
-  return body;
+  return readConversion(response);
 }
 
 async function writeCredentials(app) {

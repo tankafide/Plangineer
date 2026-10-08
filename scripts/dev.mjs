@@ -1,7 +1,7 @@
 import { execa } from 'execa';
 import { binPath } from './bin-path.mjs';
 import { startPostgres } from './db-up.mjs';
-import { repoRoot } from './script-entry.mjs';
+import { reportFailure, repoRoot } from './script-entry.mjs';
 
 const options = { cwd: repoRoot, stdio: 'inherit' };
 
@@ -14,6 +14,5 @@ try {
     options,
   );
 } catch (error) {
-  console.error(error.message);
-  process.exitCode = 1;
+  reportFailure(error);
 }

@@ -5,7 +5,13 @@ import { lintTargets, readHookInput } from './claude-hooks.mjs';
 import { repoRoot } from './script-entry.mjs';
 
 const input = await readHookInput();
-const target = lintTargets(input.tool_input?.file_path ?? '');
+const filePath = input.tool_input?.file_path;
+if (typeof filePath !== 'string') {
+  throw new Error(
+    'PostToolUse hook input has no tool_input.file_path; the hook cannot check the edit',
+  );
+}
+const target = lintTargets(filePath);
 
 if (target !== undefined) {
   const checks = [
