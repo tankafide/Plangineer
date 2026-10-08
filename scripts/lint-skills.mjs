@@ -1,5 +1,6 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
+import { compareText } from './compare-text.mjs';
 import { isEntryPoint, repoRoot } from './script-entry.mjs';
 import { parse } from 'yaml';
 
@@ -17,10 +18,6 @@ const SKILL_PATH_PATTERN = /\.agents\/skills\/([a-z0-9-]+)\/SKILL\.md/g;
 const LINK_PATTERN = /\[[^\]]*\]\(([^)\s]+)\)/g;
 const EXTERNAL_TARGET_PATTERN = /^([a-z][a-z0-9+.-]*:|#)/i;
 const FRONTMATTER_PATTERN = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/;
-
-function compareText(a, b) {
-  return a < b ? -1 : a > b ? 1 : 0;
-}
 
 export function toLf(text) {
   return text.replaceAll('\r\n', '\n');

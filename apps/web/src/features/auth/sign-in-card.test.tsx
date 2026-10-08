@@ -32,6 +32,22 @@ describe('SignInCard', () => {
     ]);
   });
 
+  it('shows the error alert and enables the button again when sign-in fails to start', async () => {
+    server.use(
+      http.post(`${AUTH_URL}/sign-in/social`, () =>
+        HttpResponse.json({ message: 'Provider not configured' }, { status: 500 }),
+      ),
+    );
+    render(<SignInCard failed={false} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in with GitHub' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain(ERROR_TEXT);
+    const button = screen.getByRole('button', { name: 'Sign in with GitHub' });
+    expect(button.hasAttribute('disabled')).toBe(false);
+  });
+
   it('shows no alert before a failed attempt', () => {
     render(<SignInCard failed={false} />);
 

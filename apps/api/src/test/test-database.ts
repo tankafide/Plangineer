@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Client, Pool } from 'pg';
 import { inject } from 'vitest';
 import { createDatabase, type Database } from '../db/client.ts';
-import { maintenanceUrl } from '../db/reset-database.ts';
+import { databaseUrl, MAINTENANCE_DATABASE } from '../db/database-url.ts';
 
 export const TEMPLATE_DATABASE = 'plangineer_test_template';
 
@@ -12,15 +12,10 @@ declare module 'vitest' {
   }
 }
 
-/** The URL of the named database on the server that DATABASE_URL points at. */
-export function databaseUrl(serverUrl: string, name: string): string {
-  const url = new URL(serverUrl);
-  url.pathname = `/${name}`;
-  return url.toString();
-}
-
 async function onMaintenance(statement: (client: Client) => Promise<unknown>): Promise<void> {
-  const client = new Client({ connectionString: maintenanceUrl(inject('databaseUrl')) });
+  const client = new Client({
+    connectionString: databaseUrl(inject('databaseUrl'), MAINTENANCE_DATABASE),
+  });
   await client.connect();
   try {
     await statement(client);

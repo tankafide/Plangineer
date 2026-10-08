@@ -3,6 +3,7 @@ import type { MeGetOutput, UserRole } from '@plangineer/contracts';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { CircleAlert } from 'lucide-react';
+import { useState, useTransition } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,7 +15,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { authClient } from '@/lib/auth-client';
+import { signOut } from '@/lib/auth-client';
 
 const ROLE_LABELS: Record<UserRole, string> = { admin: 'Admin', member: 'Member' };
 
@@ -64,7 +65,7 @@ function FailedDetails({ message, onRetry }: { message: string; onRetry: () => v
 
 function StaleNotice({ onRetry }: { onRetry: () => void }) {
   return (
-    <Alert>
+    <Alert variant="warning">
       <CircleAlert aria-hidden />
       <AlertTitle>Stale</AlertTitle>
       <AlertDescription className="flex flex-col items-start gap-2">
@@ -84,10 +85,21 @@ export function AccountSummary() {
   const navigate = useNavigate();
   const retry = () => void me.refetch();
 
-  async function signOut() {
-    await authClient.signOut();
-    queryClient.clear();
-    await navigate({ to: '/sign-in' });
+  const [signingOut, startSignOut] = useTransition();
+  const [signOutFailed, setSignOutFailed] = useState(false);
+
+  function handleSignOut() {
+    setSignOutFailed(false);
+    startSignOut(async () => {
+      try {
+        await signOut();
+      } catch {
+        setSignOutFailed(true);
+        return;
+      }
+      queryClient.clear();
+      await navigate({ to: '/sign-in' });
+    });
   }
 
   return (
@@ -105,10 +117,21 @@ export function AccountSummary() {
         )}
         {me.isRefetchError && <StaleNotice onRetry={retry} />}
         {me.data !== undefined && <UserDetails user={me.data} />}
+        {signOutFailed && (
+          <Alert variant="destructive">
+            <CircleAlert aria-hidden />
+            <AlertDescription>Sign out did not complete. Try again.</AlertDescription>
+          </Alert>
+        )}
       </CardContent>
       <CardFooter>
-        <Button variant="outline" className="w-full md:ml-auto md:w-auto" onClick={signOut}>
-          Sign out
+        <Button
+          variant="outline"
+          className="w-full md:ml-auto md:w-auto"
+          disabled={signingOut}
+          onClick={handleSignOut}
+        >
+          {signingOut ? 'Signing out…' : 'Sign out'}
         </Button>
       </CardFooter>
     </Card>

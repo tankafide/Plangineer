@@ -112,4 +112,23 @@ describe('AccountSummary', () => {
     expect(queryClient.getQueryCache().getAll()).toEqual([]);
     expect(router.state.location.pathname).toBe('/sign-in');
   });
+
+  it('keeps the user on screen and shows an error when sign-out fails', async () => {
+    answerMe(ready);
+    server.use(
+      http.post(`${AUTH_URL}/sign-out`, () =>
+        HttpResponse.json({ message: 'Database down' }, { status: 500 }),
+      ),
+    );
+    const { queryClient, router } = await renderPage(AccountSummary);
+    await screen.findByText('Ada Lovelace');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('Sign out did not complete. Try again.');
+    expect(screen.getByText('Ada Lovelace')).toBeTruthy();
+    expect(queryClient.getQueryCache().getAll()).not.toEqual([]);
+    expect(router.state.location.pathname).toBe('/');
+  });
 });

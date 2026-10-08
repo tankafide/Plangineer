@@ -63,10 +63,10 @@ describe('createApp', () => {
       expect(authorize.searchParams.get('client_id')).toBe(GITHUB_CLIENT_ID);
     });
 
-    it('ignores a role the client sends to update-user', async () => {
+    it('rejects a role the client sends to update-user, leaving it member', async () => {
       const stored = await storeUser(auth);
 
-      await app.request('/api/auth/update-user', {
+      const response = await app.request('/api/auth/update-user', {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
@@ -76,6 +76,9 @@ describe('createApp', () => {
         body: JSON.stringify({ role: 'admin' }),
       });
 
+      // Better Auth checks the session and origin first, so this code proves the role guard ran.
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({ code: 'FIELD_NOT_ALLOWED' });
       const [row] = await database.db
         .select({ role: user.role })
         .from(user)

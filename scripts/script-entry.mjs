@@ -9,3 +9,11 @@ export function isEntryPoint(moduleUrl) {
     process.argv[1] !== undefined && path.resolve(process.argv[1]) === fileURLToPath(moduleUrl)
   );
 }
+
+/** Prints a failed script's error and its cause chain, and makes the script exit 1. */
+export function reportFailure(error) {
+  for (let current = error; current instanceof Error; current = current.cause) {
+    console.error(current === error ? current.message : `Cause: ${current.message}`);
+  }
+  process.exitCode = 1;
+}

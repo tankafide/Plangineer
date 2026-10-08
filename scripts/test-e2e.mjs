@@ -5,14 +5,18 @@ import { parseEnv } from 'node:util';
 import { execa } from 'execa';
 import { binPath } from './bin-path.mjs';
 import { findBusyPorts } from './ports.mjs';
-import { repoRoot } from './script-entry.mjs';
+import { reportFailure, repoRoot } from './script-entry.mjs';
 
 const WEB_DIR = path.join(repoRoot, 'apps', 'web');
 const WEB_PORT = 5173;
 
 async function main() {
   const env = parseEnv(await readFile(path.join(repoRoot, '.env'), 'utf8'));
-  const busy = await findBusyPorts([WEB_PORT, Number(env.API_PORT)]);
+  const apiPort = Number(env.API_PORT);
+  if (!Number.isInteger(apiPort) || apiPort < 1 || apiPort > 65535) {
+    throw new Error(`API_PORT in .env is missing or not a port number: ${env.API_PORT}`);
+  }
+  const busy = await findBusyPorts([WEB_PORT, apiPort]);
   if (busy.length > 0) {
     console.error(
       `Ports ${busy.join(', ')} are in use. Stop pnpm dev before running pnpm test:e2e.`,
@@ -37,6 +41,5 @@ async function main() {
 try {
   process.exitCode = await main();
 } catch (error) {
-  console.error(error.message);
-  process.exitCode = 1;
+  reportFailure(error);
 }

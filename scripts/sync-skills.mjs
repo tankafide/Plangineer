@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { lstat, mkdir, readdir, readFile, rm, rmdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { compareText } from './compare-text.mjs';
 import { isEntryPoint, repoRoot } from './script-entry.mjs';
 
 const SOURCE_DIR = '.agents/skills';
@@ -10,10 +11,6 @@ const STAGED_FIX = `${FIX} and stage ${MIRROR_DIR}/`;
 const USAGE = 'Usage: node scripts/sync-skills.mjs [--check [--staged]]';
 const SYMLINK_MODE = '120000';
 const MERGED_STAGE = '0';
-
-function compareText(a, b) {
-  return a < b ? -1 : a > b ? 1 : 0;
-}
 
 export function normalizeContent(content) {
   if (content.includes(0)) return content;
