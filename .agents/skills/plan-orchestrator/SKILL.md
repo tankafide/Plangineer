@@ -38,11 +38,11 @@ Rule skills are read by path with the file-read tool, never through a skill tool
 6. **Save.** Write the plan to `docs/plans/YYYY-MM-DD-<slug>.md` and give the engineer the path. Revise the same file for later changes.
 7. **Check in.** Before any review, show the engineer a summary of the plan so they can tell at a glance whether it is on target. Write it to `writing-style`, in chat, short enough to read in a minute:
    - **Goal.** What the change does and why, in one or two sentences.
-   - **Scope.** The "done when" lines, and what was left out.
+   - **Scope.** The outcomes the "done when" lines prove, in a few lines, and what the plan leaves out.
    - **Approach.** Each step in one line.
    - **Key decisions.** The decisions that shape the plan, most of all those made without asking the engineer.
    - **Prerequisites.** Anything the engineer set up or must set up outside the code.
 
-   Then ask whether the plan is on target, as a question with two choices when the CLI has one: run the review, or change the plan, with the engineer's feedback as free text. On feedback, revise the plan, check it against the blocker checklist again, and show the updated summary with the same question. Repeat until the engineer confirms. Then commit the plan as [git workflow](../orchestrator-references/git-workflow.md) describes.
+   Then ask whether the plan is on target, as a question with two choices when the CLI has one: run the review, or change the plan, with the engineer's feedback as free text. On feedback, revise the plan through steps 3 to 5 for whatever the feedback affects, check it against the blocker checklist again, and show the updated summary with the same question. Repeat until the engineer confirms. Then commit the plan as [git workflow](../orchestrator-references/git-workflow.md) describes.
 8. **Review.** Every plan gets at least one review. Once the engineer has confirmed the plan and it is committed, run plan review through subagents without asking again, as [review loop](../orchestrator-references/review-loop.md#review-by-subagent) describes. Present the verified findings, fix the ones the engineer picks, and commit the round. The plan is ready for implementation only after this step.
 9. **Report.** Say what the review changed, offer another round as [review loop](../orchestrator-references/review-loop.md#offering-another-round) describes, and list the skills used, per [execution](../orchestrator-references/execution.md).
