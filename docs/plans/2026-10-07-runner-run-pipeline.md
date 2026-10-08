@@ -31,7 +31,7 @@ New dependencies, pinned exactly like the existing ones:
 | `@orpc/client` | 1.15.5 | `apps/runner` |
 | `execa` | 10.1.0 | `apps/runner` (moves from dev to runtime) |
 | `pino` | 10.4.0 | `apps/runner` |
-| `zod` | 4.6.5 | `apps/runner`, `packages/domain` |
+| `zod` | 4.6.5 | `apps/runner` |
 | `@orpc/contract` | 1.15.5 | `apps/runner` |
 | `@plangineer/contracts` | `workspace:*` | `apps/runner`, `packages/domain` |
 | `@plangineer/domain` | `workspace:*` | `apps/api` |
@@ -39,7 +39,7 @@ New dependencies, pinned exactly like the existing ones:
 | `@hookform/resolvers` | 5.9.1 | `apps/web` |
 | `execa` | 10.1.0 | `apps/web` (dev, for the e2e spec) |
 
-Each step that adds a dependency lists its `package.json`.
+Each step that adds a dependency lists its `package.json` and updates `pnpm-lock.yaml` with `pnpm install`.
 
 ### Phase 1: shared contracts and rules
 
@@ -73,7 +73,7 @@ Every shape follows `api-contract-design`. Datetimes are `z.iso.datetime()`. Ids
 **Shapes**
 
 - `Repository = z.strictObject({ owner, name })`. `owner` matches `^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$`. `name` matches `^[A-Za-z0-9._-]{1,100}$` and is not `.` or `..`. `RepositoryOutput = z.object({ owner: z.string(), name: z.string() })` is its output form.
-- `GitRef = z.string().min(1).max(255)`, matching `^[A-Za-z0-9._/-]+$`, not starting with `-` or `/`, and containing no `..`. The leading-dash rule stops a ref being read as a git option.
+- `GitRef = z.string().min(1).max(255)`, matching `^[A-Za-z0-9._/-]+$`, not starting with `-` or `/`, and containing no `..`. The leading-dash rule stops a ref being read as a git option. The runner also checks each ref with `git check-ref-format --allow-onelevel` before using it (step 12).
 - `CliStatus = z.object({ name: z.literal('claude-code'), version: z.string().max(50).nullable(), available: z.boolean(), minimumVersion: z.string().max(50) })`.
 - `Runner = z.object({ id, name, platform, status, online: z.boolean(), lastSeenAt: nullable, planLimitResetsAt: nullable, concurrencyLimit: z.int().nullable(), clis: z.array(CliStatus), createdAt, revokedAt: nullable })`. `online` is true when `lastSeenAt` is within `RUNNER_OFFLINE_AFTER_MS`.
 - `RunRunner = z.object({ id, name, online, lastSeenAt, planLimitResetsAt })`, the runner as a run shows it.
@@ -116,33 +116,34 @@ A user sees and acts on only their own runners and runs. Another user's id retur
 
 `TERMINAL_RUN_EVENT_TYPES` lists `run.succeeded`, `run.failed` and `run.cancelled`.
 
-**Runner protocol (`runner-protocol.ts`).** One discriminated union per direction on `type`. Run-scoped messages carry `runId` and `attempt`.
+**Runner protocol (`runner-protocol.ts`).** Two discriminated unions on `type`, `RunnerToServerMessage` and `ServerToRunnerMessage`. Run-scoped messages carry `runId` and `attempt`.
 
 | Message | Direction | Fields |
 | --- | --- | --- |
-| `hello` | Runner to server | `runnerVersion`, `platform`, `concurrencyLimit: int 1..16`, `clis: CliStatus[]`, `activeRuns: { runId, attempt }[]` |
+| `hello` | Runner to server | `runnerVersion: string 1..50`, `platform`, `concurrencyLimit: int 1..16`, `clis: CliStatus[]` (at most 4), `activeRuns: { runId, attempt }[]` (at most 16) |
 | `run.events` | Runner to server | `runId`, `attempt`, `events: { seq: int, at least 1, event: RunEventBody restricted to runner-sent types }[]` with 1 to 100 entries in increasing `seq` |
 | `run.heartbeat` | Runner to server | `runId`, `attempt` |
 | `runner.status` | Runner to server | `planLimitResetsAt: nullable` |
-| `welcome` | Server to runner | `runnerId`, `heartbeatIntervalMs`, `runs: { runId, attempt, valid: boolean, ackedSeq: int }[]` for each `activeRuns` entry |
+| `welcome` | Server to runner | `runnerId`, `heartbeatIntervalMs`, `runs: { runId, attempt, valid: boolean, ackedSeq: int }[]` (at most 16), one for each `activeRuns` entry |
 | `run.assign` | Server to runner | `runId`, `attempt`, `job: { repository, ref, prompt, permissionMode }` |
 | `run.cancel` | Server to runner | `runId`, `attempt` |
 | `run.ack` | Server to runner | `runId`, `attempt`, `seq` (the highest runner sequence stored) |
 | `run.heartbeat_reply` | Server to runner | `runId`, `attempt`, `valid: boolean`, `cancelRequested: boolean` |
 
-Messages are JSON text frames of at most 1 MiB, so a full batch of the largest events still fits. Close codes: `1008` for a message that fails its schema, `4001` for a revoked runner, `4002` for a socket replaced by a newer one from the same runner.
+Messages are JSON text frames of at most 1 MiB. One event serializes to under 512 KiB even when its 65,536-character field is fully escaped, so the runner caps each `run.events` message at 512 KiB of serialized JSON as well as 100 events (step 13). Close codes: `1008` for a message that fails its schema, `1009` for a message over 1 MiB (sent by `ws`), `4001` for a revoked runner, `4002` for a socket replaced by a newer one from the same runner.
 
 **Done when:**
 
 - 1a. Each new schema accepts a valid value and rejects each invalid field, including a ref that starts with `-`, a repository name of `..` and a prompt over 20,000 characters.
 - 1b. Each procedure output schema strips an unknown key, and no output schema has a token hash or pairing code hash field.
-- 1c. A `run.events` message with an API-only event type, such as `run.leased`, with an unknown key, or with 101 entries fails to parse.
+- 1c. A `run.events` message with an API-only event type, such as `run.leased`, with an unknown key, or with 101 entries fails to parse, and a `hello` with 17 active runs fails to parse.
+- 1d. An event with every string at its bound and every character escaped serializes to under 512 KiB.
 
 ### 2. Domain package and run status rules
 
 **Files:** `packages/domain/package.json`, `packages/domain/tsconfig.json`, `packages/domain/vitest.config.ts`, `packages/domain/src/index.ts`, `packages/domain/src/run-status.ts`, `packages/domain/src/run-status.test.ts`, `knip.json`
 
-Creates `@plangineer/domain` like `@plangineer/contracts`: one `exports` entry at `src/index.ts`, depending on `@plangineer/contracts` and `zod`. Adds `packages/domain: {}` to `knip.json`. The root Vitest projects glob already includes it, and dependency-cruiser already has its layout rule.
+Creates `@plangineer/domain` like `@plangineer/contracts`: one `exports` entry at `src/index.ts`, depending on `@plangineer/contracts` only, since its functions use contract types and import nothing from `zod`. Adds `packages/domain: {}` to `knip.json`. The root Vitest projects glob already includes it, and dependency-cruiser already has its layout rule.
 
 `run-status.ts` holds two pure functions:
 
@@ -194,7 +195,7 @@ Index `runner_pairing_codes_user_id_created_at_idx (user_id, created_at)` serves
 | --- | --- | --- | --- |
 | `id` | `uuid` | no | `uuidv7()` |
 | `user_id` | `uuid` | no | Owner, `user.id`, `onDelete: cascade` |
-| `name` | `text` | no | |
+| `name` | `text` | no | Check `runners_name_length_check`: 1 to 100 characters |
 | `platform` | `runner_platform` | no | |
 | `token_hash` | `text` | no | SHA-256 hex, unique `runners_token_hash_key` |
 | `status` | `runner_status` | no | Default `active` |
@@ -215,14 +216,15 @@ Index `runners_user_id_id_idx (user_id, id)` serves `runner.list`.
 | `id` | `uuid` | no | `uuidv7()` |
 | `user_id` | `uuid` | no | Creator, `user.id`, `onDelete: cascade` |
 | `runner_id` | `uuid` | no | `runners.id`, `onDelete: cascade` |
-| `repository_owner`, `repository_name`, `ref`, `prompt` | `text` | no | |
+| `repository_owner`, `repository_name`, `ref` | `text` | no | |
+| `prompt` | `text` | no | Check `runs_prompt_length_check`: 1 to 20,000 characters |
 | `status` | `run_status` | no | Default `queued` |
-| `attempt` | `integer` | no | Default 0. Increments on each lease. The fencing token |
+| `attempt` | `integer` | no | Default 0, check `runs_attempt_check` (`attempt >= 0`). Increments on each lease. The fencing token |
 | `lease_expires_at` | `timestamptz` | yes | Check `runs_lease_check`: set exactly when status is `leased` or `running` |
 | `cancel_requested` | `boolean` | no | Default false. Never cleared |
 | `last_event_id` | `integer` | no | Default 0. The event id counter |
 | `commit` | `text` | yes | From `run.started` |
-| `started_at`, `ended_at` | `timestamptz` | yes | Set by the `running` and terminal moves |
+| `started_at`, `ended_at` | `timestamptz` | yes | Set by the `running` and terminal moves. Check `runs_started_at_check`: null in `queued` and `leased`, set in `running` and `succeeded`. Check `runs_ended_at_check`: set exactly in `succeeded`, `failed` and `cancelled` |
 | `created_at`, `updated_at` | `timestamptz` | no | |
 
 | Index | Columns | Serves |
@@ -241,7 +243,7 @@ Index `runners_user_id_id_idx (user_id, id)` serves `runner.list`.
 | `run_id` | `uuid` | no | `runs.id`, `onDelete: cascade` |
 | `event_id` | `integer` | no | Unique `run_events_run_id_event_id_key (run_id, event_id)`, which serves SSE resume |
 | `attempt` | `integer` | no | The run's attempt when appended |
-| `runner_seq` | `integer` | yes | Null for API events. Unique `run_events_run_id_attempt_runner_seq_key (run_id, attempt, runner_seq)`, which de-duplicates runner events |
+| `runner_seq` | `integer` | yes | Null for API events. Check `run_events_runner_seq_check`: `runner_seq IS NULL OR type NOT IN ('run.queued', 'run.leased', 'run.cancel_requested', 'run.lease_lost')`, so an API-only event never carries a runner sequence. Unique `run_events_run_id_attempt_runner_seq_key (run_id, attempt, runner_seq)`, which de-duplicates runner events |
 | `type` | `run_event_type` | no | |
 | `payload` | `jsonb` | no | The whole `RunEvent`, parsed with its schema on write and read |
 | `created_at` | `timestamptz` | no | |
@@ -251,7 +253,7 @@ Generate the migration with `pnpm --filter @plangineer/api db:generate` and read
 **Done when:**
 
 - 3a. `pnpm db:reset` applies the new migration from empty.
-- 3b. The database rejects a second runner with the same token hash, a revoked runner with no `revoked_at`, a run in `leased` with no lease expiry, and a second run event with the same run and event id.
+- 3b. The database rejects a second runner with the same token hash, a revoked runner with no `revoked_at`, a runner name of 101 characters, a run in `leased` with no lease expiry, a prompt of 20,001 characters, a negative attempt, a `running` run with no `started_at`, a `failed` run with no `ended_at`, a `run.leased` event with a runner sequence, and a second run event with the same run and event id.
 - 3c. Deleting a user deletes their pairing codes, runners, runs and run events.
 
 ### Phase 2: control plane
@@ -281,7 +283,7 @@ Developers with an existing `.env` copy the seven new lines from `.env.example`.
 **Wiring.** The API's dependencies reach procedures through context:
 
 - `InitialContext` gains `db: Database` and `env: Env`. `createApp({ auth, logger, db, env, realtime })` passes both into each request's context, and `realtime` carries the listener and the runner connections that steps 7 and 8 add. Services take `db` and `env` as arguments. A wake is a `pg_notify` call inside the service's transaction, so no wake object is passed around.
-- `server.ts` exports `startServer({ env, logger }): Promise<{ port: number, close(): Promise<void> }>`. It creates the pool, the listener, the auth and the app, and calls `serve` on `env.API_PORT`, where `0` picks a free port for tests. `main.ts` parses the environment and calls it. Tests call it to run real instances, including two on one database.
+- `server.ts` exports `startServer({ env, logger }): Promise<{ port: number, close(): Promise<void> }>`. It creates the pool, the listener, the auth and the app, and calls `serve` on `env.API_PORT`, where `0` picks a free port for tests. `main.ts` parses the environment, calls it, and on `SIGINT` or `SIGTERM` awaits `close()` and exits. Tests call it to run real instances, including two on one database.
 - `close()` shuts down in this order: stop the sweeper interval, close every runner socket with `1001`, end every open SSE stream, close the HTTP server, close the listener, end the pool. Steps 7 and 8 register their parts with it.
 - `apps/api/package.json` adds `ws`, `@types/ws` and `@plangineer/domain`.
 
@@ -300,14 +302,14 @@ All status changes and event appends go through `appendRunEvents(tx, runId, item
 1. **Duplicate.** A runner item whose `(run_id, attempt, runner_seq)` row exists is skipped. The lock makes this read safe.
 2. **Terminal run.** Once the run is terminal, remaining items are skipped and logged.
 3. **Rule.** `nextRunStatus` from `@plangineer/domain` decides. A rejected item stops the batch, and the API appends `run.failed` with reason `protocol_error` in its place.
-4. **Insert.** The item is parsed with `RunEvent`, inserted with the next event id, and applied: the status and its columns (`commit`, `started_at`, `ended_at`, clearing `lease_expires_at` on a terminal move).
+4. **Insert.** The item is parsed with `RunEvent`, inserted with the next event id, and applied. A status change runs as `UPDATE runs ... WHERE id = $1 AND status = <from>` and throws if no row changes, which would be a broken invariant under the lock. The update sets the status and its columns (`commit`, `started_at`, `ended_at`, clearing `lease_expires_at` on a terminal move).
 
 The batch then updates `last_event_id` once and calls `pg_notify('run_events', run_id)` once, in the same transaction. It returns the highest stored runner sequence for the attempt, which the socket acknowledges whether the items were stored or skipped.
 
 - **`run.create`.** Rejects a runner the caller does not own with `NOT_FOUND` and a revoked runner with `CONFLICT`. Inserts the run as `queued` with a `run.queued` event, then sends a wake. An offline runner still accepts the run, which waits in the queue.
 - **`run.get`** and **`run.list`.** The caller's runs, joined to the runner for `RunRunner`, `id` descending for the list. Another user's run returns `NOT_FOUND`.
 - **`run.cancel`.** In one transaction: `NOT_FOUND` for another user's run, `CONFLICT` on a terminal run. Otherwise sets `cancel_requested`, appends `run.cancel_requested`, and for a `queued` run also appends `run.cancelled` with reason `requested`. Then sends a wake.
-- **`claimRuns(runnerId)` in `dispatch.ts`.** One transaction: locks the runner row `FOR UPDATE`, which serializes claims per runner. Skips the runner unless it is `active`, online, has a `concurrency_limit`, and has no `plan_limit_resets_at` in the future. Counts its `leased` and `running` runs, then selects up to the free slots from `queued`, not cancel-requested runs, `ORDER BY id LIMIT n FOR UPDATE SKIP LOCKED`. Each claimed run gets `attempt + 1`, `lease_expires_at = now() + RUN_LEASE_DURATION_MS` and a `run.leased` event. Returns the claimed runs with their jobs.
+- **`claimRuns(runnerId)` in `dispatch.ts`.** One transaction: locks the runner row `FOR UPDATE`, which serializes claims per runner. Skips the runner unless it is `active`, online, has a `concurrency_limit`, and has no `plan_limit_resets_at` in the future. Counts its `leased` and `running` runs, then selects up to the free slots from `queued`, not cancel-requested runs, `ORDER BY id LIMIT n FOR UPDATE SKIP LOCKED`. Each claimed run gets `attempt + 1`, `lease_expires_at = now() + RUN_LEASE_DURATION_MS` and a `run.leased` event, through `appendRunEvents` and its status guard. Returns the claimed runs with their jobs.
 - **`sweepLapsedLeases()` in `sweeper.ts`.** Selects runs in `leased` or `running` with `lease_expires_at < now()` `FOR UPDATE SKIP LOCKED`, applies `leaseLostOutcome` with `RUN_MAX_ATTEMPTS`, and appends `run.lease_lost`, then the terminal event when there is one, in one transaction per run. A requeued run returns to `queued` with no lease and a wake for its runner. Step 7 schedules it.
 - **Test factory.** `apps/api/src/test/fixtures.ts` gains `storeRunner(db, overrides)`, which inserts a runner row directly with a random token hash, so run tests need no pairing.
 
@@ -335,7 +337,7 @@ The exchange follows `auth-and-access` runner pairing.
 - **`createPairingCode`.** Rejects with `TOO_MANY_REQUESTS` when the user created 5 or more codes in the last 10 minutes, counted with the database clock. Otherwise generates 12 characters from `crypto.randomInt` over the Crockford alphabet, stores the SHA-256 of the code without dashes, uppercased, with `expires_at = now() + RUNNER_PAIRING_CODE_TTL_MS`, and returns the formatted code once.
 - **`pair`.** A public procedure. Normalizes the code, then in one transaction selects the unused, unexpired row by hash `FOR UPDATE`, sets `used_at`, generates a token of 32 bytes from `crypto.randomBytes` as base64url, and inserts the runner with the token's SHA-256 hash. A missing, used or expired code returns `PAIRING_CODE_REJECTED` with the same message, so the error tells an attacker nothing. The 60-bit code and its expiry stand in for a rate limit on this route (D12).
 - **`list`.** The user's runners, `id` descending, keyset on the cursor. `online` is computed in SQL as `last_seen_at > now() - RUNNER_OFFLINE_AFTER_MS`.
-- **`revoke`.** In one transaction: sets `status = 'revoked'` and `revoked_at = now()` (a second revoke returns the row unchanged), cancels each of the runner's `queued` runs with a `run.cancelled` event of reason `runner_revoked`, and sends a wake. The socket holder closes the socket with `4001` (step 7).
+- **`revoke`.** In one transaction: sets `status = 'revoked'` and `revoked_at = now()` (a second revoke returns the row unchanged), ends each of the runner's `queued`, `leased` and `running` runs with a `run.cancelled` event of reason `runner_revoked`, and sends a wake. Nothing can resume those runs, since the runner exits on `4001` and its late events reach terminal runs, which `appendRunEvents` skips. The socket holder closes the socket with `4001` (step 7).
 - **`findRunnerByToken(token)`** hashes the token and looks it up by the unique hash, returning only an `active` runner. Step 7 uses it at the handshake.
 - **Logging.** No new redact path. No code logs procedure inputs or outputs, and the existing `*.token` and `req.headers.authorization` paths cover the runner token. Codes and tokens are never logged, put in a URL or returned twice.
 
@@ -345,7 +347,7 @@ The exchange follows `auth-and-access` runner pairing.
 - 6b. A second use of the code, an expired code and an unknown code each return `PAIRING_CODE_REJECTED`.
 - 6c. A sixth pairing code inside 10 minutes returns `TOO_MANY_REQUESTS`.
 - 6d. `runner.list` returns only the caller's runners, pages with `nextCursor`, and shows `online` from `last_seen_at`.
-- 6e. Revoking a runner marks it revoked, cancels its queued runs with reason `runner_revoked`, and returns `NOT_FOUND` for another user's runner.
+- 6e. Revoking a runner marks it revoked, ends its queued, leased and running runs `cancelled` with reason `runner_revoked`, and returns `NOT_FOUND` for another user's runner.
 - 6f. A request with no session gets `UNAUTHORIZED` from every runner procedure except `pair`.
 - 6g. The API's log output for a full pairing and connection contains neither the pairing code nor the token.
 
@@ -358,7 +360,7 @@ The exchange follows `auth-and-access` runner pairing.
 - **`dispatchRunner(runnerId)`.** Calls `claimRuns`, sends `run.assign` with `permissionMode: 'plan'` for each claimed run, and sends `run.cancel` for each of the runner's `leased` or `running` runs with `cancel_requested` that this socket has not yet been told about.
 - **Ownership.** Every run-scoped message and every `activeRuns` entry refers to a run whose `runner_id` is the socket's runner. A run of another runner is treated like a stale attempt: `valid: false`, and nothing changes.
 - **`hello`.** Stores `concurrency_limit`, `runner_version`, `clis` and `last_seen_at = now()`. Replies with `welcome`: `heartbeatIntervalMs` from the environment, and for each `activeRuns` entry `valid` (the run is this runner's and is `leased` or `running` at that attempt) and `ackedSeq` (the highest stored runner sequence for that attempt, or 0). Then calls `dispatchRunner`.
-- **`run.events`.** Ignores and logs a message whose attempt is not the run's current attempt, or whose run belongs to another runner. Otherwise calls `appendRunEvents` and replies `run.ack` with the sequence it returns.
+- **`run.events`.** Ignores and logs a message unless its run is this runner's, in `leased` or `running`, at the message's attempt. A requeued run is `queued`, so late events from the runner that lost it are ignored. Otherwise calls `appendRunEvents` and replies `run.ack` with the sequence it returns.
 - **`run.heartbeat`.** For this runner's run at its current attempt in `leased` or `running`, extends `lease_expires_at = now() + RUN_LEASE_DURATION_MS`. Replies `run.heartbeat_reply` with `valid` and `cancelRequested`.
 - **`runner.status`.** Stores `plan_limit_resets_at`.
 - **Sweeper.** Each API process runs `sweepLapsedLeases` every `RUN_SWEEP_INTERVAL_MS`, then calls `dispatchRunner` for every runner whose socket it holds, which also resumes a runner whose plan limit has passed. `close()` from step 4 stops the interval and closes every held socket with `1001`.
@@ -377,13 +379,17 @@ The exchange follows `auth-and-access` runner pairing.
 - 7g. Cancelling a running run pushes `run.cancel` to the runner's socket, including when the socket is held by another `createApp` instance on the same database.
 - 7h. `welcome` after a reconnect reports `ackedSeq` and `valid` for each active run, and `valid: false` for another runner's run.
 - 7i. `close()` with a connected runner and an open SSE stream resolves, and the runner sees close code `1001`.
+- 7j. After a lease lapses and the run is requeued, a `run.events` message from the old runner at the same attempt is ignored and the run stays `queued`.
+- 7k. A pong updates `last_seen_at`, and a socket that misses a ping is terminated.
+- 7l. `runner.status` stores `plan_limit_resets_at`, and a null value clears it.
+- 7m. Once `plan_limit_resets_at` has passed, the next sweeper tick assigns the runner's queued run.
 
 ### 8. Run event stream
 
 **Files:** `apps/api/src/runs/run-event-stream.ts`, `apps/api/src/runs/run-event-tail.ts`, `apps/api/src/runs/run-event-stream.test.ts`, `apps/api/src/app.ts`, `apps/api/src/server.ts`
 
 - **Route.** `GET` on `RUN_EVENTS_PATH`, using Hono's `streamSSE`. It resolves the session like `/rpc/*`, returns `401` without one and `404` for a run the caller does not own. `Last-Event-ID` must be a non-negative integer, otherwise `400`.
-- **Tail (`run-event-tail.ts`).** One per process, fed by the `run_events` channel of step 4. Process memory holds only the last event id read per run and the open streams. On a notification it reads that run's rows with `event_id > last` once, in pages of 500, and fans them out to every open stream on the run. On listener reconnect it reads each open run once.
+- **Tail (`run-event-tail.ts`).** One per process, fed by the `run_events` channel of step 4. Process memory holds only the last event id read per run and the open streams. The first stream on a run sets that run's last id from `runs.last_event_id` at subscribe time, and the stream's backlog read covers everything up to it. On a notification it reads that run's rows with `event_id > last` once, in pages of 500, and fans them out to every open stream on the run. On listener reconnect it reads each open run once.
 - **Stream.** Subscribes to the tail first, then sends the backlog after `Last-Event-ID` in pages of 500, dropping anything at or below the last id it sent. Each SSE message has `id: <event id>`, `event: run-event` and the `RunEvent` JSON as data. A comment line goes out every `SSE_KEEPALIVE_INTERVAL_MS`. The stream ends after a terminal event, and a run already terminal ends the stream after its backlog. `stream.onAbort` unsubscribes. Errors go to `streamSSE`'s error handler, which logs and closes. The tail registers its open streams with `close()` from step 4, which ends them.
 
 **Done when:**
@@ -392,6 +398,7 @@ The exchange follows `auth-and-access` runner pairing.
 - 8b. Two streams on one run are served by one read per notification.
 - 8c. The stream ends after the terminal event, and a stream opened on a finished run sends its backlog and ends.
 - 8d. The route returns `401` with no session, `404` for another user's run and `400` for a non-integer `Last-Event-ID`.
+- 8e. An idle stream receives a comment line every `SSE_KEEPALIVE_INTERVAL_MS`, checked with fake timers.
 
 ### Phase 3: runner
 
@@ -401,22 +408,22 @@ Runner code follows `runner-adapters`, `cross-platform` and the vendor login rul
 
 **Files:** `apps/runner/src/skills/skills-mirror.ts`, `apps/runner/src/skills/skills-mirror.test.ts`, `apps/runner/src/cli.ts`, `apps/runner/src/cli.test.ts`, `apps/runner/package.json`, `package.json`, `scripts/verify.mjs`, `lefthook.yml`, `scripts/sync-skills.mjs` (deleted), `scripts/sync-skills.test.mjs` (deleted), `.agents/skills/cross-platform/SKILL.md`, `.agents/skills/tooling-and-infra/SKILL.md`, `.agents/skills/runner-adapters/SKILL.md`, `docs/engineering/stack-decisions.md`
 
-- Port `scripts/sync-skills.mjs` to TypeScript with the same behavior and its tests: `planSync`, `applySync`, the working-tree and git-index readers, LF normalization, binary files left alone, symlink refusal, and the drift message naming each file and the fix. Two changes: the fix text names `plangineer-runner skills sync`, and a missing or empty `.agents/skills` is handled as below.
+- Port `scripts/sync-skills.mjs` to TypeScript with the same behavior and its tests: `planSync`, `applySync`, the working-tree and git-index readers, LF normalization, binary files left alone, symlink refusal, and the drift message naming each file and the fix. Two changes: the fix text says "Edit the file under .agents/skills/, then run pnpm skills:sync." in every repository (D4), and a missing or empty `.agents/skills` is handled as below.
 - **No source folder.** `check` passes when `.agents/skills` is missing or empty and `.claude/skills` holds no files, since there is nothing to mirror. With mirror files and no source, each is stray drift. `sync` with no source files exits 1 with "No skill files found under .agents/skills." Git runs through `execa` with an argument array. `scripts/compare-text.mjs` stays, since `scripts/lint-skills.mjs` uses it, and the runner gets its own comparison inside `skills-mirror.ts`.
 - Export `checkSkillsMirror(repoRoot)` for step 13, returning `{ ok: true } | { ok: false, message }`. The message lists at most 20 files and then "and N more", so it fits `run.failed.message`.
 - CLI commands: `skills sync`, `skills check` and `skills check --staged`, all on the current working directory.
 - Root scripts: `skills:sync` becomes `node apps/runner/src/cli.ts skills sync`, `skills:check` becomes `node apps/runner/src/cli.ts skills check`. `scripts/verify.mjs` step 2 runs `apps/runner/src/cli.ts skills check`. `lefthook.yml` runs `node apps/runner/src/cli.ts skills check --staged`.
 - Delete `scripts/sync-skills.mjs` and its test.
 - Update the docs that name the script or the hook convention (D20):
-  - `cross-platform` line 18 points at `apps/runner/src/skills/skills-mirror.ts`.
-  - `tooling-and-infra` line 28 points at `scripts/lint-skills.test.mjs` as its example. Line 39 says each hook command is a Node script under `scripts/` or the runner's CLI. Its "Temporary pieces" section is removed.
+  - `cross-platform` line 18 points at `apps/runner/src/skills/skills-mirror.ts`. Its Environment row (line 22) adds the one exception: an agent CLI child gets the allowlist from `auth-and-access`, built with `extendEnv: false` and names matched case-insensitively (D22).
+  - `tooling-and-infra` line 28 points at `scripts/lint-skills.test.mjs` as its example. Line 39 says each hook command is a Node script under `scripts/` or the runner's CLI, and line 41 names `skills check --staged`. Its "Temporary pieces" section is removed.
   - The switch-over sentence in `runner-adapters` is removed.
   - The `stack-decisions.md` convention on hooks and repo scripts adds that the skills commands run through `node apps/runner/src/cli.ts`.
   - Then `pnpm skills:sync` and `pnpm skills:lint`.
 
 **Done when:**
 
-- 9a. `plangineer-runner skills sync` and `skills check` pass every case the old script's tests covered, as runner tests.
+- 9a. The runner's `skills sync` and `skills check` commands pass every case the old script's tests covered, as runner tests.
 - 9b. `pnpm skills:check`, `pnpm verify` and the lefthook pre-commit hook run the runner's command, and `scripts/sync-skills.mjs` no longer exists.
 - 9c. `skills check` passes on a repository with no `.agents/skills` and no mirror, fails naming each stray file when only the mirror exists, and names at most 20 files in its message.
 
@@ -442,7 +449,7 @@ Runner code follows `runner-adapters`, `cross-platform` and the vendor login rul
 - **Paths.** Under the data directory: `runner.json`, `repos/<owner>/<name>.git`, `w/<run id>/<name>` and `logs/runner.log`. The `w` folder name keeps Windows paths short.
 - **Credentials.** `runner.json` holds `{ serverUrl, runnerId, token }`, written with mode `0o600` through a temporary file and rename. It is parsed with Zod on read.
 - **Logger.** pino JSON to stdout and `logs/runner.log`, redacting `token`, `code` and `authorization`.
-- **`pair` command.** `plangineer-runner pair --server <url> --code <code> [--name <name>]`. The name defaults to `os.hostname()`. The client is a `ContractRouterClient` from `@orpc/contract` over an `RPCLink`, as `packages/api-client/src/api-provider.tsx` builds it. It calls `runner.pair` through an oRPC client from `@orpc/client` with `SimpleCsrfProtectionLinkPlugin`, writes `runner.json`, and prints "Paired as <name>. Start the runner with plangineer-runner start." A rejected code exits 1 with "That pairing code is invalid or expired. Create a new one in Plangineer."
+- **`pair` command.** `pnpm runner pair --server <url> --code <code> [--name <name>]`. The name defaults to `os.hostname()`. The client is a `ContractRouterClient` from `@orpc/contract` over an `RPCLink`, as `packages/api-client/src/api-provider.tsx` builds it. It calls `runner.pair` through an oRPC client from `@orpc/client` with `SimpleCsrfProtectionLinkPlugin`, writes `runner.json`, and prints "Paired as <name>. Start the runner with pnpm runner start." A rejected code exits 1 with "That pairing code is invalid or expired. Create a new one in Plangineer."
 - **Root script.** `pnpm runner` runs `node apps/runner/src/cli.ts`, so `pnpm runner pair ...` works from the checkout (D4).
 
 **Done when:**
@@ -465,10 +472,10 @@ Runner code follows `runner-adapters`, `cross-platform` and the vendor login rul
 | `--tools Read,Glob,Grep,Skill` | Only these tools exist in the session |
 | `--allowedTools Read,Glob,Grep,Skill` | The same list is pre-approved, so no tool use prompts |
 | `--strict-mcp-config` | The repository's `.mcp.json` servers are not started |
-| `--settings {"disableAllHooks":true}` | Hooks from the repository's `.claude/settings.json` do not run |
+| `--settings {"disableAllHooks":true,"apiKeyHelper":"","awsAuthRefresh":"","awsCredentialExport":"","gcpAuthRefresh":"","otelHeadersHelper":""}` | Hooks and credential helper commands from the repository's `.claude/settings.json` do not run |
 
-The last two were checked on Claude Code 2.1.284 on Oct 7, 2026: a project hook ran without the setting and did not run with it, and project skills still loaded.
-- **Child environment.** `childEnv()` copies only allowlisted names from `process.env`, matching names case-insensitively so Windows `Path` keeps its key: `PATH`, `PATHEXT`, `SYSTEMROOT`, `COMSPEC`, `WINDIR`, `HOME`, `USERPROFILE`, `HOMEDRIVE`, `HOMEPATH`, `APPDATA`, `LOCALAPPDATA`, `TEMP`, `TMP`, `TMPDIR`, `LANG`, `LC_*`, `TERM`, `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY` in both cases, `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_CACHE_HOME`, `ANTHROPIC_*` and `CLAUDE_*`. No `PLANGINEER_*` variable reaches the child. Values pass through unread.
+The last two were checked on Claude Code 2.1.284 on Oct 7, 2026. A project hook ran without `disableAllHooks` and did not run with it. A project `apiKeyHelper` ran without the override, switching the run to its key, and did not run with `"apiKeyHelper":""`. Project skills still loaded in every case. A project `env` block setting `ANTHROPIC_BASE_URL` was not applied.
+- **Child environment.** `childEnv()` copies only allowlisted names from `process.env`, matching names case-insensitively so Windows `Path` keeps its key: `PATH`, `PATHEXT`, `SYSTEMROOT`, `COMSPEC`, `WINDIR`, `HOME`, `USERPROFILE`, `HOMEDRIVE`, `HOMEPATH`, `APPDATA`, `LOCALAPPDATA`, `TEMP`, `TMP`, `TMPDIR`, `LANG`, `LC_*`, `TERM`, `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY` in both cases, `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_CACHE_HOME`, `ANTHROPIC_*` and `CLAUDE_*`. No `PLANGINEER_*` variable reaches the child. Values pass through unread. This allowlist is the one place the runner builds a child environment instead of extending `process.env` (D22).
 - **Mapping (`claude-code-mapping.ts`).** Reads stdout line by line with `node:readline` (`crlfDelay: Infinity`):
 
 | Claude line | Run event |
@@ -507,19 +514,19 @@ The last two were checked on Claude Code 2.1.284 on Oct 7, 2026: a project hook 
 **Done when:**
 
 - 11a. Each fixture maps to the expected run events, with exactly one terminal event: success, agent error, rate limit as `plan_limit`, CRLF, an unmapped type as `agent.other`, a non-JSON line as `invalid_output`, and an exit with no `result` as `exit_code` with the stderr tail.
-- 11f. An init line with 600 skills and a 70,000-character message map to events within their bounds, marked truncated, that parse with `RunEventBody`.
-- 11g. The spawn arguments for a `plan` job are exactly the `CLAUDE_ARGS` table, and never include `--bare`.
 - 11b. `detect` reports the fake agent's version as available, and a version below `2.1.284` or a missing command as unavailable.
 - 11c. `childEnv` passes `PATH`, `ANTHROPIC_API_KEY` and `CLAUDE_CONFIG_DIR` and drops `PLANGINEER_RUNNER_DATA_DIR` and an unlisted variable.
 - 11d. Aborting a `hang` run stops the child and its process group and yields no terminal event, on Windows, macOS and Linux.
 - 11e. `stopProcess` on Windows runs `taskkill` with `/pid <pid> /T /F`.
+- 11f. An init line with 600 skills and a 70,000-character message map to events within their bounds, marked truncated, that parse with `RunEventBody`.
+- 11g. The spawn arguments for a `plan` job are exactly the `CLAUDE_ARGS` table, and never include `--bare`.
 
 ### 12. Worktrees
 
 **Files:** `apps/runner/src/worktrees/worktrees.ts`, `apps/runner/src/worktrees/git.ts`, `apps/runner/src/worktrees/worktrees.test.ts`
 
 - **`git.ts`.** Runs `git` through `execa` with an argument array, `GIT_TERMINAL_PROMPT=0` added to the environment so a missing credential fails at once, and `--end-of-options` before any ref. Git uses the engineer's own credentials (D5).
-- **`prepareWorktree({ repository, ref, runId })`.** Serialized per repository with a promise chain keyed by `<owner>/<name>`. Clones `<PLANGINEER_GIT_BASE_URL>/<owner>/<name>.git` with `git clone --bare` into `repos/<owner>/<name>.git` if absent, setting `core.longpaths=true` and `remote.origin.fetch=+refs/heads/*:refs/heads/*`. Then `git fetch --prune --tags origin`, resolves the commit with `git rev-parse --verify --end-of-options <ref>^{commit}`, and runs `git worktree add --detach w/<runId>/<name> <commit>`. Returns `{ path, commit }`.
+- **`prepareWorktree({ repository, ref, runId })`.** Serialized per repository with a promise chain keyed by the lowercased `<owner>/<name>`, since GitHub names and the Windows and macOS file systems ignore case. Checks the ref with `git check-ref-format --allow-onelevel`. Clones `<PLANGINEER_GIT_BASE_URL>/<owner>/<name>.git` with `git clone --bare` into `repos/<owner>/<name>.git`, with the folder names lowercased, if absent, setting `core.longpaths=true` and `remote.origin.fetch=+refs/heads/*:refs/heads/*`. Then `git fetch --prune --tags origin`, resolves the commit with `git rev-parse --verify --end-of-options <ref>^{commit}`, and runs `git worktree add --detach w/<runId>/<name> <commit>`. Returns `{ path, commit }`.
 - **`removeWorktree(path)`.** Removes the folder with `fs.rm(path, { recursive: true, force: true, maxRetries: 5 })` after the child has exited, then runs `git worktree prune` on its bare clone inside the same per-repository chain. It runs for every run, whatever the outcome. No worktree command uses `--force`.
 - A git failure returns its last 20 stderr lines for `run.failed` with reason `checkout_failed`.
 
@@ -528,14 +535,26 @@ The last two were checked on Claude Code 2.1.284 on Oct 7, 2026: a project hook 
 - 12a. Against a local bare repository through a `file:` base URL, `prepareWorktree` creates a detached worktree at the ref's commit outside the engineer's checkout, and a second run on the same repository reuses the clone after a fetch.
 - 12b. Two `prepareWorktree` calls on one repository at once both succeed.
 - 12c. An unknown ref fails with git's message, and `removeWorktree` leaves no folder and no entry in `git worktree list`.
+- 12d. Runs on `Acme/App` and `acme/app` at once share one clone and one promise chain, and both succeed.
+
+Test repositories are made with `git -c user.name=Plangineer Test -c user.email=test@example.com commit`, since CI runners have no git identity.
 
 ### 13. Runner connection and job queue
 
 **Files:** `apps/runner/src/connection/control-plane-socket.ts`, `apps/runner/src/jobs/job-queue.ts`, `apps/runner/src/jobs/run-job.ts`, `apps/runner/src/jobs/event-buffer.ts`, `apps/runner/src/start-command.ts`, `apps/runner/src/test/fake-control-plane.ts`, tests beside each, `apps/runner/src/cli.ts`, `knip.json`
 
-- **`start` command.** Reads `runner.json` (exits 1 with "This runner is not paired. Run plangineer-runner pair first." when absent), detects the CLIs, and dials `<serverUrl>/api/runners/socket` with the `ws` client and `Authorization: Bearer <token>`. It opens no inbound port.
-- **Socket.** Sends `hello` on each connect with the platform, concurrency limit, CLI status and active runs. On `welcome` it drops buffered events at or below each `ackedSeq`, resends the rest, and stops any job marked `valid: false`. On a lost connection it reconnects with backoff from 1 s doubling to a cap of 5 s with full jitter, and running children keep running. The cap stays under the heartbeat interval, so a short API restart does not cost the lease (D17). A `401` handshake or a `4001` close stops every job and exits 1 with "This runner was revoked or its token is invalid. Pair it again with plangineer-runner pair." A `1008` close is a bug in one side, so the runner logs the reason, stops every job with cause `shutdown` and exits 1 instead of resending.
-- **Queue.** `job-queue.ts` accepts `run.assign` into memory and runs up to the concurrency limit. A `rejected` rate limit from any job pauses starting new jobs until its `resetsAt` and sends `runner.status` with it.
+- **`start` command.** Reads `runner.json` (exits 1 with "This runner is not paired. Run pnpm runner pair first." when absent), detects the CLIs, and dials `<serverUrl>/api/runners/socket` with the `ws` client and `Authorization: Bearer <token>`. It opens no inbound port.
+- **Socket.** Sends `hello` on each connect with the platform, concurrency limit, CLI status and active runs. On `welcome` it first stops each job marked `valid: false` and drops its buffer, then drops buffered events at or below each remaining `ackedSeq` and resends the rest. On a lost connection it reconnects with backoff from 1 s doubling to a cap of 5 s with full jitter, and running children keep running. The cap stays under the heartbeat interval, so a short API restart does not cost the lease (D17). Close codes on the current socket:
+
+| Close | Runner does |
+| --- | --- |
+| `401` handshake or `4001` | Stops every job with cause `shutdown` and exits 1 with "This runner was revoked or its token is invalid. Pair it again with pnpm runner pair." |
+| `4002` | Stops every job with cause `shutdown` and exits 1 with "Another runner process using this pairing took over. Stop that process, or pair this machine as a second runner." |
+| `1008` or `1009` | A bug in one side, so it logs the reason, stops every job with cause `shutdown` and exits 1 instead of resending |
+| Any other close or a network error | Reconnects as above |
+
+A close on a socket the runner already replaced while reconnecting is ignored.
+- **Queue.** `job-queue.ts` accepts `run.assign` into memory and runs up to the concurrency limit. A `rejected` rate limit from any job pauses starting new jobs until its `resetsAt`, or for 15 minutes when `resetsAt` is null, and sends `runner.status` with that time. When the pause ends it sends `runner.status` with null (D10).
 - **One job (`run-job.ts`).** In order: `prepareWorktree`, `checkSkillsMirror` on the worktree (drift ends `run.failed` with reason `skills_drift` and the drift message), the adapter's `detect` (unavailable ends `run.failed` with reason `cli_unavailable` and the needed version), `run.started` with the commit and CLI version, then the adapter's events. Every exit path removes the worktree.
 - **Stop causes.** The job owns one `AbortController`, and whoever stops it passes the cause as `abort(reason)`. After the stop, the job sends exactly one terminal event chosen from the cause:
 
@@ -548,7 +567,7 @@ The last two were checked on Claude Code 2.1.284 on Oct 7, 2026: a project hook 
 | `invalid` | `welcome` or a heartbeat reply with `valid: false` | None, since the server has already ended or moved the run |
 
 The first cause wins. A stop before the adapter starts sends the same event.
-- **Events.** Each event gets the next runner sequence for the run and attempt, goes into `event-buffer.ts`, and is sent when connected as `run.events` batches of up to 100, flushed every 100 ms or when 100 are waiting. The buffer drops events once acknowledged and holds at most 10,000 unacknowledged events per run. Past that the job stops with cause `buffer_full`.
+- **Events.** Each event gets the next runner sequence for the run and attempt, goes into `event-buffer.ts`, and is sent when connected as `run.events` batches of up to 100 events and 512 KiB of serialized JSON, flushed every 100 ms or when either cap is reached. The buffer drops events once acknowledged and holds at most 10,000 unacknowledged events per run. Past that the job stops with cause `buffer_full`.
 - **Heartbeats.** Every `heartbeatIntervalMs` for each assigned job. A reply with `valid: false` stops the job. A reply with `cancelRequested: true`, like a `run.cancel` message, aborts it.
 - **Shutdown.** On `SIGINT` or `SIGTERM`, stops every job with cause `shutdown`, waits up to 5 s for acknowledgements, then exits.
 
@@ -563,11 +582,15 @@ The first cause wins. A stop before the adapter starts sends the same event.
 - 13e. A worktree with a drifted skills mirror ends the run with `run.failed` reason `skills_drift` before the agent starts.
 - 13f. A `rate-limit` run ends with `run.failed` reason `plan_limit`, and the runner sends `runner.status` with the reset time and starts no queued job before it.
 - 13g. A `4001` close makes `start` exit 1 with the revoked message.
-- 13h. `SIGINT` to `start` during a `hang` run sends `run.failed` with reason `runner_stopped` and leaves no fake agent process running.
+- 13h. The runner's shutdown function, called in-process during a `hang` run, sends `run.failed` with reason `runner_stopped` and leaves no fake agent process running, on Windows, macOS and Linux. On macOS and Linux a real `SIGINT` to `start` does the same. Windows has no catchable `SIGINT` from another process, so that case runs only on the POSIX systems.
 - 13i. With `PLANGINEER_RUN_TIMEOUT_MS=2000`, a `hang` run ends with `run.failed` reason `timeout` and its process stops.
 - 13j. A full event buffer ends the run with `run.failed` reason `event_buffer_full`, and a heartbeat reply with `valid: false` stops the job with no terminal event. Each run sends at most one terminal event.
 - 13k. A `1008` close makes `start` exit 1 without reconnecting.
-- 13l. Events reach the control plane in `run.events` batches of at most 100.
+- 13l. Events reach the control plane in `run.events` batches of at most 100 events and 512 KiB.
+- 13m. Thirty `agent.tool_result` events of 60,000 characters each are sent in several batches, each under 512 KiB, and all are acknowledged.
+- 13n. A `4002` close on the current socket makes `start` exit 1 with the takeover message, and a `1009` close makes it exit 1 without reconnecting.
+- 13o. A `rejected` rate limit with a null `resetsAt` pauses the queue for 15 minutes, checked with fake timers, then sends `runner.status` with null.
+- 13p. After a disconnect, a `welcome` with `valid: false` for a job stops it, drops its buffer and resends nothing for it.
 
 ### Phase 4: web app
 
@@ -578,19 +601,21 @@ Web code follows `frontend-data`, `frontend-react`, `ui-design-system` and `visu
 **Files:** `packages/api-client/src/runners.ts`, `packages/api-client/src/runs.ts`, `packages/api-client/src/run-events.ts`, tests beside each, `packages/api-client/src/index.ts`, `packages/api-client/package.json`
 
 - Hooks: `useRunnerList` (infinite), `useCreatePairingCode`, `useRevokeRunner` (invalidates the runner list), `useRunList` (infinite), `useRun(runId)`, `useCreateRun` (invalidates the run list), `useCancelRun` (writes the returned run with `setQueryData`, invalidates the run list). None are optimistic.
-- `useRunEvents(runId)` follows `frontend-data` live runs: `fetch` with `credentials: 'include'`, `EventSourceParserStream`, `Last-Event-ID` on every request, events kept in the query cache under the stream's key, an idempotent reducer keyed by event id, each event parsed with `RunEvent`, reconnect with capped backoff from 1 s to 30 s with jitter and at once when the page becomes visible, stop on a 4xx with `failed`, and on a terminal event abort, set `ended` and invalidate the run's detail key. It returns `{ events, status }` with status `connecting`, `live`, `reconnecting`, `ended` or `failed`.
+- `useRunEvents(runId)` follows `frontend-data` live runs: `fetch` with `credentials: 'include'`, `EventSourceParserStream`, `Last-Event-ID` on every request, events kept in the query cache under the stream's key, an idempotent reducer keyed by event id, each event parsed with `RunEvent`, reconnect with capped backoff from 1 s to 30 s with jitter and at once when the page becomes visible, stop on a 4xx with `failed`, and on a terminal event abort, set `ended` and invalidate the run's detail key. Lifecycle events also patch the `useRun` cache with `setQueryData`, so the details card stays current: `run.leased` sets `status` and `attempt`, `run.started` sets `status`, `commit` and `startedAt`, `run.cancel_requested` sets `cancelRequested`, and `run.lease_lost` with `requeued` sets `status` to `queued`. It returns `{ events, status }` with status `connecting`, `live`, `reconnecting`, `ended` or `failed`.
 
 **Done when:**
 
 - 14a. Each hook calls its procedure with the oRPC key, and each mutation invalidates the keys listed above.
 - 14b. `useRunEvents` resumes with `Last-Event-ID: 5` after a drop after event 5, applies no event twice, and parses an event split across chunks and CRLF line endings.
 - 14c. `useRunEvents` reports `failed` on a `404` without reconnecting, and `ended` after a terminal event.
+- 14d. A `run.started` event updates the cached run's status, commit and start time without a refetch.
 
 ### 15. Screens
 
 **Files:** `apps/web/package.json`, `apps/web/src/routeTree.gen.ts` (regenerated by the router plugin), `apps/web/src/components/stale-notice.tsx` (moved from `features/account/account-summary.tsx`), `apps/web/src/features/account/account-summary.tsx`, `apps/web/src/routes/_app.tsx`, `apps/web/src/routes/_app/index.tsx` (moved from `routes/index.tsx`), `apps/web/src/routes/_app/runners.tsx`, `apps/web/src/routes/_app/runs/index.tsx`, `apps/web/src/routes/_app/runs/$runId.tsx`, `apps/web/src/features/app-shell/app-header.tsx`, `apps/web/src/features/runners/*`, `apps/web/src/features/runs/*`, component tests beside each, `apps/web/src/components/ui/*` (added through the shadcn CLI: `badge`, `input`, `textarea`, `select`, `field`, `label`, `empty`, `item`)
 
 - **Forms and staleness.** The Runs form uses React Hook Form with `zodResolver` over the `run.create` input schema, as `frontend-react` requires, so `apps/web/package.json` adds `react-hook-form` and `@hookform/resolvers`. `StaleNotice` moves from `account-summary.tsx` to `components/stale-notice.tsx` unchanged, titled "Stale" with **Retry**, and all four screens use it.
+- **Status colours.** From the `visual-style` status table, as badges at 15% behind the role's text, always with a label: run `queued`, `leased` and `running` use `info`, `succeeded` uses `success`, `failed` uses `destructive`, `cancelled` uses `muted-foreground`. Runner Online uses `success`, Offline uses `warning`, Revoked uses `muted-foreground`. The offline and plan limit notices use `warning`. No new token.
 - **Shell.** `_app.tsx` is a pathless layout that holds the session check now in `index.tsx` and renders `AppHeader` above the outlet. The header is one row with links Account, Runners and Runs, each at least 44 px tall. It stays one row at 375 px.
 - **Runners (`/runners`).** Primary action **Pair a runner**. Phone, one column:
   1. A "Pair a runner" card with a **Pair a runner** button. After a click it shows the command `pnpm runner pair --server <window.location.origin> --code <code>` in a monospace block with `break-all`, a **Copy command** button, the expiry time, and a **Done** button that hides it. A `TOO_MANY_REQUESTS` error shows "Too many pairing codes. Try again in a few minutes."
@@ -617,9 +642,9 @@ Web code follows `frontend-data`, `frontend-react`, `ui-design-system` and `visu
 - 15a. The Runners screen shows the pairing command after **Pair a runner**, lists runners with online state and CLI status, and revokes a runner only after **Revoke runner** is confirmed.
 - 15b. The Runs form blocks a ref starting with `-` and an invalid repository with field errors, and a valid submit opens the new run's page.
 - 15c. The Run page shows each event kind, the offline and plan limit notices for a queued run, and cancels only after **Cancel run** is confirmed.
-- 15f. With 450 events the Run page renders 200 rows, and **Show earlier events** adds 200 more.
 - 15d. Each screen shows its loading, empty, failed and stale states.
 - 15e. Each screen has no horizontal scroll and no control under 44 px at 375 px, and its desktop layout matches this step at 1280 px.
+- 15f. With 450 events the Run page renders 200 rows, and **Show earlier events** adds 200 more.
 
 ### Phase 5: journeys and docs
 
@@ -628,7 +653,7 @@ Web code follows `frontend-data`, `frontend-react`, `ui-design-system` and `visu
 **Files:** `apps/api/src/test/e2e-session-cli.ts`, `apps/api/package.json`, `apps/web/package.json`, `apps/web/e2e/global-setup.ts`, `apps/web/e2e/runner-test-run.spec.ts`, `apps/web/playwright.config.ts`, `scripts/runner-fake.mjs`, `package.json`, `knip.json`, `docs/engineering/stack-decisions.md`, `.agents/skills/tooling-and-infra/SKILL.md`, `docs/plans/mvp-roadmap.md`
 
 - **Signed-in sessions for journeys.** `e2e-session-cli.ts` (`pnpm --filter @plangineer/api e2e:session`) loads the `.env` like the API, stores a user with `storeUser` and prints the `sessionCookie` value as JSON. `global-setup.ts` runs it after the reset in `pnpm test:e2e` and writes a Playwright storage state that the new spec uses. The sign-in spec stays signed out. Both new files are `knip.json` entries.
-- **Journey (`runner-test-run.spec.ts`).** In each project: create a local bare repository with one commit and a `.agents/skills` folder in sync with its mirror, open `/runners`, click **Pair a runner**, read the code from the page, run `node apps/runner/src/cli.ts pair --name e2e-<project>-<random>` and then `start` through `execa` (a dev dependency of `apps/web`) with a temporary `PLANGINEER_RUNNER_DATA_DIR`, `PLANGINEER_GIT_BASE_URL` set to the repository's `file:` URL and `PLANGINEER_CLAUDE_COMMAND` set to the fake agent. Then start a test run from `/runs`, choosing the test's own runner by its unique name, and see the events stream until Succeeded. A second test starts a `fake:hang` run, cancels it, and sees Cancelled. Each test stops its runner process and revokes its runner, so no stale runner is left active for the shared e2e user.
+- **Journey (`runner-test-run.spec.ts`).** In each project: create a local bare repository with one commit and a `.agents/skills` folder in sync with its mirror, open `/runners`, click **Pair a runner**, read the code from the page, run `node apps/runner/src/cli.ts pair --name e2e-<project>-<random>` and then `start` through `execa` (a dev dependency of `apps/web`) with a temporary `PLANGINEER_RUNNER_DATA_DIR`, `PLANGINEER_GIT_BASE_URL` set to the repository's `file:` URL and `PLANGINEER_CLAUDE_COMMAND` set to the fake agent. Then start a test run from `/runs`, choosing the test's own runner by its unique name, and see the events stream until Succeeded. A second test starts a `fake:hang` run, cancels it, and sees Cancelled. Each test stops its runner process, then revokes its runner on `/runners` with **Revoke** and **Revoke runner**, so no stale runner is left active for the shared e2e user.
 - **`pnpm runner:fake`.** `scripts/runner-fake.mjs` runs the runner's `start` with `PLANGINEER_CLAUDE_COMMAND` set to the fake agent, so `pnpm dev` work and screenshot checks have runs without a model. It uses the engineer's normal pairing and real GitHub checkouts. Test runs from it target `tankafide/Plangineer` at `main`, which has a synced skills mirror.
 - **Docs.** `stack-decisions.md` adds `pnpm runner` and `pnpm runner:fake` to the commands table and replaces "the fake agent join it" in the `pnpm dev` row with a pointer to `pnpm runner:fake`. `tooling-and-infra` line 32 drops the fake agent from what `pnpm dev` starts and names `pnpm runner:fake`, then `pnpm skills:sync`. The roadmap's "Where things stand" rows for the skills mirror and the runner say what this chunk delivered.
 
@@ -642,15 +667,15 @@ Web code follows `frontend-data`, `frontend-react`, `ui-design-system` and `visu
 All decisions were made on Oct 7, 2026. The engineer chose D1, D4, D5 and D14. The planner made the rest, and the engineer can overrule any of them.
 
 - **D1. Test runs start jobs.** Chunk 1 has no features or repository records, so a Runs screen starts a run from a runner, a repository, a ref and a prompt. Chunk 3 replaces it with feature tasks. Rejected: an API-only trigger, which leaves the gate's "app sends a job" to a script, and keeping the screen as a lasting diagnostics tool, which is beyond the MVP.
-- **D2. Runs target one runner.** The creator picks the runner, and dispatch claims only that runner's runs. Choosing a runner by owner, role and availability arrives with repository settings in chunk 2 and features in chunk 3. Runs carry no feature, stage, model, cost or skills columns yet. Those columns arrive with the chunks that read them. Cost and skills appear in the event log today.
+- **D2. Runs target one runner.** The creator picks the runner, and dispatch claims only that runner's runs. Choosing a runner by owner, role and availability arrives with repository settings in chunk 2 and features in chunk 3. Runs carry no feature, stage, model, cost or skills columns yet. Those columns arrive with the chunks that read them. Cost and skills appear in the event log in this chunk.
 - **D3. Runner kind is left out.** Every runner is local in this chunk. Hosted runners add the `kind` column in chunk 8.
-- **D4. No npm publishing.** The runner runs from the checkout through `pnpm runner`. Node does not strip types under `node_modules`, so publishing needs a build step, which moves to rollout (chunk 10). `apps/runner` stays `"private": true`.
+- **D4. No npm publishing.** The runner runs from the checkout through `pnpm runner`. Node does not strip types under `node_modules`, so publishing needs a build step, which moves to rollout (chunk 10). `apps/runner` stays `"private": true`, so every message the runner prints names `pnpm runner` and `pnpm skills:sync`. Chunk 2 changes the drift fix text when setup gives target repositories their own sync command, and chunk 10 changes the rest when the runner is published.
 - **D5. Checkout uses the engineer's git credentials.** The runner keeps a bare clone per repository under its data directory and fetches before each job, over HTTPS with the engineer's credential helper. No GitHub token crosses the protocol. Hosted runners in chunk 8 need GitHub App installation tokens. Rejected: an installation token per job now, which needs the app installed on every test repository and adds token handling before it is needed.
 - **D6. Worktrees are per run and removed when the run ends.** With no feature branch yet, each run checks out a detached worktree at the ref's commit. Removal deletes the folder and prunes, so no worktree command needs `--force`. Per-feature worktrees arrive in chunk 3.
 - **D7. Permission mode `plan` for test runs.** Test runs read and answer, and nothing they produce is kept. `--tools` limits the session to `Read`, `Glob`, `Grep` and `Skill`, and `--allowedTools` pre-approves the same list, as `security` asks. Later stages set their own mode and tools, and the contract enum grows with them.
-- **D8. Pairing is code-first.** A member creates a 12-character code in the app and passes it to `plangineer-runner pair`. The code is one-time and expires after 10 minutes, so its appearance in shell history exposes nothing. Rejected: a device flow where the runner polls, which adds an unauthenticated polling route.
+- **D8. Pairing is code-first.** A member creates a 12-character code in the app and passes it to `pnpm runner pair`. The code is one-time and expires after 10 minutes, so its appearance in shell history exposes nothing. Rejected: a device flow where the runner polls, which adds an unauthenticated polling route.
 - **D9. Retry policy.** A run that loses its lease before `run.started` is requeued, up to `RUN_MAX_ATTEMPTS`. A run that loses it after starting fails with `lease_lost` and is never retried, because the agent may already have acted.
-- **D10. Plan limit detection.** A `rate_limit_event` whose `rate_limit_info.status` is `rejected` means the plan limit is reached. The real Oct 7, 2026 run showed status `allowed` with `resetsAt` in Unix seconds. The `allowed_warning` and `rejected` values come from the Claude Agent SDK's rate limit type and could not be produced on demand while planning, so the synthetic fixture stands in for a recording. The runner pauses its queue and the API stops dispatching until `resetsAt`.
+- **D10. Plan limit detection.** A `rate_limit_event` whose `rate_limit_info.status` is `rejected` means the plan limit is reached. The real Oct 7, 2026 run showed status `allowed` with `resetsAt` in Unix seconds. The `allowed_warning` and `rejected` values come from the Claude Agent SDK's rate limit type and could not be produced on demand while planning, so the synthetic fixture stands in for a recording. The runner pauses its queue and the API stops dispatching until `resetsAt`. A `rejected` event with no `resetsAt` pauses for 15 minutes, a fixed runner constant, so the runner and the API agree on one time.
 - **D11. Online means seen recently.** The API pings each socket every heartbeat interval and stores `last_seen_at` on each pong. A runner is online while `last_seen_at` is within `RUNNER_OFFLINE_AFTER_MS`, computed with `now()`. This keeps the state in Postgres for every API process.
 - **D12. No rate limit on `runner.pair`.** A guess has one chance in 2^60 per code, and a code lives 10 minutes, so a limiter adds nothing. `createPairingCode` keeps its per-user limit of 5 per 10 minutes, a fixed rule in `pairing.ts`.
 - **D13. Wakes cross API processes.** A `runner_wake` notification carries a runner id, and the process holding that runner's socket dispatches, pushes cancels and closes revoked sockets. The sweeper also dispatches every socket the process holds, which covers a missed notification and a plan limit that has passed.
@@ -659,9 +684,10 @@ All decisions were made on Oct 7, 2026. The engineer chose D1, D4, D5 and D14. T
 - **D16. `packages/domain` starts here.** Run status transitions and the lease-loss outcome are business rules, and staleness, triage and amendment levels follow in later chunks.
 - **D17. Fixed runner limits.** The stop grace of 10 s, the shutdown wait of 5 s, the event buffer of 10,000, the batch of 100 events and the reconnect backoff are constants in their modules. They are runner behavior, not deployment settings. The backoff cap of 5 s stays under the default heartbeat interval of 10 s, so a runner reconnects within the 30 s lease during a short API restart. The run timeout is a runner variable, because a team may need longer runs.
 - **D18. Left out.** Hosted runners, the Codex adapter, npm publishing, feature-scoped worktrees, the run timeline, cost and skills columns, OpenAPI generation, and any admin view of other users' runners.
-- **D19. Repository hooks and MCP servers do not run in test runs.** `claude -p` skips the workspace trust dialog, so a repository's `.claude/settings.json` hooks and `.mcp.json` servers would otherwise run on the engineer's machine for any ref. `--settings {"disableAllHooks":true}` and `--strict-mcp-config` turn both off and keep project skills. Rejected: `--setting-sources user`, which also stopped project skills from loading in the Oct 7, 2026 check. Later stages decide whether trusted repositories may enable them.
+- **D19. Repository hooks, helpers and MCP servers do not run in test runs.** `claude -p` skips the workspace trust dialog, so a repository's `.claude/settings.json` hooks and credential helpers and its `.mcp.json` servers would otherwise run on the engineer's machine for any ref. A project `apiKeyHelper` also replaced the engineer's login with its own key. `--settings` with `disableAllHooks` and each helper set to an empty string, plus `--strict-mcp-config`, turn these off and keep project skills. Only `apiKeyHelper` and hooks were proven on Oct 7, 2026. The AWS, GCP and telemetry helpers apply only when the engineer's own settings enable those providers, and are blanked the same way. Rejected: `--setting-sources user` and `--restricted`, which both also stopped project skills from loading in the Oct 7, 2026 checks. Later stages decide whether trusted repositories may enable them.
 - **D20. The skills commands are the one hook outside `scripts/`.** The skills mirror is runner behavior that every repository uses, so the hook and root scripts call the runner's CLI. A wrapper script under `scripts/` would only forward the call. `stack-decisions.md` and `tooling-and-infra` record the exception.
 - **D21. `run_events` keeps every row.** A test run writes about 50 to 500 events of about 2 KB, so a run is under 1 MB. One team running tens of runs a day stays under 10 GB a year. Retention or archiving is decided with metrics in chunk 10.
+- **D22. Agent children get a built environment.** The `cross-platform` rule says to extend `process.env`, but the vendor login rule in `auth-and-access` requires an allowlist so the runner's own secrets never reach the agent. The allowlist wins for agent CLI children only, built with `extendEnv: false` and case-insensitive name matching so Windows `Path` survives. Git and every other child extend `process.env` as usual. Step 9 records the exception in `cross-platform`.
 - **Inputs.** Base commit `396ffcb11b7cb1f66997af6406d9d09c51842303` on `main`. No context files: exploration ran in a subagent and its findings are folded into this plan.
 
 ## Constraints
@@ -670,9 +696,9 @@ All decisions were made on Oct 7, 2026. The engineer chose D1, D4, D5 and D14. T
 | --- | --- | --- |
 | C1. Runner token and pairing code secrecy | Stored only as SHA-256 hashes, never logged, never in a URL, returned once | Integration tests on stored rows and a log capture test |
 | C2. Vendor login rule | No `PLANGINEER_*` variable or runner token reaches the agent child, and no code reads a CLI's credential files | `childEnv` unit test and review against `auth-and-access` |
-| C3. Bounded agent output | Each agent string at most 65,536 characters, each socket message at most 1 MiB, each runner buffer at most 10,000 events | Schema tests, a socket test with an oversized message, and a buffer test |
+| C3. Bounded agent output | Each agent string at most 65,536 characters, each `run.events` message at most 512 KiB and 100 events, each socket message at most 1 MiB, each runner buffer at most 10,000 events | Schema tests, 1d, 13m, a socket test with an oversized message, and a buffer test |
 | C4. Cross-platform runner | Runner tests pass on Windows, macOS and Linux in CI | `pnpm verify` in the CI matrix |
-| C5. Repository code stays inert | Test runs start no repository hook or MCP server and have only `Read`, `Glob`, `Grep` and `Skill` | The spawn argument test (11g) |
+| C5. Repository code stays inert | Test runs start no repository hook, credential helper or MCP server and have only `Read`, `Glob`, `Grep` and `Skill` | The spawn argument test (11g) |
 | C6. Bounded run time | A run stops after `PLANGINEER_RUN_TIMEOUT_MS` | 13i |
 
 ## Test plan
@@ -682,6 +708,7 @@ All decisions were made on Oct 7, 2026. The engineer chose D1, D4, D5 and D14. T
 | 1a. Schemas accept valid and reject invalid values | ✓ | | | | | |
 | 1b. Outputs strip unknown keys, no hash fields | ✓ | | | | | |
 | 1c. `run.events` rejects API-only types, unknown keys, 101 entries | ✓ | | | | | |
+| 1d. Largest event fits under 512 KiB | ✓ | | | | | |
 | 2a. `nextRunStatus` over every pair | ✓ | | | | | |
 | 2b. `leaseLostOutcome` combinations | ✓ | | | | | |
 | 3a. Migration applies from empty | | ✓ | | | | |
@@ -706,7 +733,7 @@ All decisions were made on Oct 7, 2026. The engineer chose D1, D4, D5 and D14. T
 | 6b. Used, expired and unknown codes rejected | | ✓ | | | | |
 | 6c. Pairing code rate limit | | ✓ | | | | |
 | 6d. `runner.list` scope, paging, online | | ✓ | | | | |
-| 6e. Revoke cancels queued runs, hides others' runners | | ✓ | | | | |
+| 6e. Revoke ends the runner's open runs, hides others' runners | | ✓ | | | | |
 | 6f. Session required except `pair` | | ✓ | | | | |
 | 6g. Logs hold no code or token | | ✓ | | | | |
 | 7a. Hello, welcome and assign | | ✓ | | | | |
@@ -718,10 +745,15 @@ All decisions were made on Oct 7, 2026. The engineer chose D1, D4, D5 and D14. T
 | 7g. Cancel reaches a socket on another app instance | | ✓ | | | | |
 | 7h. Welcome reports acks and validity | | ✓ | | | | |
 | 7i. Shutdown closes sockets and streams | | ✓ | | | | |
+| 7j. Late events after a requeue are ignored | | ✓ | | | | |
+| 7k. Ping and pong liveness | | ✓ | | | | |
+| 7l. `runner.status` stored and cleared | | ✓ | | | | |
+| 7m. Sweeper dispatches after a plan limit passes | | ✓ | | | | |
 | 8a. SSE resume with no gap or repeat | | ✓ | | | | |
 | 8b. Two streams, one read | | ✓ | | | | |
 | 8c. Stream ends after terminal event | | ✓ | | | | |
 | 8d. SSE 401, 404 and 400 | | ✓ | | | | |
+| 8e. Keepalive comment | | ✓ | | | | |
 | 9a. Skills commands keep the old behavior | | ✓ | | | | |
 | 9b. Root scripts, verify and hook use the runner | | ✓ | | | ✓ | |
 | 9c. Check handles missing source and long drift | | ✓ | | | | |
@@ -737,6 +769,7 @@ All decisions were made on Oct 7, 2026. The engineer chose D1, D4, D5 and D14. T
 | 12a. Worktree at the ref, clone reused | | ✓ | | | | |
 | 12b. Parallel prepares on one repository | | ✓ | | | | |
 | 12c. Unknown ref fails, removal is clean | | ✓ | | | | |
+| 12d. Repository case shares one clone | | ✓ | | | | |
 | 13a. Assigned run streams to `run.succeeded` | | ✓ | | ✓ | | |
 | 13b. Concurrency limit holds the second run | | ✓ | | | | |
 | 13c. Cancel stops the fake agent | | ✓ | | ✓ | | |
@@ -744,17 +777,22 @@ All decisions were made on Oct 7, 2026. The engineer chose D1, D4, D5 and D14. T
 | 13e. Skills drift fails the run | | ✓ | | | | |
 | 13f. Plan limit pauses the queue | | ✓ | | | | |
 | 13g. `4001` stops `start` | | ✓ | | | | |
-| 13h. `SIGINT` stops jobs and children | | ✓ | | | | |
+| 13h. Shutdown stops jobs and children | | ✓ | | | | |
 | 13i. Run timeout | | ✓ | | | | |
 | 13j. One terminal event per stop cause | | ✓ | | | | |
 | 13k. `1008` exits without reconnecting | | ✓ | | | | |
 | 13l. Events sent in batches | | ✓ | | | | |
+| 13m. Large events split across batches | | ✓ | | | | |
+| 13n. `4002` and `1009` exit | | ✓ | | | | |
+| 13o. Null `resetsAt` pause | | ✓ | | | | |
+| 13p. Invalid job dropped on welcome | | ✓ | | | | |
 | 14a. Hook keys and invalidation | | | ✓ | | | |
 | 14b. `useRunEvents` resume, split chunk, CRLF | | | ✓ | | | |
 | 14c. `useRunEvents` 404 and terminal | | | ✓ | | | |
+| 14d. Lifecycle events patch the cached run | | | ✓ | | | |
 | 15a. Runners pairing and revoke | | | ✓ | ✓ | | |
-| 15b. Runs form validation and submit | | | ✓ | ✓ | | |
-| 15c. Run page events, notices, cancel | | | ✓ | ✓ | | |
+| 15b. Runs form validation and submit | | | ✓ | | | |
+| 15c. Run page events, notices, cancel | | | ✓ | | | |
 | 15d. Loading, empty, failed and stale states | | | ✓ | | ✓ | |
 | 15e. Phone and desktop layouts | | | | | ✓ | |
 | 15f. Event list shows 200 at a time | | | ✓ | | | |
