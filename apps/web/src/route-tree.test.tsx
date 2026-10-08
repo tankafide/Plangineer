@@ -127,6 +127,18 @@ describe('routes', () => {
     expect(router.state.location.pathname).toBe('/');
   });
 
+  it('shows the expired message and sends no request for a malformed approval code', async () => {
+    answerSignedIn();
+    const inputs = answerProcedure('runner/getLogin', answerJson({}));
+
+    await renderRoute('/runners/approve?code=not-a-code');
+
+    expect(
+      await screen.findByText(/This pairing request expired or was already used\./),
+    ).toBeTruthy();
+    expect(inputs).toEqual([]);
+  });
+
   it('shows the header with Account, Runners, Repositories and Runs above a signed-in screen', async () => {
     answerSignedIn();
     answerProcedure('runner/list', answerJson(page([])));
