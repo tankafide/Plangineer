@@ -18,17 +18,17 @@ Delete `runnerCreatePairingCode`, `runnerPair`, `RunnerCreatePairingCodeOutput`,
 | --- | --- |
 | `RunnerLoginStatus` | `z.enum(['pending', 'approved', 'denied', 'completed'])` |
 | `RunnerUserCode` | `z.string().regex(/^[0-9A-Za-z]{4}-?[0-9A-Za-z]{4}-?[0-9A-Za-z]{4}$/)`: 12 Crockford base32 characters, the dashes optional (D2) |
-| `RunnerLoginStartInput` | `z.strictObject({ name: z.string().min(1).max(100), platform: RunnerPlatform })` |
-| `RunnerLoginStartOutput` | `{ deviceSecret: string, userCode: string, approveUrl: z.url(), expiresAt: z.iso.datetime(), pollIntervalMs: z.int() }` |
-| `RunnerLoginPollInput` | `z.strictObject({ deviceSecret: z.string().regex(/^[A-Za-z0-9_-]{43}$/) })`: 32 random bytes as base64url |
-| `RunnerLoginPollOutput` | `z.discriminatedUnion('status', [{ status: 'pending' }, { status: 'approved', runnerId: z.uuid(), token: z.string() }, { status: 'denied' }, { status: 'expired' }])` |
+| `RunnerStartLoginInput` | `z.strictObject({ name: z.string().min(1).max(100), platform: RunnerPlatform })` |
+| `RunnerStartLoginOutput` | `z.object({ deviceSecret: z.string(), userCode: z.string(), approveUrl: z.url(), expiresAt: z.iso.datetime(), pollIntervalMs: z.int() })` |
+| `RunnerPollLoginInput` | `z.strictObject({ deviceSecret: z.string().regex(/^[A-Za-z0-9_-]{43}$/) })`: 32 random bytes as base64url |
+| `RunnerPollLoginOutput` | `z.discriminatedUnion('status', [{ status: 'pending' }, { status: 'approved', runnerId: z.uuid(), token: z.string() }, { status: 'denied' }, { status: 'expired' }])` |
 | `RunnerUserCodeInput` | `z.strictObject({ userCode: RunnerUserCode })` |
-| `RunnerLogin` | `{ name, platform, status: RunnerLoginStatus.exclude(['completed']), requestedAt, expiresAt }` |
+| `RunnerLogin` | `z.object({ name: z.string(), platform: RunnerPlatform, status: RunnerLoginStatus.exclude(['completed']), requestedAt: z.iso.datetime(), expiresAt: z.iso.datetime() })` |
 
 | Procedure | Who | Input | Output | Errors |
 | --- | --- | --- | --- | --- |
-| `runner.startLogin` | public | `RunnerLoginStartInput` | `RunnerLoginStartOutput` | `TOO_MANY_REQUESTS` (429) |
-| `runner.pollLogin` | public | `RunnerLoginPollInput` | `RunnerLoginPollOutput` | none |
+| `runner.startLogin` | public | `RunnerStartLoginInput` | `RunnerStartLoginOutput` | `TOO_MANY_REQUESTS` (429) |
+| `runner.pollLogin` | public | `RunnerPollLoginInput` | `RunnerPollLoginOutput` | none |
 | `runner.getLogin` | member | `RunnerUserCodeInput` | `RunnerLogin` | `NOT_FOUND` |
 | `runner.approveLogin` | member | `RunnerUserCodeInput` | `RunnerLogin` | `NOT_FOUND`, `CONFLICT` |
 | `runner.denyLogin` | member | `RunnerUserCodeInput` | `RunnerLogin` | `NOT_FOUND`, `CONFLICT` |
@@ -37,12 +37,12 @@ Delete `runnerCreatePairingCode`, `runnerPair`, `RunnerCreatePairingCodeOutput`,
 
 **Done when:**
 
-- 1a. Each new schema accepts a valid value and rejects a malformed user code, a 42-character device secret, an unknown key and a name of 101 characters.
-- 1b. `RunnerLoginPollOutput` parses each of the four statuses and strips an unknown key, and `RunnerLogin` rejects the status `completed`.
+- 1a. Each new input schema accepts a valid value and rejects a malformed user code, a 42-character device secret, an unknown key and a name of 101 characters.
+- 1b. Each new output schema strips an unknown key, `RunnerPollLoginOutput` parses each of its four statuses, and `RunnerLogin` rejects the status `completed`.
 
 ### 2. Table
 
-**Files:** `apps/api/src/db/schema.ts`, `apps/api/drizzle/0003_*.sql`, `apps/api/src/db/schema.test.ts`
+**Files:** `apps/api/src/db/schema.ts`, `apps/api/drizzle/0003_*.sql`, `apps/api/drizzle/meta/*` (generated), `apps/api/src/db/schema.test.ts`
 
 Drop `runner_pairing_codes` and add `runner_logins`. Its status enum is `pgEnum('runner_login_status', RunnerLoginStatus.enum)`, built from the contracts enum as `schema.ts` builds the others:
 
@@ -59,7 +59,7 @@ Drop `runner_pairing_codes` and add `runner_logins`. Its status enum is `pgEnum(
 | `expires_at` | `timestamptz` | not null |
 | `created_at` | `timestamptz` | |
 
-Checks: `(user_id IS NOT NULL) = (status IN ('approved', 'completed'))` and `(runner_id IS NOT NULL) = (status = 'completed')`. A partial index on `expires_at` where `status = 'pending'` serves the pending count in step 3. Generate the migration with `pnpm --filter @plangineer/api db:generate` and prove it with `pnpm db:reset`.
+Checks: `(user_id IS NOT NULL) = (status IN ('approved', 'completed'))` and `(runner_id IS NOT NULL) = (status = 'completed')`. A plain index on `expires_at` serves both the pending count and the cleanup delete in step 3. Generate the migration with `pnpm --filter @plangineer/api db:generate` and prove it with `pnpm db:reset`.
 
 **Done when:**
 
@@ -73,20 +73,21 @@ Checks: `(user_id IS NOT NULL) = (status IN ('approved', 'completed'))` and `(ru
 - `RUNNER_PAIRING_CODE_TTL_MS` becomes `RUNNER_LOGIN_TTL_MS`, from 60,000 to 3,600,000, default 600,000 in `.env.example`. A local `.env` written before this change fails `parseEnv` with the key's name until the engineer renames that line.
 - `generatePairingCode` becomes `generateUserCode`. It keeps the 12 Crockford base32 characters from `randomInt`, shown as `XXXX-XXXX-XXXX`.
 - `generateDeviceSecret` returns 32 bytes from `randomBytes` as base64url.
-- The API stores the user code and the device secret only as `hashSecret` of their normalized form.
+- `normalizePairingCode` becomes `normalizeUserCode`: dashes removed, uppercased.
+- The API stores the user code only as `hashSecret(normalizeUserCode(userCode))`, and the device secret only as `hashSecret(deviceSecret)`, unchanged.
 - **`startLogin`.** One transaction runs under `pg_advisory_xact_lock(hashtextextended('runner-logins', 0))`:
   1. It deletes login requests whose `expires_at` passed more than an hour ago.
   2. It refuses with `TOO_MANY_REQUESTS` when 200 pending login requests are unexpired.
   3. It inserts the login request with `expires_at = now() + RUNNER_LOGIN_TTL_MS`.
 
   It returns `approveUrl` as `${BETTER_AUTH_URL}/runners/approve?code=<userCode>`, and `pollIntervalMs` of 2,000 (D5).
-- **`getLogin`, `approveLogin` and `denyLogin`.** Each finds the login request by `hashSecret(normalize(userCode))`. A missing or expired login request is `NOT_FOUND`. `getLogin` returns a `completed` login request as `approved` (D9). Approve and deny lock the row and need `status = 'pending'`, else `CONFLICT`. Approve sets `approved` with the caller's `user_id`. Deny sets `denied`.
-- **`pollLogin`.** It finds the login request by the device secret's hash and answers by status:
+- **`getLogin`, `approveLogin` and `denyLogin`.** Each finds the login request by `hashSecret(normalizeUserCode(userCode))`. A missing or expired login request is `NOT_FOUND`. `getLogin` returns a `completed` login request as `approved` (D9). Approve and deny lock the row and need `status = 'pending'`, else `CONFLICT`. Approve sets `approved` with the caller's `user_id`. Deny sets `denied`.
+- **`pollLogin`.** In one transaction, it selects the login request by the device secret's hash `FOR UPDATE`, then answers by status. Two overlapping polls therefore complete a login request once:
 
   | Status | Answer |
   | --- | --- |
   | `pending` or `denied`, unexpired | Returned as it is |
-  | `approved`, expired or not | Completes in one transaction under the row lock: generates a runner token, inserts the runner through `insertRunner` with the login request's name, platform and `user_id`, sets `completed` and `runner_id`, and returns `{ status: 'approved', runnerId, token }`. This is the only time the token leaves the API |
+  | `approved`, expired or not | Completes in the same transaction: generates a runner token, inserts the runner through `insertRunner` with the login request's name, platform and `user_id`, sets `completed` and `runner_id`, and returns `{ status: 'approved', runnerId, token }`. This is the only time the token leaves the API |
   | Anything else | `expired` |
 
   An approved login request completes whatever its `expires_at`, because the approval itself came in time.
@@ -105,15 +106,16 @@ Checks: `(user_id IS NOT NULL) = (status IN ('approved', 'completed'))` and `(ru
 - 3f. `getLogin`, `approveLogin` and `denyLogin` refuse a caller with no session. In `runner-socket-lifecycle.test.ts`, no log line from pairing and connecting holds the device secret, the user code with or without its dashes, or the runner token.
 - 3g. A login request approved before its `expires_at` and polled after it still returns the token.
 - 3h. `getLogin` returns a completed login request with the status `approved`.
+- 3i. Two concurrent polls of an approved login request return one token and create one runner, and the other poll returns `expired`.
 
 ### 4. Runner `login` command
 
-**Files:** `apps/runner/src/login-command.ts`, `apps/runner/src/login-command.test.ts`, `apps/runner/src/pair-command.ts` (deleted), `apps/runner/src/pair-command.test.ts` (deleted), `apps/runner/src/cli.ts`, `apps/runner/src/cli.test.ts`, `apps/runner/src/start-command.ts`, `apps/runner/src/start-command-connection.test.ts`, `apps/runner/src/config/runner-logger.ts`, `apps/runner/src/config/runner-logger.test.ts`, `apps/runner/package.json`, `apps/runner/README.md`
+**Files:** `apps/runner/src/login-command.ts`, `apps/runner/src/login-command.test.ts`, `apps/runner/src/pair-command.ts` (deleted), `apps/runner/src/pair-command.test.ts` (deleted), `apps/runner/src/cli.ts`, `apps/runner/src/cli.test.ts`, `apps/runner/src/start-command.ts`, `apps/runner/src/start-command-connection.test.ts`, `apps/runner/src/config/runner-logger.ts`, `apps/runner/src/config/runner-logger.test.ts`, `apps/runner/package.json`, `pnpm-lock.yaml`, `apps/runner/README.md`
 
-Add `open` 11.0.4 to the runner's dependencies. `plangineer-runner login --server <url> [--name <name>] [--no-browser]` replaces `pair`:
+Add `open` 11.0.4 to the runner's dependencies. `login-command` takes the opener as a dependency, so tests can pass one that fails. `plangineer-runner login --server <url> [--name <name>] [--no-browser]` replaces `pair`:
 
 1. The command calls `runner.startLogin` with the name and the platform. The name defaults to the host name.
-2. It prints `To pair this machine, approve it in Plangineer: <approveUrl>` and `Code: <userCode>`. Then it opens `approveUrl` with `open`, unless `--no-browser` is set. A browser that fails to open leaves the printed link, with no error.
+2. It prints `To pair this machine, approve it in Plangineer: <approveUrl>` and `Code: <userCode>`. Then it opens `approveUrl` with `open`, unless `--no-browser` is set. `open` rejects its promise when no browser can be launched. The command catches that rejection, leaves the printed link and keeps polling, with no error.
 3. It polls `runner.pollLogin` every `pollIntervalMs` and acts on each answer:
 
 | Answer | Result |
@@ -124,14 +126,16 @@ Add `open` 11.0.4 to the runner's dependencies. `plangineer-runner login --serve
 | `TOO_MANY_REQUESTS` from `startLogin` | Fails with `Too many pairing requests are waiting in Plangineer. Try again in a few minutes.` |
 | A network error | Fails at once with its message |
 
-`start` without credentials says `This runner is not paired. Run plangineer-runner login --server <url> first.` A revoked or unknown token says `This runner was revoked or its token is invalid. Pair it again with plangineer-runner login.` The runner logger also redacts `deviceSecret` and `userCode`. The package version becomes `0.2.0` (D8).
+`start` without credentials says `This runner is not paired. Run plangineer-runner login --server <url> first.` A revoked or unknown token says `This runner was revoked or its token is invalid. Pair it again with plangineer-runner login.` The runner logger replaces its `code` and `*.code` redaction, which only pairing codes needed, with `deviceSecret`, `*.deviceSecret`, `userCode` and `*.userCode`. WebSocket close codes and error codes such as `ECONNREFUSED` then show in the log again. The package version becomes `0.2.0` (D8).
 
 **Done when:**
 
 - 4a. Against a fake control plane, `login --no-browser` prints the link and user code, polls through `pending` to `approved`, writes `runner.json` and exits 0.
 - 4b. A denied request, an expired request and a `TOO_MANY_REQUESTS` start each exit 1 with their message and write no `runner.json`.
 - 4c. `login` without `--server`, or with a server that is not a URL, prints the usage, and `pair` is no longer a command.
-- 4d. The runner logger redacts `deviceSecret`, `userCode` and `token`.
+- 4d. The runner logger redacts `deviceSecret`, `userCode` and `token`, and logs `code` as it is.
+- 4e. A network error from `startLogin` or `pollLogin` exits 1 with its message and writes no `runner.json`.
+- 4f. With an opener that rejects, `login` prints the link, polls to `approved` and exits 0.
 
 ### 5. Client hooks
 
@@ -151,7 +155,7 @@ A signed-out visitor to any `_app` page returns to it after sign-in (D6).
 
 - `_app` redirects to `/sign-in?redirect=<path and search>`.
 - `safeReturnPath(value: string, origin: string): string` returns `value` when it is a same-origin path, and `/` otherwise. A same-origin path starts with `/`, holds no backslash and no control character, and satisfies `new URL(value, origin).origin === origin`.
-- `sign-in.tsx` validates `redirect` with `safeReturnPath` in `validateSearch`, with `.catch('/')`. A signed-in visitor to `/sign-in` goes to it with `redirect({ href })`.
+- `sign-in.tsx` validates `redirect` in `validateSearch` as `z.string().default('/').transform((value) => safeReturnPath(value, window.location.origin)).catch('/')`. The key is optional on input and always a string on output, as the `error` parameter is optional. So `navigate({ to: '/sign-in' })` in `account-summary.tsx` keeps compiling, and sign-out lands on `/sign-in` with no `redirect`. A signed-in visitor to `/sign-in` goes to `redirect` with `redirect({ href })`.
 - `signInWithGitHub(redirect)` passes the path as Better Auth's `callbackURL`. It passes `/sign-in?redirect=<encoded path>` as `errorCallbackURL`, so a failed sign-in keeps the return path.
 - Better Auth 1.7.7 accepts a root-relative `callbackURL` and `errorCallbackURL` with a query string. `isSafeRelativeURL` in `dist/auth/trusted-origins.mjs` allows them, and `dist/api/middlewares/origin-check.mjs` allows relative paths for every label but `origin`. 6c keeps that behavior under test.
 - `sign-in.spec.ts` expects `/sign-in?redirect=%2F` after a signed-out visit to `/`.
@@ -177,7 +181,7 @@ The Runners route moves to `routes/_app/runners/index.tsx` as `createFileRoute('
 | State | Shows |
 | --- | --- |
 | Loading | `Skeleton` in the card's shape |
-| Failed load | An `Alert` with **Retry** |
+| Failed load | `LoadFailed`, its `Alert` with **Retry** |
 | Stale (a refetch failed with content shown) | `StaleNotice` above the card |
 | `pending` | A card titled **Pair &lt;name&gt;?** with the platform, the request time and the user code. Below them: "Approve only if you just ran `plangineer-runner login` and your terminal shows this code." **Approve** is the default `Button` and **Deny** the outline one |
 | `approved` | A `CircleCheck` icon in `text-success` and "Approved. Your terminal finishes pairing on its own.", with a link to Runners |
@@ -185,10 +189,16 @@ The Runners route moves to `routes/_app/runners/index.tsx` as `createFileRoute('
 | `NOT_FOUND`, or no `code` | "This pairing request expired or was already used. Run `plangineer-runner login` again." with no buttons |
 
 - The user code uses `font-mono text-2xl tracking-widest`. The machine name wraps with `break-all`, since it holds up to 100 characters.
-- A failed approve or deny shows its error under its button, and both buttons are enabled again. `CONFLICT` reads "This request was already decided. Reload to see its state."
+- A failed approve or deny acts on its error code:
+
+  | Error | Result |
+  | --- | --- |
+  | `NOT_FOUND` | The page shows the expired state, as a reload would |
+  | `CONFLICT` | "This request was already decided. Reload to see its state." under the button, with both buttons enabled |
+  | Any other | "Could not reach Plangineer. Try again." under the button, with both buttons enabled |
 - On a phone, the card fills the width and the buttons stack full width at 44 px tall or more. From `md:` the card is `max-w-md`, centered, with the buttons side by side.
 
-**Runners card.** **Add a runner** replaces the pairing card. It shows `npx plangineer-runner login --server <window.location.origin>` with a copy button, and one line: "Run it on the machine, then approve the request it opens in your browser." It makes no API call (D8). The empty state in `runner-list.tsx` reads "Pair your first runner with the Add a runner card above."
+**Runners card.** **Add a runner** replaces the pairing card. It shows `npx plangineer-runner login --server <window.location.origin>` with a `CopyButton`, and one line: "Run it on the machine, then approve the request it opens in your browser." It makes no API call (D8). The empty state in `runner-list.tsx` reads "Pair your first runner with the Add a runner card above."
 
 **Done when:**
 
@@ -197,7 +207,8 @@ The Runners route moves to `routes/_app/runners/index.tsx` as `createFileRoute('
 - 7c. The Runners screen shows the `npx plangineer-runner login --server` command for the current origin, and its empty state names the Add a runner card.
 - 7d. Screenshots at desktop and 375 px show the approval page in each state with no overflow.
 - 7e. The approval page shows a skeleton while loading, and a failed load shows **Retry**, which loads the login request again.
-- 7f. A `CONFLICT` from **Approve** shows its message under **Approve**, with both buttons enabled.
+- 7f. A `CONFLICT` from **Approve** shows its message under **Approve**, and a network failure of **Deny** shows its message under **Deny**, each with both buttons enabled.
+- 7i. A `NOT_FOUND` from **Approve** or **Deny** shows the expired state with no buttons.
 - 7g. `/runners/approve` with no `code` or a malformed one shows the expired message and sends no request.
 - 7h. A login request loaded as `approved` shows the approved state on a fresh load of the page.
 
@@ -255,8 +266,8 @@ All decisions were made on Oct 8, 2026. The engineer asked for pairing to be as 
 
 | Line | Unit | Integration | Component | End to end | Agent check | Human check |
 | --- | :-: | :-: | :-: | :-: | :-: | :-: |
-| 1a. New schemas accept and reject | ✓ | | | | | |
-| 1b. Poll output statuses | ✓ | | | | | |
+| 1a. Input schemas accept and reject | ✓ | | | | | |
+| 1b. Output schemas strip and parse | ✓ | | | | | |
 | 2a. Migration applies from empty | | ✓ | | | | |
 | 2b. Constraints and cascade | | ✓ | | | | |
 | 3a. Start, approve, poll once | | ✓ | | | | |
@@ -267,10 +278,13 @@ All decisions were made on Oct 8, 2026. The engineer asked for pairing to be as 
 | 3f. Auth and no secrets in logs | | ✓ | | | | |
 | 3g. Approved login completes after expiry | | ✓ | | | | |
 | 3h. Completed reads as approved | | ✓ | | | | |
+| 3i. Concurrent polls complete once | | ✓ | | | | |
 | 4a. Login succeeds | | ✓ | | | | |
 | 4b. Denied, expired and too many | | ✓ | | | | |
 | 4c. Usage and no `pair` | ✓ | | | | | |
 | 4d. Runner logger redaction | ✓ | | | | | |
+| 4e. Network error | | ✓ | | | | |
+| 4f. Browser fails to open | | ✓ | | | | |
 | 5a. Hooks update the cache | | | ✓ | | | |
 | 6a. Return path kept | | | ✓ | | | |
 | 6b. Unsafe return paths refused | ✓ | | | | | |
@@ -281,16 +295,17 @@ All decisions were made on Oct 8, 2026. The engineer asked for pairing to be as 
 | 7c. Runners card command | | | ✓ | | | |
 | 7d. Screenshots | | | | | ✓ | |
 | 7e. Loading and failed load | | | ✓ | | | |
-| 7f. Approve conflict | | | ✓ | | | |
+| 7f. Approve conflict and failed deny | | | ✓ | | | |
 | 7g. Missing or malformed code | | | ✓ | | | |
 | 7h. Fresh load of an approved login request | | | ✓ | | | |
+| 7i. Approve or deny after expiry | | | ✓ | | | |
 | 8a. Journey pairs through approval | | | | ✓ | | |
 | 8b. Skills lint and no old terms | | | | | ✓ | |
 | C1. Secrets stay secret | ✓ | ✓ | | | | |
 | C2. Bounded public endpoints | | ✓ | | | | |
 | C3. No open redirect | ✓ | ✓ | ✓ | | | |
 
-Unit tests cover the contract schemas, the CLI's argument handling, the runner logger's redaction and `safeReturnPath`. API integration tests call the procedures through the router on real Postgres. They fix the clock only by setting `expires_at` in the past, and capture the pino output for the secret scan. Runner tests use a fake HTTP server speaking the oRPC wire format, as `pair-command.test.ts` does at `f9246ae`. The server answers `startLogin` and a scripted sequence of `pollLogin` replies, with `--no-browser`. Component tests use Testing Library with MSW for each approval state and the sign-in redirect. The journey uses the e2e session cookie and the real CLI.
+Unit tests cover the contract schemas, the CLI's argument handling, the runner logger's redaction and `safeReturnPath`. API integration tests call the procedures through the router on real Postgres. They fix the clock only by setting `expires_at` in the past, and capture the pino output for the secret scan. Runner tests use a fake HTTP server speaking the oRPC wire format, as `pair-command.test.ts` does at `f9246ae`. The server answers `startLogin` and a scripted sequence of `pollLogin` replies. The tests use `--no-browser`, except 4f, which passes an opener that rejects. Component tests use Testing Library with MSW for each approval state and the sign-in redirect. The journey uses the e2e session cookie and the real CLI.
 
 ## Verification
 
