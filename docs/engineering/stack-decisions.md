@@ -48,7 +48,9 @@ Nothing imports from another `apps/*` package.
 | `pnpm setup:github-app` | Creates the dev GitHub App through GitHub's manifest flow and writes its credentials to `.env` |
 | `pnpm db:up` | Starts Postgres (Docker Compose) and waits for its healthcheck |
 | `pnpm db:migrate` | Applies pending migrations to the dev database |
-| `pnpm dev` | Starts Postgres, applies migrations, then runs the API and web. MinIO, seed data and the fake agent join it with the features that need them |
+| `pnpm dev` | Starts Postgres, applies migrations, then runs the API and web. MinIO and seed data join it with the features that need them. For runs without a model, start `pnpm runner:fake` beside it |
+| `pnpm runner` | Runs the runner's CLI from the checkout: `pnpm runner pair --server <url> --code <code>`, then `pnpm runner start` |
+| `pnpm runner:fake` | Starts the paired runner with the fake agent in place of `claude` |
 | `pnpm db:reset` | Drops and migrates the dev database. Seeding joins it with the first feature that has data |
 | `pnpm verify` | Format check, skills mirror check, Oxlint, typecheck, dependency-cruiser, Knip, Vitest, in that order. Must pass before work is done |
 | `pnpm test:e2e` | Playwright Test journeys against the local stack, on a database reset by `pnpm db:reset`. Must pass before work that adds or changes a journey is done |
@@ -63,7 +65,7 @@ Nothing imports from another `apps/*` package.
 - Migrations come only from `drizzle-kit generate` (`pnpm --filter @plangineer/api db:generate`). Never `drizzle-kit push` or Better Auth's `migrate`.
 - Each app parses its environment with a Zod schema at startup and exits on any missing or invalid variable. Every variable is listed in `.env.example`.
 - The API and runner log JSON with pino to stdout and `logs/<app>.log`.
-- Hooks and repo scripts are Node scripts (`node scripts/<name>.mjs`), never bash or PowerShell. No shell syntax in `package.json` scripts.
+- Hooks and repo scripts are Node scripts (`node scripts/<name>.mjs`), never bash or PowerShell. The skills commands are the one exception: the hook and the `skills:*` scripts run the runner's CLI through `node apps/runner/src/cli.ts`. No shell syntax in `package.json` scripts.
 - Integration tests use real Postgres through template databases, never PGlite or mocks of the database.
 - Tests never call a real model; runner tests use the fake agent and recorded JSONL fixtures.
 - UI work is checked with screenshots at desktop and phone (375 px) widths before it is done.

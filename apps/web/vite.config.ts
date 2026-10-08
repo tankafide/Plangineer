@@ -17,7 +17,8 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 5173,
       strictPort: true,
-      proxy: { '/api': apiUrl, '/rpc': apiUrl },
+      // ws: true carries the runner socket, so runners pair and connect through the web origin.
+      proxy: { '/api': { target: apiUrl, ws: true }, '/rpc': apiUrl },
     },
   };
 });

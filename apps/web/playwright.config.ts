@@ -10,6 +10,7 @@ const WEB_URL = 'http://localhost:5173';
 
 export default defineConfig({
   testDir: 'e2e',
+  globalSetup: './e2e/global-setup.ts',
   reporter: [['html', { open: 'never' }]],
   use: { baseURL: WEB_URL, trace: 'retain-on-failure' },
   projects: [

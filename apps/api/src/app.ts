@@ -5,23 +5,41 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { HTTPException } from 'hono/http-exception';
 import { requestId } from 'hono/request-id';
+import { RUN_EVENTS_PATH } from '@plangineer/contracts';
 import type { Auth } from './auth/auth.ts';
+import { resolveSession } from './auth/session.ts';
+import type { Database } from './db/client.ts';
+import type { Env } from './env.ts';
 import type { Logger } from './logger.ts';
-import type { InitialContext } from './rpc/context.ts';
 import { router } from './rpc/router.ts';
+import type { RunnerConnections } from './runners/runner-connections.ts';
+import { RUNNER_SOCKET_PATH, runnerSocketRoute } from './runners/runner-socket.ts';
+import { runEventStreamRoute } from './runs/run-event-stream.ts';
+import type { RunEventTail } from './runs/run-event-tail.ts';
 
 const MAX_BODY_BYTES = 1024 * 1024;
 
 type AppEnv = { Variables: { requestId: string; logger: Logger } };
 
-async function resolveSession(auth: Auth, headers: Headers): Promise<InitialContext['session']> {
-  const session = await auth.api.getSession({ headers });
-  if (session === null) return null;
-  const { id, name, email, role } = session.user;
-  return { user: { id, name, email, role } };
+/** The parts that serve live runs: the runner sockets and the run event tail. */
+export interface Realtime {
+  connections: RunnerConnections;
+  tail: RunEventTail;
 }
 
-export function createApp({ auth, logger }: { auth: Auth; logger: Logger }) {
+export function createApp({
+  auth,
+  logger,
+  db,
+  env,
+  realtime,
+}: {
+  auth: Auth;
+  logger: Logger;
+  db: Database;
+  env: Env;
+  realtime: Realtime;
+}) {
   const rpcHandler = new RPCHandler(router, {
     plugins: [new SimpleCsrfProtectionHandlerPlugin()],
     interceptors: [
@@ -49,11 +67,22 @@ export function createApp({ auth, logger }: { auth: Auth; logger: Logger }) {
 
   app.on(['GET', 'POST'], '/api/auth/*', (c) => auth.handler(c.req.raw));
 
+  app.get(RUNNER_SOCKET_PATH, (c, next) =>
+    runnerSocketRoute({ db, env, logger: c.get('logger') }, realtime.connections)(c, next),
+  );
+  app.get(RUN_EVENTS_PATH, (c) =>
+    runEventStreamRoute({ deps: { db, env, logger: c.get('logger') }, auth, tail: realtime.tail })(
+      c,
+    ),
+  );
+
   app.use('/rpc/*', async (c, next) => {
     const { matched, response } = await rpcHandler.handle(c.req.raw, {
       prefix: '/rpc',
       context: {
         logger: c.get('logger'),
+        db,
+        env,
         session: await resolveSession(auth, c.req.raw.headers),
       },
     });

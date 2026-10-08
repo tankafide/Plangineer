@@ -3,7 +3,7 @@ import { binPath } from './bin-path.mjs';
 
 const steps = [
   { name: 'format check', args: [binPath('oxfmt'), '--check'] },
-  { name: 'skills mirror check', args: ['scripts/sync-skills.mjs', '--check'] },
+  { name: 'skills mirror check', args: ['apps/runner/src/cli.ts', 'skills', 'check'] },
   { name: 'Oxlint', args: [binPath('oxlint'), '--type-aware', '--type-check'] },
   { name: 'typecheck', args: [binPath('turbo'), 'run', 'typecheck'] },
   {

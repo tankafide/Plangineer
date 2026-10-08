@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { describe, expect, it } from 'vitest';
 import { AUTH_URL, renderRoute, server } from '@/test/app-harness';
+import { answerJson, answerProcedure, answerSignedIn, page } from '@/test/fixtures';
 
 function answerSession(response: () => Response) {
   server.use(http.get(`${AUTH_URL}/get-session`, response));
@@ -65,5 +66,36 @@ describe('routes', () => {
 
     expect(await screen.findByRole('button', { name: 'Sign in with GitHub' })).toBeTruthy();
     expect(screen.queryByRole('heading', { name: 'Something went wrong' })).toBeNull();
+  });
+
+  it('sends a signed-out visit to /runs on to /sign-in', async () => {
+    answerSession(() => HttpResponse.json(null));
+
+    const { router } = await renderRoute('/runs');
+
+    expect(await screen.findByRole('button', { name: 'Sign in with GitHub' })).toBeTruthy();
+    expect(router.state.location.pathname).toBe('/sign-in');
+  });
+
+  it('shows the header with Account, Runners and Runs above a signed-in screen', async () => {
+    answerSignedIn();
+    answerProcedure('runner/list', answerJson(page([])));
+
+    await renderRoute('/runners');
+
+    const nav = await screen.findByRole('navigation', { name: 'Main' });
+    expect(nav.textContent).toContain('Account');
+    const runners = screen.getByRole('link', { name: 'Runners' });
+    expect(runners.getAttribute('aria-current')).toBe('page');
+    expect(screen.getByRole('link', { name: 'Runs' }).getAttribute('href')).toBe('/runs');
+    expect(screen.getByRole('heading', { name: 'Runners' })).toBeTruthy();
+  });
+
+  it('shows Page not found for a run id that is not a uuid', async () => {
+    answerSignedIn();
+
+    await renderRoute('/runs/not-a-run');
+
+    expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeTruthy();
   });
 });

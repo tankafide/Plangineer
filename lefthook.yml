@@ -1,7 +1,7 @@
 pre-commit:
   commands:
     skills-check:
-      run: node scripts/sync-skills.mjs --check --staged
+      run: node apps/runner/src/cli.ts skills check --staged
     skills-lint:
       glob: '.agents/skills/**'
       run: node scripts/lint-skills.mjs

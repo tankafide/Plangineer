@@ -4,7 +4,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { CircleAlert } from 'lucide-react';
 import { useState, useTransition } from 'react';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { LoadFailed } from '@/components/load-failed';
+import { StaleNotice } from '@/components/stale-notice';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -48,36 +50,6 @@ function LoadingDetails() {
   );
 }
 
-function FailedDetails({ message, onRetry }: { message: string; onRetry: () => void }) {
-  return (
-    <div className="flex flex-col gap-4">
-      <Alert variant="destructive">
-        <CircleAlert aria-hidden />
-        <AlertTitle>Your account could not be loaded</AlertTitle>
-        <AlertDescription>{message}</AlertDescription>
-      </Alert>
-      <Button variant="outline" className="w-full md:w-auto md:self-start" onClick={onRetry}>
-        Retry
-      </Button>
-    </div>
-  );
-}
-
-function StaleNotice({ onRetry }: { onRetry: () => void }) {
-  return (
-    <Alert variant="warning">
-      <CircleAlert aria-hidden />
-      <AlertTitle>Stale</AlertTitle>
-      <AlertDescription className="flex flex-col items-start gap-2">
-        These details could not be refreshed.
-        <Button variant="outline" size="sm" onClick={onRetry}>
-          Retry
-        </Button>
-      </AlertDescription>
-    </Alert>
-  );
-}
-
 /** The signed-in user's name, email and role, with sign out. */
 export function AccountSummary() {
   const me = useMe();
@@ -113,7 +85,11 @@ export function AccountSummary() {
       <CardContent className="flex flex-col gap-4">
         {me.isPending && <LoadingDetails />}
         {me.isError && me.data === undefined && (
-          <FailedDetails message={me.error.message} onRetry={retry} />
+          <LoadFailed
+            title="Your account could not be loaded"
+            message={me.error.message}
+            onRetry={retry}
+          />
         )}
         {me.isRefetchError && <StaleNotice onRetry={retry} />}
         {me.data !== undefined && <UserDetails user={me.data} />}

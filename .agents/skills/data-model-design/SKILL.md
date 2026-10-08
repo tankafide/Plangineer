@@ -29,6 +29,7 @@ What each record owns and how it changes. A plan that adds a record not listed h
 | --- | --- |
 | User | Better Auth owns its tables. Add the role (admin or member), the GitHub identity and notification preferences as columns, with no organization table |
 | Runner | Belongs to one user. Stores a hashed pairing token and never the token, unique on the hash. Revoking sets a status and keeps the row, because runs point at it |
+| Runner pairing code | Belongs to one user and cascades with it. Stored only as a hash, used once, and expires |
 | Feature | The root of a change. Context files, pre-planning tasks, plan revisions, threads and runs belong to it. Its state is an enumerated column |
 | Pre-planning task | Belongs to a feature and cascades with it. Records the commit it ran against. Produces one context file |
 | Context file | Belongs to a feature and cascades with it. Plan revisions record which context files they were built from in a join table |

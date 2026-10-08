@@ -25,20 +25,20 @@ Rules for the workspace, scripts, hooks, CI and check configuration. The stack a
 - No shell syntax in `package.json` scripts: no `&&`, `|`, `$VAR`, `>`, `rm`, `cp` or shell globs. A script that needs more than one command becomes a Node script.
 - Run a package's CLI by resolving its JavaScript bin with `binPath` from `scripts/bin-path.mjs` and spawning it with `process.execPath`, as `scripts/verify.mjs` does. Use `execa` for anything else. Never spawn a `.cmd` shim or use `shell: true`.
 - A script exits non-zero on any failure and prints what failed and the fix. Mutating commands (`format`, `skills:sync`) are separate scripts from read-only checks (`format:check`, `skills:check`).
-- A script that holds logic has a Vitest test beside it, as `scripts/sync-skills.test.mjs` does.
+- A script that holds logic has a Vitest test beside it, as `scripts/lint-skills.test.mjs` does.
 
 ### Local stack
 
-- `pnpm dev` is a Node script. It runs `docker info` first, starts Postgres and MinIO with Docker Compose, waits for both healthchecks, then starts the API, web and the fake agent with seed data.
+- `pnpm dev` is a Node script. It runs `docker info` first, starts Postgres and MinIO with Docker Compose, waits for both healthchecks, then starts the API and web with seed data. `pnpm runner:fake` runs the paired runner with the fake agent beside it, so runs need no model.
 - `compose.yaml` pins image tags (Postgres at the production major, never `latest`), uses named volumes and gives each service a healthcheck.
 - `pnpm db:reset` drops, migrates and reseeds the dev database. It refuses a `DATABASE_URL` whose host is not local.
 - If Docker is down or a container fails, report it. Do not restart Docker or prune volumes.
 
 ### Hooks
 
-- `lefthook.yml` holds every hook, and each command is `node scripts/<name>.mjs`. Scope a command to its files with `glob`, as `skills-lint` does.
+- `lefthook.yml` holds every hook, and each command is a Node script, `node scripts/<name>.mjs`, or the runner's CLI, `node apps/runner/src/cli.ts`. Scope a command to its files with `glob`, as `skills-lint` does.
 - A hook never mutates files and never uses `stage_fixed`, because it can overwrite an unstaged edit.
-- Pre-commit checks the staged files (`--check --staged`), not the working tree.
+- Pre-commit checks the staged files (`skills check --staged`), not the working tree.
 - Pre-push runs `node scripts/verify.mjs`, so a failing `pnpm verify` stops the push.
 - `prepare` runs `lefthook install`. Hooks can be skipped with `--no-verify`, so CI is the gate.
 - `.claude/settings.json` registers two Claude Code hooks. `PostToolUse` on `Edit|Write` runs `scripts/claude-post-edit.mjs`, which format-checks and lints the edited file and never rewrites it. `Stop` runs `scripts/claude-stop.mjs`, which runs `pnpm verify` unless the stop hook is already active or every changed path is under `docs/`. Both exit 2 on failure, the only code that blocks, so the output reaches the agent.
@@ -71,10 +71,6 @@ Never silence a rule to make a check pass. Fix the code, or change the rule in t
 1. Add a step to the `steps` list in `scripts/verify.mjs`: a name and the Node arguments that run it. Put fast checks first.
 2. Add a root `package.json` script for it if people run it alone.
 3. Name it in the `pnpm verify` row of [stack decisions](../../../docs/engineering/stack-decisions.md) if it is not there. `implementation-orchestrator` reports any check that row names and the script does not run.
-
-### Temporary pieces
-
-`scripts/sync-skills.mjs`, its tests and the `skills:*` root scripts stand in for the runner's `skills sync` and `skills check` until `apps/runner` lands. [runner-adapters](../runner-adapters/SKILL.md#skills-commands) owns that behavior and the switch-over.
 
 ## Review mode
 

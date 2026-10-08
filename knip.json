@@ -6,11 +6,14 @@
       "entry": ["scripts/*.mjs"]
     },
     "packages/contracts": {},
+    "packages/domain": {},
     "packages/api-client": {},
     "apps/api": {
       "entry": ["src/auth/auth-cli.ts"]
     },
     "apps/web": {},
-    "apps/runner": {}
+    "apps/runner": {
+      "entry": ["src/adapters/claude-code/fake-claude.ts"]
+    }
   }
 }

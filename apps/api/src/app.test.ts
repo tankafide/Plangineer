@@ -2,16 +2,9 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import type { Auth } from './auth/auth.ts';
-import { createApp } from './app.ts';
 import { user } from './db/schema.ts';
-import {
-  GITHUB_CLIENT_ID,
-  sessionCookie,
-  silentLogger,
-  storeUser,
-  testAuth,
-  testEnv,
-} from './test/fixtures.ts';
+import { GITHUB_CLIENT_ID, sessionCookie, storeUser, testEnv } from './test/fixtures.ts';
+import { createTestApp } from './test/test-app.ts';
 import { createTestDatabase, type TestDatabase } from './test/test-database.ts';
 
 const ORIGIN = testEnv().BETTER_AUTH_URL;
@@ -20,15 +13,16 @@ const CSRF_HEADER = { 'x-csrf-token': 'orpc' };
 describe('createApp', () => {
   let database: TestDatabase;
   let auth: Auth;
-  let app: ReturnType<typeof createApp>;
+  let app: Awaited<ReturnType<typeof createTestApp>>['app'];
+  let close: () => Promise<void>;
 
   beforeAll(async () => {
     database = await createTestDatabase();
-    auth = testAuth(database.db);
-    app = createApp({ auth, logger: silentLogger });
+    ({ app, auth, close } = await createTestApp(database));
   });
 
   afterAll(async () => {
+    await close();
     await database.drop();
   });
 

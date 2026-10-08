@@ -1,9 +1,6 @@
-import { serve } from '@hono/node-server';
-import { createApp } from './app.ts';
-import { createAuth } from './auth/auth.ts';
-import { createDatabase } from './db/client.ts';
 import { type Env, parseEnv } from './env.ts';
 import { createLogger } from './logger.ts';
+import { startServer } from './server.ts';
 
 function readEnv(): Env | undefined {
   try {
@@ -15,27 +12,21 @@ function readEnv(): Env | undefined {
   }
 }
 
-function start(env: Env): void {
+async function start(env: Env): Promise<void> {
   const logger = createLogger(env.LOG_LEVEL);
-  const { db, pool } = createDatabase(env.DATABASE_URL);
-  const app = createApp({ auth: createAuth({ db, env }), logger });
+  const server = await startServer({ env, logger });
+  logger.info({ port: server.port }, 'API listening');
 
-  const server = serve({ fetch: app.fetch, port: env.API_PORT }, ({ port }) => {
-    logger.info({ port }, 'API listening');
-  });
-
-  function shutdown(signal: NodeJS.Signals): void {
+  async function shutdown(signal: NodeJS.Signals): Promise<void> {
     logger.info({ signal }, 'API shutting down');
-    server.close(async () => {
-      await pool.end();
-      process.exit(0);
-    });
+    await server.close();
+    process.exit(0);
   }
 
-  process.once('SIGINT', shutdown);
-  process.once('SIGTERM', shutdown);
+  process.once('SIGINT', (signal) => void shutdown(signal));
+  process.once('SIGTERM', (signal) => void shutdown(signal));
 }
 
 const env = readEnv();
 if (env === undefined) process.exitCode = 1;
-else start(env);
+else await start(env);

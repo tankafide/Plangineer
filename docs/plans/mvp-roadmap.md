@@ -13,8 +13,8 @@ Chunks 1 to 9 cover MVP Phases 1 to 3. Chunk 10 is Phase 4, which is rollout and
 | Phase 0 loop | The four orchestrators and the rule skills are written in `.agents/skills/`, and the scaffold went through the full loop. The MVP's exit gate asks for 3 to 5 features |
 | Skill specification and baseline catalog | Not written. Chunk 2 needs both, and they can be written alongside chunk 1 |
 | Project scaffold | Merged to `main` on Oct 7, 2026. It includes the workspace, every check, CI on three systems, local Postgres, GitHub sign-in, the user record with its admin or member role, and the development GitHub App |
-| Skills mirror | `scripts/sync-skills.mjs` syncs and checks this repository. The runner does not ship it yet |
-| Runner | A stub that prints `--version` |
+| Skills mirror | The runner's `skills sync` and `skills check` commands sync and check this repository, through `pnpm skills:sync`, `pnpm verify` and the pre-commit hook. A run fails with `skills_drift` when its worktree's mirror drifts |
+| Runner | Chunk 1 built it: pairing with a one-time code, one WebSocket to the API, dispatch from the `runs` table with leases and a sweeper, the Claude Code adapter in plan mode, a worktree per run, plan limits, and SSE to the Runs screens. It runs from the checkout with `pnpm runner`, and `pnpm runner:fake` runs it with the fake agent |
 
 ## Chunks
 

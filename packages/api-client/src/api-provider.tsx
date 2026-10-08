@@ -18,15 +18,30 @@ function createApiUtils(url: string) {
 
 type ApiUtils = ReturnType<typeof createApiUtils>;
 
-const ApiContext = createContext<ApiUtils | null>(null);
+interface Api {
+  utils: ApiUtils;
+  /** The RPC endpoint. Routes outside oRPC, such as the run event stream, resolve against it. */
+  url: string;
+}
+
+const ApiContext = createContext<Api | null>(null);
 
 export function ApiProvider({ url, children }: { url: string; children: ReactNode }) {
-  const [utils] = useState(() => createApiUtils(url));
-  return <ApiContext value={utils}>{children}</ApiContext>;
+  const [api] = useState(() => ({ utils: createApiUtils(url), url }));
+  return <ApiContext value={api}>{children}</ApiContext>;
+}
+
+function useApi(): Api {
+  const api = useContext(ApiContext);
+  if (api === null) throw new Error('API hooks must be called inside ApiProvider');
+  return api;
 }
 
 export function useApiUtils(): ApiUtils {
-  const utils = useContext(ApiContext);
-  if (utils === null) throw new Error('useApiUtils must be called inside ApiProvider');
-  return utils;
+  return useApi().utils;
+}
+
+/** The absolute URL of an API route outside oRPC, on the same origin as the RPC endpoint. */
+export function useApiRouteUrl(path: string): string {
+  return new URL(path, useApi().url).href;
 }

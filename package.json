@@ -18,9 +18,11 @@
     "knip": "knip",
     "test": "vitest run",
     "test:e2e": "node scripts/test-e2e.mjs",
-    "skills:sync": "node scripts/sync-skills.mjs",
+    "runner": "node apps/runner/src/cli.ts",
+    "runner:fake": "node scripts/runner-fake.mjs",
+    "skills:sync": "node apps/runner/src/cli.ts skills sync",
     "skills:lint": "node scripts/lint-skills.mjs",
-    "skills:check": "node scripts/sync-skills.mjs --check",
+    "skills:check": "node apps/runner/src/cli.ts skills check",
     "verify": "node scripts/verify.mjs"
   },
   "devDependencies": {

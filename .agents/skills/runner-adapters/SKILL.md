@@ -49,7 +49,6 @@ Rules for `apps/runner`, the npm package an engineer installs to run agents on t
 
 - `sync` copies every file, normalizes line endings to LF, deletes mirror files with no source, refuses symlinks and writes only files that changed.
 - `check` writes nothing. It exits non-zero on any missing, changed or stray mirror file, naming each one and the fix: edit the file under `.agents/skills/`, then sync. A difference only in line endings is not drift.
-- They replace `scripts/sync-skills.mjs`. When they land, the root `skills:sync` and `skills:check` scripts call them, and `scripts/sync-skills.mjs` and its tests are deleted. Never keep two implementations.
 
 ### Adapters
 

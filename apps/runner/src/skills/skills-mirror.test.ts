@@ -1,28 +1,28 @@
-import { spawnSync } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { execa } from 'execa';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { gitIndex, toDisplayPath, workingTree } from './skill-trees.ts';
 import {
   applySync,
+  checkSkills,
+  checkSkillsMirror,
   describeDrift,
-  gitIndex,
   hasDrift,
-  main,
   normalizeContent,
   planSync,
-  toDisplayPath,
-  workingTree,
-} from './sync-skills.mjs';
+  syncSkills,
+} from './skills-mirror.ts';
 
-const FIX = 'edit the file under .agents/skills/, then run pnpm skills:sync';
+const FIX = 'Edit the file under .agents/skills/, then run pnpm skills:sync.';
 
-async function put(file, content) {
+async function put(file: string, content: string): Promise<void> {
   await mkdir(path.dirname(file), { recursive: true });
   await writeFile(file, content);
 }
 
-function exists(file) {
+function exists(file: string): Promise<boolean> {
   return stat(file).then(
     () => true,
     () => false,
@@ -51,25 +51,21 @@ describe('normalizeContent', () => {
 });
 
 describe('skills mirror', () => {
-  let root;
-  const source = (...parts) => path.join(root, '.agents', 'skills', ...parts);
-  const mirror = (...parts) => path.join(root, '.claude', 'skills', ...parts);
+  let root: string;
+  const source = (...parts: string[]) => path.join(root, '.agents', 'skills', ...parts);
+  const mirror = (...parts: string[]) => path.join(root, '.claude', 'skills', ...parts);
   const plan = () => planSync(workingTree(root));
   const stagedPlan = () => planSync(gitIndex(root));
-  const git = (...args) => {
-    const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
-    if (result.status !== 0) throw new Error(result.stderr);
-    return result.stdout.trim();
-  };
+  const git = async (...args: string[]) => (await execa('git', args, { cwd: root })).stdout;
   const sync = async () => applySync(root, await plan());
 
   beforeEach(async () => {
-    root = await mkdtemp(path.join(os.tmpdir(), 'sync-skills-'));
+    root = await mkdtemp(path.join(os.tmpdir(), 'skills-mirror-'));
     await put(source('alpha', 'SKILL.md'), 'alpha\n');
     await put(source('alpha', 'agents', 'openai.yaml'), 'policy: {}\n');
   });
 
-  afterEach(() => rm(root, { recursive: true, force: true }));
+  afterEach(() => rm(root, { recursive: true, force: true, maxRetries: 5 }));
 
   it('creates an exact LF copy, normalizing CRLF sources', async () => {
     await put(source('alpha', 'SKILL.md'), 'alpha\r\nline\r\n');
@@ -134,59 +130,102 @@ describe('skills mirror', () => {
     expect(message).toContain(`Fix: ${FIX}`);
   });
 
-  it('fails loudly when the source folder does not exist', async () => {
-    await rm(path.join(root, '.agents'), { recursive: true });
-    await expect(plan()).rejects.toThrow('ENOENT');
-  });
-
-  it('fails loudly when the source folder is empty', async () => {
-    await rm(source('alpha'), { recursive: true });
-    await expect(plan()).rejects.toThrow('No skill files found in .agents/skills');
-  });
-
   it('refuses a linked folder in the source, naming it', async () => {
     await symlink(source('alpha', 'agents'), source('alpha', 'linked'), 'junction');
     await expect(plan()).rejects.toThrow('.agents/skills/alpha/linked');
   });
 
-  describe('main', () => {
-    it('--check exits 1 on drift without writing', async () => {
-      expect(await main(root, ['--check'])).toBe(1);
+  describe('with no source folder', () => {
+    beforeEach(() => rm(path.join(root, '.agents'), { recursive: true }));
+
+    it('passes the check when there is no mirror either', async () => {
+      expect(await checkSkillsMirror(root)).toEqual({ ok: true });
+      expect(await checkSkills(root, { staged: false })).toEqual({
+        ok: true,
+        message: 'Skills mirror is in sync.',
+      });
+    });
+
+    it('fails the check naming each mirror file as stray', async () => {
+      await put(mirror('alpha', 'SKILL.md'), 'alpha\n');
+      await put(mirror('beta', 'SKILL.md'), 'beta\n');
+      expect(await checkSkillsMirror(root)).toEqual({
+        ok: false,
+        message: [
+          'stray: .claude/skills/alpha/SKILL.md',
+          'stray: .claude/skills/beta/SKILL.md',
+          `Fix: ${FIX}`,
+        ].join('\n'),
+      });
+    });
+
+    it('refuses to sync', async () => {
+      expect(await syncSkills(root)).toEqual({
+        ok: false,
+        message: 'No skill files found under .agents/skills.',
+      });
+    });
+  });
+
+  it('passes the check and refuses to sync when the source folder is empty', async () => {
+    await rm(source('alpha'), { recursive: true });
+    expect(await checkSkillsMirror(root)).toEqual({ ok: true });
+    expect((await syncSkills(root)).ok).toBe(false);
+  });
+
+  it('names at most 20 drifting files, then how many more', async () => {
+    for (let index = 0; index < 23; index += 1) {
+      await put(mirror(`stray-${String(index).padStart(2, '0')}`, 'SKILL.md'), 'x\n');
+    }
+    const result = await checkSkillsMirror(root);
+    if (result.ok) throw new Error('expected drift');
+    const lines = result.message.split('\n');
+    expect(lines.filter((line) => line.includes('.claude/skills/'))).toHaveLength(20);
+    expect(lines.slice(-2)).toEqual(['and 5 more', `Fix: ${FIX}`]);
+  });
+
+  describe('commands', () => {
+    it('check fails on drift without writing', async () => {
+      expect((await checkSkills(root, { staged: false })).ok).toBe(false);
       expect(await exists(mirror('alpha', 'SKILL.md'))).toBe(false);
     });
 
-    it('sync then --check exits 0', async () => {
-      expect(await main(root, [])).toBe(0);
-      expect(await main(root, ['--check'])).toBe(0);
+    it('sync then check passes', async () => {
+      expect(await syncSkills(root)).toEqual({
+        ok: true,
+        message: 'Skills mirror synced: 2 written, 0 removed.',
+      });
+      expect((await checkSkills(root, { staged: false })).ok).toBe(true);
     });
-
-    it.each([[['--staged']], [['--chek']], [['--check', '--extra']]])(
-      'rejects the arguments %j without writing',
-      async (args) => {
-        expect(await main(root, args)).toBe(1);
-        expect(await exists(mirror('alpha', 'SKILL.md'))).toBe(false);
-      },
-    );
   });
 
   describe('staged check', () => {
     beforeEach(async () => {
-      git('init', '--quiet');
+      await git('init', '--quiet');
       await sync();
-      git('add', '--all');
+      await git('add', '--all');
     });
 
     it('passes when the index is in sync', async () => {
       expect(hasDrift(await stagedPlan())).toBe(false);
-      expect(await main(root, ['--check', '--staged'])).toBe(0);
+      expect(await checkSkills(root, { staged: true })).toEqual({
+        ok: true,
+        message: 'Staged skills mirror is in sync.',
+      });
     });
 
     it('fails when a source edit is staged without its mirror copy', async () => {
       await put(source('alpha', 'SKILL.md'), 'edited\n');
       await sync();
-      git('add', source('alpha', 'SKILL.md'));
+      await git('add', source('alpha', 'SKILL.md'));
       expect((await stagedPlan()).changed).toEqual(['alpha/SKILL.md']);
-      expect(await main(root, ['--check', '--staged'])).toBe(1);
+      expect(await checkSkills(root, { staged: true })).toEqual({
+        ok: false,
+        message: [
+          'changed: .claude/skills/alpha/SKILL.md',
+          'Fix: Edit the file under .agents/skills/, then run pnpm skills:sync and stage .claude/skills/.',
+        ].join('\n'),
+      });
     });
 
     it('passes when only the working tree drifts', async () => {
@@ -195,25 +234,30 @@ describe('skills mirror', () => {
     });
 
     it('reports staged missing and stray mirror files', async () => {
-      git('rm', '--cached', '--quiet', mirror('alpha', 'SKILL.md'));
+      await git('rm', '--cached', '--quiet', mirror('alpha', 'SKILL.md'));
       await put(mirror('alpha', 'extra.md'), 'x\n');
-      git('add', mirror('alpha', 'extra.md'));
+      await git('add', mirror('alpha', 'extra.md'));
       const result = await stagedPlan();
       expect(result.missing).toEqual(['alpha/SKILL.md']);
       expect(result.stray).toEqual(['alpha/extra.md']);
     });
 
     it('does not treat a staged line-ending-only difference as drift', async () => {
-      git('config', 'core.autocrlf', 'false');
+      await git('config', 'core.autocrlf', 'false');
       await writeFile(path.join(root, '.gitattributes'), '* -text\n');
       await put(mirror('alpha', 'SKILL.md'), 'alpha\r\n');
-      git('add', mirror('alpha', 'SKILL.md'));
+      await git('add', mirror('alpha', 'SKILL.md'));
       expect(hasDrift(await stagedPlan())).toBe(false);
     });
 
     it('refuses a staged symlink, naming it', async () => {
-      const sha = git('hash-object', '-w', source('alpha', 'SKILL.md'));
-      git('update-index', '--add', '--cacheinfo', `120000,${sha},.agents/skills/alpha/link.md`);
+      const sha = await git('hash-object', '-w', source('alpha', 'SKILL.md'));
+      await git(
+        'update-index',
+        '--add',
+        '--cacheinfo',
+        `120000,${sha},.agents/skills/alpha/link.md`,
+      );
       await expect(stagedPlan()).rejects.toThrow('.agents/skills/alpha/link.md');
     });
   });
