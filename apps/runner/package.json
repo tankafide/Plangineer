@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "The Plangineer runner: runs agent jobs on your machine and keeps agent skills in sync.",
   "bin": {
-    "plangineer-runner": "./dist/cli.mjs"
+    "plangineer-runner": "dist/cli.mjs"
   },
   "files": [
     "dist"
