@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
+import { createInterface } from 'node:readline';
+import type { Readable } from 'node:stream';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { expect, type Page, test } from '@playwright/test';
@@ -58,15 +60,25 @@ function spawnRunner(env: Record<string, string>): RunningRunner {
   };
 }
 
-/** Reads the subprocess's stdout, line by line, until the approval link appears. */
-async function readApprovalLink(lines: AsyncIterable<string>): Promise<string> {
+/**
+ * Reads the stdout lines until the approval link appears. Reading stays attached afterwards,
+ * so the process is never cut off the way leaving an execa iterable early would.
+ */
+function readApprovalLink(stdout: Readable): Promise<string> {
   const printed: string[] = [];
-  for await (const line of lines) {
-    printed.push(line);
-    const link = /approve it in Plangineer: (\S+)$/.exec(line)?.[1];
-    if (link !== undefined) return link;
-  }
-  throw new Error(`The login ended before it printed an approval link: ${printed.join(' | ')}`);
+  const lines = createInterface({ input: stdout });
+  return new Promise((resolve, reject) => {
+    lines.on('line', (line) => {
+      printed.push(line);
+      const link = /approve it in Plangineer: (\S+)$/.exec(line)?.[1];
+      if (link !== undefined) resolve(link);
+    });
+    lines.on('close', () =>
+      reject(
+        new Error(`The login ended before it printed an approval link: ${printed.join(' | ')}`),
+      ),
+    );
+  });
 }
 
 /** Pairs a runner through the approval page and starts it with the fake agent. */
@@ -86,7 +98,7 @@ async function startRunner(
     [RUNNER_CLI, 'login', '--server', baseURL, '--name', name, '--no-browser'],
     { env },
   );
-  await page.goto(await readApprovalLink(login.iterable({ from: 'stdout', binary: false })));
+  await page.goto(await readApprovalLink(login.stdout));
   await expect(page.getByRole('heading', { name: `Pair ${name}?` })).toBeVisible();
   await page.getByRole('button', { name: 'Approve' }).click();
   await expect(
