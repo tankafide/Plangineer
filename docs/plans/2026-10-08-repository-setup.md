@@ -82,38 +82,89 @@ The reviewer's checklist:
 
 `project-stack` is a template skill with fixed headings `## Context`, `## Stack`, `## Layout`, `## Commands` and `## Conventions`, each holding one slot. Its Commands table has a row named `check`, the one command that must pass before work is done. It stands in for Plangineer's `docs/engineering/stack-decisions.md` in a target repository (D21).
 
-`baseline-catalog.md` lists the 21 skills below, each with its kind, purpose, signal and the orchestrators that route to it. It states that a required skill is chosen whenever any orchestrator is chosen, because the orchestrator templates link to it. The table matches `BASELINE_CATALOG` in step 3, which a test checks.
+`baseline-catalog.md` lists the 21 skills below, each with its kind, purpose and signal. It states that a required skill is chosen whenever any orchestrator is chosen, because the orchestrator templates link to it. The table matches `BASELINE_CATALOG` in step 3, which a test checks.
 
-| Name | Kind | Purpose | Signal | Routed by | Required |
-| --- | --- | --- | --- | --- | :-: |
-| `codebase-exploration` | fixed | How to explore the repository before planning, and what a context file holds | Always | plan, plan review | ✓ |
-| `plan-format` | fixed | The plan template and its blocker checklist | Always | plan, plan review | ✓ |
-| `writing-style` | fixed | How plans, pull request descriptions and docs read | Always | plan, plan review, implementation | ✓ |
-| `finding-verification` | fixed | How review findings are verified before anyone fixes them | Always | plan review, implementation review | ✓ |
-| `plan-conformance` | fixed | Matching a diff to its plan, with deviations and extras | Always | implementation, implementation review | ✓ |
-| `project-stack` | template | The repository's context, stack, layout, commands and conventions | Always | all four | ✓ |
-| `architecture-design` | template | Where code belongs and what may import what | Always | all four | ✓ |
-| `testing` | template | Test layers, what each proves, and the fixtures each uses | Always | plan, implementation, implementation review | ✓ |
-| `code-quality` | template | Naming, unit size, types, error handling and dead code | Always | implementation, implementation review | ✓ |
-| `debugging` | template | Reproducing, isolating and fixing a root cause | Always | implementation | ✓ |
-| `security` | template | Trust boundaries, input handling and secrets | Always | plan review, implementation review | |
-| `performance` | template | Standing performance limits and how each is checked | Always | plan, implementation review | |
-| `data-model-design` | template | Tables, constraints, indexes and migrations | Directory `migrations`; file `schema.prisma`, `alembic.ini` or `drizzle.config.ts`; dependency `prisma`, `drizzle-orm`, `typeorm`, `sequelize`, `knex` or `mongoose` | all four | |
-| `api-contract-design` | template | Endpoints, schemas, errors and compatibility | Extension `.proto` or `.graphql`; file `openapi.yaml` or `openapi.json`; dependency `express`, `fastify`, `hono`, `koa`, `@nestjs/core`, `@trpc/server` or `@orpc/server` | all four | |
-| `backend` | generated | Server layers, request handling, errors, configuration and logging | Dependency `express`, `fastify`, `hono`, `koa`, `@nestjs/core` or `next` | implementation, implementation review | |
-| `database-access` | generated | Queries, transactions, seed data and database tests | Dependency `prisma`, `@prisma/client`, `drizzle-orm`, `typeorm`, `sequelize`, `knex` or `mongoose` | implementation, implementation review | |
-| `frontend` | generated | Components, routing, forms, screen states and accessibility | Extension `.tsx`, `.jsx`, `.vue` or `.svelte`; dependency `react`, `vue`, `svelte`, `@angular/core` or `solid-js` | plan, implementation, implementation review | |
-| `frontend-data` | generated | Server state, caching and realtime updates in the client | Dependency `@tanstack/react-query`, `swr`, `@apollo/client`, `@reduxjs/toolkit` or `urql` | implementation, implementation review | |
-| `design-system` | generated | Layout, the component library, tokens and theming | File `components.json`, `tailwind.config.js` or `tailwind.config.ts`; dependency `tailwindcss`, `@mui/material`, `@chakra-ui/react` or `@mantine/core` | plan, implementation, implementation review | |
-| `auth` | generated | Sign-in, sessions, roles and access checks | Dependency `better-auth`, `next-auth`, `@auth/core`, `passport`, `lucia`, `@clerk/nextjs` or `@clerk/clerk-react` | plan review, implementation, implementation review | |
-| `tooling-and-ci` | generated | The package manager, workspace, hooks, CI and the parts of the check command | Directory `.github`; file `turbo.json`, `nx.json`, `pnpm-workspace.yaml`, `lefthook.yml` or `.pre-commit-config.yaml` | implementation, implementation review | |
+| Name | Kind | Purpose | Signal | Required |
+| --- | --- | --- | --- | :-: |
+| `codebase-exploration` | fixed | How to explore the repository before planning, and what a context file holds | Always | ✓ |
+| `plan-format` | fixed | The plan template and its blocker checklist | Always | ✓ |
+| `writing-style` | fixed | How plans, pull request descriptions and docs read | Always | ✓ |
+| `finding-verification` | fixed | How review findings are verified before anyone fixes them | Always | ✓ |
+| `plan-conformance` | fixed | Matching a diff to its plan, with deviations and extras | Always | ✓ |
+| `project-stack` | template | The repository's context, stack, layout, commands and conventions | Always | ✓ |
+| `architecture-design` | template | Where code belongs and what may import what | Always | ✓ |
+| `testing` | template | Test layers, what each proves, and the fixtures each uses | Always | ✓ |
+| `code-quality` | template | Naming, unit size, types, error handling and dead code | Always | ✓ |
+| `debugging` | template | Reproducing, isolating and fixing a root cause | Always | ✓ |
+| `security` | template | Trust boundaries, input handling and secrets | Always | |
+| `performance` | template | Standing performance limits and how each is checked | Always | |
+| `data-model-design` | template | Tables, constraints, indexes and migrations | Directory `migrations`; file `schema.prisma`, `alembic.ini` or `drizzle.config.ts`; dependency `prisma`, `drizzle-orm`, `typeorm`, `sequelize`, `knex` or `mongoose` | |
+| `api-contract-design` | template | Endpoints, schemas, errors and compatibility | Extension `.proto` or `.graphql`; file `openapi.yaml` or `openapi.json`; dependency `express`, `fastify`, `hono`, `koa`, `@nestjs/core`, `@trpc/server` or `@orpc/server` | |
+| `backend` | generated | Server layers, request handling, errors, configuration and logging | Dependency `express`, `fastify`, `hono`, `koa`, `@nestjs/core` or `next` | |
+| `database-access` | generated | Queries, transactions, seed data and database tests | Dependency `prisma`, `@prisma/client`, `drizzle-orm`, `typeorm`, `sequelize`, `knex` or `mongoose` | |
+| `frontend` | generated | Components, routing, forms, screen states and accessibility | Extension `.tsx`, `.jsx`, `.vue` or `.svelte`; dependency `react`, `vue`, `svelte`, `@angular/core` or `solid-js` | |
+| `frontend-data` | generated | Server state, caching and realtime updates in the client | Dependency `@tanstack/react-query`, `swr`, `@apollo/client`, `@reduxjs/toolkit` or `urql` | |
+| `design-system` | generated | Layout, the component library, tokens and theming | File `components.json`, `tailwind.config.js` or `tailwind.config.ts`; dependency `tailwindcss`, `@mui/material`, `@chakra-ui/react` or `@mantine/core` | |
+| `auth` | generated | Sign-in, sessions, roles and access checks | Dependency `better-auth`, `next-auth`, `@auth/core`, `passport`, `lucia`, `@clerk/nextjs` or `@clerk/clerk-react` | |
+| `tooling-and-ci` | generated | The package manager, workspace, hooks, CI and the parts of the check command | Directory `.github`; file `turbo.json`, `nx.json`, `pnpm-workspace.yaml`, `lefthook.yml` or `.pre-commit-config.yaml` | |
+
+`baseline-catalog.md` also holds the routing table: which orchestrator routes each catalog skill, and the "applies when" text of its row. A row taken from this repository's orchestrators keeps its text, with Plangineer-only nouns removed. The rest are new (D37).
+
+| Skill | Orchestrator | Applies when |
+| --- | --- | --- |
+| `project-stack` | all four | Always: the repository's stack, layout, commands and conventions |
+| `codebase-exploration` | plan | No exploration context files were provided. Run explore mode in a subagent unless the exploration is trivial |
+| `codebase-exploration` | plan review | Always, in verify mode, in a subagent unless the check is trivial |
+| `codebase-exploration` | implementation | No plan, and the area is unfamiliar or large. Run explore mode in a subagent, with the work branch as the base when it already has commits |
+| `plan-format` | plan | Drafting the plan and checking it for blockers |
+| `plan-format` | plan review | Checking the plan's structure, "done when" lines and blocker checklist, and updating the plan |
+| `writing-style` | plan | Drafting and revising the plan's prose |
+| `writing-style` | plan review | Checking the plan's prose, and updating the plan. Style breaks are nits |
+| `writing-style` | implementation | Writing the pull request description |
+| `finding-verification` | plan review, implementation review | Always, in a subagent, before the engineer sees any finding |
+| `plan-conformance` | implementation review | Always when there is a plan |
+| `code-quality` | implementation review | Always |
+| `architecture-design` | plan, plan review | The plan adds or moves code, adds a package or module, or changes dependencies |
+| `architecture-design` | implementation | The change adds or moves code, adds a package or module, or changes dependencies |
+| `architecture-design` | implementation review | The diff adds or moves code, adds a package or module, or changes dependencies, or the recorded decisions cover it |
+| `api-contract-design` | plan, plan review | The plan adds or changes a contract, procedure or event |
+| `api-contract-design` | implementation | The change adds or changes a contract, procedure or event |
+| `api-contract-design` | implementation review | The diff adds or changes a contract, procedure or event, or the recorded decisions cover it |
+| `data-model-design` | plan, plan review | The plan adds or changes a table, constraint, index or migration |
+| `data-model-design` | implementation | The change adds or changes a table, constraint, index or migration |
+| `data-model-design` | implementation review | The diff adds or changes a table, constraint, index or migration, or the recorded decisions cover it |
+| `testing` | plan | Filling the test plan grid, once the "done when" lines are settled |
+| `testing` | plan review | Checking that the test plan covers every "done when" line |
+| `testing` | implementation | Writing tests, once per phase |
+| `testing` | implementation review | The diff adds or changes tests, or changes behavior |
+| `security` | plan review | The plan adds a trust boundary, such as authentication, a webhook or untrusted input |
+| `security` | implementation review | The diff touches a trust boundary, secrets or untrusted input |
+| `performance` | plan review | The plan adds queries, lists, realtime delivery or heavy frontend work |
+| `performance` | implementation review | The diff touches queries, lists, realtime delivery or heavy frontend work |
+| `debugging` | implementation | The request is a bug fix |
+| `debugging` | implementation review | Fixing a selected defect that is a bug |
+| `backend` | implementation | The change is in server handlers, middleware, configuration or logging |
+| `backend` | implementation review | The diff touches server handlers, middleware, configuration or logging |
+| `database-access` | implementation | The change writes queries, transactions or seed data |
+| `database-access` | implementation review | The diff touches queries, transactions or seed data |
+| `frontend` | implementation | The change is in components or routes |
+| `frontend` | implementation review | The diff touches components or routes |
+| `frontend-data` | implementation | The change touches server state, caching or realtime updates in the client |
+| `frontend-data` | implementation review | The diff touches server state, caching or realtime updates in the client |
+| `design-system` | plan, plan review | The plan touches screens or components |
+| `design-system` | implementation | The change touches screens or components |
+| `design-system` | implementation review | The diff touches screens or components |
+| `auth` | implementation | The change touches sign-in, sessions or roles |
+| `auth` | implementation review | The diff touches sign-in, sessions or roles |
+| `tooling-and-ci` | implementation | The change touches the workspace, scripts, hooks, CI or check configuration |
+| `tooling-and-ci` | implementation review | The diff touches the workspace, scripts, hooks, CI or check configuration |
 
 In `mvp-roadmap.md`, mark the two specifications written in "Where things stand", and mark the "Baseline catalog" open question in `mvp.md` decided.
 
 **Done when:**
 
 - 1a. `docs/product/skill-specification.md` and `docs/product/baseline-catalog.md` exist, and `mvp.md` links to both.
-- 1b. The catalog doc's table lists the same names, kinds, signals, routing and required marks as `BASELINE_CATALOG` (checked by the test in 3b).
+- 1b. The catalog doc's two tables list the same names, kinds, signals, required marks, routing and "applies when" text as `BASELINE_CATALOG` (checked by the test in 3b).
 
 ### 2. Contracts
 
@@ -207,7 +258,7 @@ The contract router gains `repository` and `repositorySetup`.
 
 **Files:** `packages/domain/src/baseline-catalog.ts`, `packages/domain/src/skill-recommendation.ts`, `packages/domain/src/setup-selection.ts`, `packages/domain/src/setup-status.ts`, `packages/domain/src/run-status.ts`, `packages/domain/src/index.ts`, a `.test.ts` beside each, `packages/domain/src/baseline-catalog-doc.test.ts`
 
-- **`BASELINE_CATALOG`.** A readonly array of `CatalogEntry { name: SkillName, kind: CatalogKind, purpose: string, appliesWhen: string, routedBy: Orchestrator[], required: boolean, signal: Signal }`, holding the 21 rows of step 1. `Signal` is `{ kind: 'always' }` or `{ kind: 'match', directories: string[], fileNames: string[], extensions: string[], dependencies: string[] }`.
+- **`BASELINE_CATALOG`.** A readonly array of `CatalogEntry { name: SkillName, kind: CatalogKind, purpose: string, routing: { orchestrator: Orchestrator, appliesWhen: string }[], required: boolean, signal: Signal }`, holding the 21 rows and the routing table of step 1. `Signal` is `{ kind: 'always' }` or `{ kind: 'match', directories: string[], fileNames: string[], extensions: string[], dependencies: string[] }`.
 - **`recommendSkills({ paths, dependencies, existingSkillNames })`.** Returns one `Recommendation { name, kind, recommended, required, reason }` per catalog entry whose name is not in `existingSkillNames`, in catalog order. An `always` entry has the reason "Every repository needs it". A `match` entry is recommended on the first match, checked in the order directories, file names, extensions, dependencies. A directory matches any path segment, a file name matches a path's last segment, an extension matches a path's end, and a dependency matches a name exactly. The reasons read "Found a `migrations` folder", "Found `schema.prisma`", "Found `.tsx` files" and "Found `react` in package.json". An entry with no match has `recommended: false` and the reason "No signal found".
 - **`validateSetupSelection(scan, selection)`.** Returns `{ ok: true }` or `{ ok: false, reason: SelectionError, names }`, checked in this order:
 
@@ -234,7 +285,7 @@ The contract router gains `repository` and `repositorySetup`.
 **Done when:**
 
 - 3a. `recommendSkills` returns the expected recommendation and reason for every signal kind, skips an existing skill name, and marks the 10 required entries `required`.
-- 3b. The doc test parses the table in `docs/product/baseline-catalog.md` and finds the same names, kinds, signals, routing and required marks as `BASELINE_CATALOG`.
+- 3b. The doc test parses both tables in `docs/product/baseline-catalog.md` and finds the same names, kinds, signals, required marks, routing and "applies when" text as `BASELINE_CATALOG`.
 - 3c. `validateSetupSelection` returns each `SelectionError` for its case and `ok` for a valid selection.
 - 3d. `nextSetupStatus` allows every transition in the table and rejects every other pair.
 - 3e. `nextRunStatus` accepts `setup.pushed` only while the run is `running`, and the run stays `running`.
@@ -243,24 +294,24 @@ The contract router gains `repository` and `repositorySetup`.
 
 ### 4. Environment, first admin and role checks
 
-**Files:** `apps/api/src/env.ts`, `apps/api/src/auth/auth.ts`, `apps/api/src/rpc/router.ts`, `apps/api/src/test/fixtures.ts`, `scripts/setup-env.mjs`, `.github/workflows/ci.yml`, `.env.example`, tests beside each
+**Files:** `apps/api/src/env.ts`, `apps/api/src/auth/auth.ts`, `apps/api/src/db/seed-ids.ts`, `apps/api/src/rpc/router.ts`, `apps/api/src/test/fixtures.ts`, `scripts/setup-env.mjs`, `.github/workflows/ci.yml`, `.env.example`, tests beside each
 
 - `EnvSchema` gains `GITHUB_APP_ID` (an integer of at least 1) and `GITHUB_APP_PRIVATE_KEY` (a PEM). The schema converts the key to PKCS#8 with `createPrivateKey(...).export({ type: 'pkcs8', format: 'pem' })`, and a key that fails to load is an invalid variable. The key never appears in a log or error message.
 - `pnpm setup:env` also writes `GITHUB_APP_ID=1` and a throwaway 2048-bit RSA key in PKCS#1 PEM, so the API starts before `pnpm setup:github-app` writes the real App. Until then every GitHub call fails with `GITHUB_FAILED`. Both CI jobs run `pnpm setup:env` in place of copying `.env.example`.
-- `databaseHooks.user.create.before` sets `role: 'admin'` when no user with role `admin` exists, and leaves `member` otherwise (D10).
+- `databaseHooks.user.create.before` sets `role: 'admin'` when no user with role `admin` exists outside `SEED_USER_IDS`, and leaves `member` otherwise (D10). `apps/api/src/db/seed-ids.ts` holds `SEED_USER_IDS`, the two fixed user ids that step 17 seeds.
 - `requireRole('admin')` is oRPC middleware in `router.ts` that raises `FORBIDDEN` for a member. Every admin procedure in step 2's table uses it at its call site.
 - `testEnv` gains a test key generated once per test process, and `storeUser` takes a `role` override.
 
 **Done when:**
 
 - 4a. The API refuses to start with a missing `GITHUB_APP_ID`, or with a `GITHUB_APP_PRIVATE_KEY` that is not a PEM, and names the variable without printing its value.
-- 4b. The first user to sign in becomes an admin, and the second becomes a member.
+- 4b. The first user to sign in becomes an admin, and the second becomes a member. With only the seeded `Seed Admin` stored, the first real sign-in still becomes an admin.
 - 4c. A member calling an admin procedure gets `FORBIDDEN`, and no row changes.
 - 4d. `pnpm setup:env` writes a `.env` that `parseEnv` accepts.
 
 ### 5. GitHub adapter
 
-**Files:** `apps/api/src/github/github.ts`, `apps/api/src/github/github.test.ts`, `apps/api/src/test/github-handlers.ts`, `apps/api/package.json`
+**Files:** `apps/api/src/github/github.ts`, `apps/api/src/github/github.test.ts`, `apps/api/src/test/github-handlers.ts`, `apps/api/src/lib/result.ts`, `apps/api/src/lib/service-deps.ts`, `apps/api/src/rpc/context.ts`, `apps/api/src/rpc/router.ts`, `apps/api/src/server.ts`, `apps/api/src/app.ts`, `apps/api/src/test/test-app.ts`, `apps/api/src/test/fixtures.ts`, `apps/api/package.json`
 
 Adds `octokit` 5.0.5 to `apps/api`, and `msw` 3.0.2 to its dev dependencies. `github.ts` is the only module that imports Octokit, as `github-integration` requires. `createGithub(env)` builds one `App` and returns:
 
@@ -275,6 +326,8 @@ Adds `octokit` 5.0.5 to `apps/api`, and `msw` 3.0.2 to its dev dependencies. `gi
 | `updatePullRequestBody(...)` | `PATCH /repos/{owner}/{repo}/pulls/{number}` | pull requests write |
 | `getPullRequest(installationId, repositoryId, number)` | `GET /repos/{owner}/{repo}/pulls/{number}` | pull requests read |
 
+**Wiring.** `createGithub(env)` runs once in `server.ts`. `ServiceDeps` (`lib/service-deps.ts`) gains `github: Github`, and `InitialContext` (`rpc/context.ts`) carries the same deps, so procedures, the sweeper and the runner socket all reach it. `test/test-app.ts` and `testDeps` build it against MSW. `Result` (`lib/result.ts`) gains an error that carries data, `err(code, data)`, and `unwrap` in `router.ts` passes that data to the oRPC error, so `GITHUB_FAILED` and `INVALID_SELECTION` reach the client with their `data`.
+
 Each repository action mints an installation token scoped to that one repository id and the permission in the table, through `POST /app/installations/{id}/access_tokens`. A token lives only in memory. Every failure becomes a `GithubError { status, message }`, which handlers map to `GITHUB_FAILED`. `github-handlers.ts` holds MSW handlers built from the response shapes these endpoints return.
 
 **Done when:**
@@ -282,6 +335,7 @@ Each repository action mints an installation token scoped to that one repository
 - 5a. Each function returns the mapped result from an MSW response, and `listInstallableRepositories` reads every page.
 - 5b. A token request names exactly one repository id and the permission the function needs.
 - 5c. A 404, a 403 rate limit and a 500 from GitHub each become a `GithubError` with the status, and no log line holds the token or the key.
+- 5d. A procedure that fails with `err('GITHUB_FAILED', { status, message })` reaches an oRPC client as `GITHUB_FAILED` with that `data`.
 
 ### 6. Tables
 
@@ -356,6 +410,7 @@ Follows the runner feature's shape: a service returning `Result`, a repository m
 - 7c. `repository.listInstallable` leaves out added repositories, sorts by owner then name, and sets `truncated` when 1,001 are installable.
 - 7d. `repository.update` changes the description, one role's model and the workflow settings, and rejects a role setting with an unknown agent and a fixed round count of 6.
 - 7e. `repository.remove` deletes the repository and its setup, and returns `CONFLICT` while the setup is `generating`.
+- 7f. A GitHub failure in `listInstallable` or `add` returns `GITHUB_FAILED` with its status and message.
 
 ### 8. Scan
 
@@ -370,7 +425,7 @@ Follows the runner feature's shape: a service returning `Result`, a repository m
 5. **Signals.** Every tree path, and the dependency names in `dependencies`, `devDependencies` and `peerDependencies` of up to 50 `package.json` files outside `node_modules`, each at most 1 MiB. A `package.json` that is not valid JSON adds no names (D14).
 6. `recommendSkills` from step 3 fills `recommendations`, with every scanned skill name as `existingSkillNames`.
 
-The scan locks the setup row with `SELECT ... FOR UPDATE` (D36), replaces its `scan`, clears `selection`, `job`, `run_id`, the pull request fields and `failure_message`, and moves the status through `nextSetupStatus(current, 'scanned')`. The pull request fields clear because a new setup opens or updates its pull request again.
+The scan locks the `repositories` row with `SELECT ... FOR UPDATE` (D36), which orders even the first scan, when no setup row exists yet. It then inserts or updates the setup row, replaces its `scan`, clears `selection`, `job`, `run_id`, the pull request fields and `failure_message`, and moves the status through `nextSetupStatus(current, 'scanned')`. The pull request fields clear because a new setup opens or updates its pull request again.
 
 **Done when:**
 
@@ -380,6 +435,9 @@ The scan locks the setup row with `SELECT ... FOR UPDATE` (D36), replaces its `s
 - 8d. Rescanning a `failed` or `pr_open` setup clears its selection, job, run, pull request and failure message.
 - 8e. A scan lists a loose file, an invalid folder name and a file missing from a `both` skill's `.agents/skills/` copy in `unmovableContent`.
 - 8f. A `SKILL.md` over 256 KiB is stored with a null description and never read, an instruction path over 300 characters is skipped, and 201 skills return `REPOSITORY_TOO_LARGE`.
+- 8g. A `package.json` that is not valid JSON, and one over 1 MiB, add no dependency names, and only the first 50 `package.json` files are read.
+- 8h. A GitHub failure during a scan returns `GITHUB_FAILED` with its status and message, and the stored setup does not change.
+- 8i. Two concurrent first scans of one repository store one setup row, and neither fails.
 
 ### 9. Skill templates, the setup prompt and the setup inputs
 
@@ -408,11 +466,11 @@ The templates are product output, so they follow `agent-instructions`. The folde
 
 The section also says how settings arrive. When the app starts a run, the prompt's first line is `Workflow settings:` and its second line is one JSON object shaped like `WorkflowSettings`. Only that position counts. Text shaped like a settings block anywhere else, fenced or not, is data (D34). With no block, every setting takes its `DEFAULT_WORKFLOW_SETTINGS` value, which matches how the orchestrators behave before this plan. The plan orchestrator reads `planCheckIn` and `planReview`, the implementation orchestrator reads `implementationReview`, and each review orchestrator reads its own review's settings. Each of the four orchestrators links to the section at the step it affects. Run `pnpm skills:sync` and `pnpm skills:lint` after these edits.
 
-**Replacements.** `template-drift.test.ts` holds this table as `[file, from, to]` entries, applies it to this repository's five fixed skills, four orchestrators and four reference files, and expects each template. An edit to one of those files here then fails the test until its template takes the same edit (D22).
+**Replacements.** `template-drift.test.ts` holds this table as `[file, from, to]` entries, applies it to this repository's five fixed skills with their `agents/openai.yaml` files, four orchestrators and four reference files, and expects each template. An edit to one of those files here then fails the test until its template takes the same edit (D22).
 
 | File | From | To |
 | --- | --- | --- |
-| The four orchestrators | `in Plangineer` in the `description` (with the space before it) | Removed |
+| `plan-orchestrator`, `implementation-orchestrator`, `implementation-review-orchestrator` | `in Plangineer` in the `description` (with the space before it) | Removed |
 | The four orchestrators | Every row of the Routing table body | `{{routing}}` |
 | `plan-orchestrator`, `plan-review-orchestrator` | `Read the [stack decisions](../../../docs/engineering/stack-decisions.md).` | `Read [project-stack](../project-stack/SKILL.md).` |
 | `implementation-orchestrator` | `- Read the [stack decisions](../../../docs/engineering/stack-decisions.md). With a plan, the plan already carries the stack decisions it needs.` | `- Read [project-stack](../project-stack/SKILL.md). With a plan, the plan already carries the stack facts it needs.` |
@@ -425,6 +483,9 @@ The section also says how settings arrive. When the app starts a run, the prompt
 | `codebase-exploration` | ``(`git rev-parse main` unless the repository names another)`` | ``(`git rev-parse {{defaultBranch}}`)`` |
 | `plan-conformance` | ``merge base with `main` `` | ``merge base with `{{defaultBranch}}` `` |
 | `plan-format` | ``such as `pnpm verify`.`` | ``such as the `check` command in `project-stack`.`` |
+| `plan-conformance` | ``The plan puts a schema in `packages/contracts` and the code puts it in `apps/api` `` | `The plan puts a schema in the shared contracts module and the code puts it in a server module` |
+| `plan-format/agents/openai.yaml` | `The Plangineer plan template` | `The plan template` |
+| `writing-style/agents/openai.yaml` | `How Plangineer plans,` | `How plans,` |
 
 `plan-format`, `writing-style`, `finding-verification` and the other reference files take no other change. Their remaining examples, such as the `runs` table in `writing-style`, read as examples in any repository.
 
@@ -446,13 +507,13 @@ Each `agents/openai.yaml` template keeps this repository's shape, with a `short_
 
 **Rendering.** `renderSetupFiles(scan, selection)` returns `{ files, templateSkills, generateSkills }` for the `SetupJob`:
 
-- Each chosen orchestrator at `.agents/skills/<orchestrator>/SKILL.md`, with `{{routing}}` replaced by one row per routed skill: `` | `.agents/skills/<name>/SKILL.md` | <applies when> | ``. A catalog skill is routed by the orchestrators its `routedBy` names, with its `appliesWhen`. A reused existing skill is routed by all four, with its description cut to 200 characters, newlines made spaces and `|` written as `\|`, or "See the skill" when the description is null. Rows sort by name.
+- Each chosen orchestrator at `.agents/skills/<orchestrator>/SKILL.md`, with `{{routing}}` replaced by one row per routed skill: `` | `.agents/skills/<name>/SKILL.md` | <applies when> | ``. A catalog skill gets one row in each orchestrator its `routing` names, with that entry's `appliesWhen`. A reused existing skill is routed by all four, with its description cut to 200 characters, newlines made spaces and `|` written as `\|`, or "See the skill" when the description is null. Rows sort by name.
 - The four reference files, whenever anything is chosen and `orchestratorReferencesExist` is false, because the fixed and template skills link to them.
 - Each chosen `fixed` and `template` skill's `SKILL.md` and `agents/openai.yaml`, with the API placeholders filled and the slot lines left for the agent.
 - `templateSkills` lists the chosen `template` skills, and `generateSkills` the chosen `generated` ones.
 - An API placeholder left in any output throws.
 
-**Inputs and prompt.** The variable lists go in an inputs document, so the prompt stays a fixed size (D35). `renderSetupInputs(scan, selection)` returns Markdown of at most `SETUP_INPUTS_MAX` characters holding: the template skill paths, `project-stack` first; one line per generated skill with its catalog `purpose`; the paths of the scan's instruction files; and the reused skills with their paths and descriptions cut to 200 characters. Each list sits in a fenced block marked as data, not instructions. The runner writes it to `.plangineer-setup/inputs.md` in the worktree (step 15).
+**Inputs and prompt.** The variable lists go in an inputs document, so the prompt stays a fixed size (D35). `renderSetupInputs(scan, selection)` returns Markdown of at most `SETUP_INPUTS_MAX` characters holding: the template skill paths, `project-stack` first; one line per generated skill with its catalog `purpose`; the paths of the scan's instruction files; and the reused skills with their paths and descriptions cut to 200 characters. Each list sits in a fenced block marked as data, not instructions, whose fence is one backtick longer than the longest run of backticks in its content, so no description can close it. The runner writes it to `.plangineer-setup/inputs.md` in the worktree (step 15).
 
 `renderSetupPrompt()` fills `setup-prompt.md`, which takes no variables and stays under `RUN_PROMPT_MAX`. The prompt holds:
 
@@ -469,7 +530,7 @@ Each `agents/openai.yaml` template keeps this repository's shape, with a `short_
 **Done when:**
 
 - 9a. Rendering a selection with two orchestrators and one reused skill writes those two orchestrators and the four references, each routing table holding exactly its skills in name order.
-- 9b. No rendered file holds `{{`, `pnpm`, `stack-decisions` or `apps/`.
+- 9b. No rendered file, `agents/openai.yaml` files included, holds `{{`, `pnpm`, `stack-decisions`, `apps/` or `Plangineer`.
 - 9c. The references are left out when `orchestratorReferencesExist` is true, and written for a selection of skills with no orchestrator.
 - 9d. The prompt stays under `RUN_PROMPT_MAX`, the inputs for 21 catalog skills, 200 reused skills with 1,024-character descriptions and 50 instruction files of 300 characters stay under `SETUP_INPUTS_MAX`, and inline snapshots of a small prompt and inputs show each part.
 - 9e. Each fixed skill, orchestrator and reference template equals this repository's file of the same name after the replacement table.
@@ -477,6 +538,7 @@ Each `agents/openai.yaml` template keeps this repository's shape, with a `short_
 - 9g. `{{designSkills}}` renders `` `architecture-design`, `testing` `` when neither conditional design skill is chosen, and adds each chosen one in the stated order.
 - 9h. This repository's `review-loop.md` holds the workflow settings table and the settings block rule, no longer says "no auto-loop and no fixed number of rounds", each orchestrator links to the section, and `pnpm skills:lint` passes.
 - 9i. A reused skill whose description holds a newline and a `|` renders one valid table row.
+- 9j. A reused skill whose description holds three backticks stays inside its fenced block in the inputs document.
 
 ### 10. Starting setup and dispatching the setup job
 
@@ -484,28 +546,28 @@ Each `agents/openai.yaml` template keeps this repository's shape, with a `short_
 
 `repositorySetup.start` renders and checks everything before a run exists (D35):
 
-1. Loads the runner, raising `NOT_FOUND` unless it belongs to the caller and is not revoked.
-2. In one transaction, locks the setup row with `SELECT ... FOR UPDATE` (D36), raising `NOT_FOUND` when the repository or its setup is missing, and `CONFLICT` unless `nextSetupStatus(status, 'started')` is ok.
+1. Opens one transaction and locks the runner with `lockRunnerForUser`, as `createRun` does, raising `NOT_FOUND` unless it belongs to the caller and is not revoked. A concurrent revoke then either commits first or waits.
+2. In the same transaction, locks the setup row with `SELECT ... FOR UPDATE` (D36), raising `NOT_FOUND` when the repository or its setup is missing, and `CONFLICT` unless `nextSetupStatus(status, 'started')` is ok.
 3. Raises `INVALID_SELECTION` with the reason and names from `validateSetupSelection`.
 4. Builds the `SetupJob` from `renderSetupFiles`, `renderSetupInputs` and `renderSetupPrompt`, with `moveSkills` set to the scan's skills with location `claude`, and parses it with the `SetupJob` schema. A job over a bound raises `INVALID_SELECTION` with reason `too_large`.
 5. In the same transaction, inserts a `runs` row with `kind: 'setup'`, the repository's owner and name, `ref` set to the scan's commit and the job's `prompt`, appends `run.queued`, and sets the setup's `selection`, `job`, `run_id` and status `generating`. After the commit it wakes the runner as `run.create` does.
 
-`run.create` sets `kind: 'test'`. `lockClaimableRuns` stays a query: it returns each claimed row with its `kind`, and a setup run's stored `job` through a join on `repository_setups.run_id`. `claimRuns` in `dispatch.ts` builds the `RunJob`: a `TestJob` from the row's fields, or the stored `SetupJob` as it is. `dispatch.test.ts` moves from `permissionMode` to the job kinds.
+`run.create` sets `kind: 'test'`. `lockClaimableRuns` stays a query and locks only `runs`, with `.for('update', { of: runs, skipLocked: true })`, because Postgres refuses `FOR UPDATE` on the nullable side of an outer join. It returns each claimed row with its `kind`, and a setup run's stored `job` through a left join on `repository_setups.run_id`. `claimRuns` in `dispatch.ts` builds the `RunJob`: a `TestJob` from the row's fields, or the stored `SetupJob` as it is. `dispatch.test.ts` moves from `permissionMode` to the job kinds.
 
 **Done when:**
 
 - 10a. Starting a valid selection stores a queued setup run, the job and status `generating` in one transaction.
 - 10b. An invalid selection returns `INVALID_SELECTION` with its reason and names, and stores no run.
-- 10c. Starting with another user's runner returns `NOT_FOUND`, and starting a `generating` setup returns `CONFLICT`.
+- 10c. Starting with another user's runner or a revoked runner returns `NOT_FOUND`, and starting a `generating` setup returns `CONFLICT`.
 - 10d. A claimed setup run's `run.assign` carries the stored `SetupJob`, and a claimed test run carries a `TestJob`.
 - 10e. Two concurrent starts of one setup store one run, and the other returns `CONFLICT`.
 - 10f. A selection whose job passes `SETUP_JOB_MAX_BYTES` returns `INVALID_SELECTION` with reason `too_large`.
 
 ### 11. Opening the pull request and following it
 
-**Files:** `apps/api/src/setup/setup-service.ts`, `apps/api/src/setup/setup-pull-request.ts`, `apps/api/src/runs/run-events-repository.ts`, `apps/api/src/runs/sweeper.ts`, `apps/api/src/runs/run-service.ts`, `apps/api/src/runners/runner-socket.ts`, `apps/api/src/runners/runner-service.ts`, tests beside each
+**Files:** `apps/api/src/setup/setup-service.ts`, `apps/api/src/setup/setup-pull-request.ts`, `apps/api/src/runs/run-events-repository.ts`, `apps/api/src/runs/sweeper.ts`, `apps/api/src/runs/run-service.ts`, `apps/api/src/runners/runner-socket.ts`, `apps/api/src/runners/runner-session.ts`, `apps/api/src/runners/runner-service.ts`, tests beside each
 
-`advanceSetup(deps, repositoryId)` moves a setup from what its run and pull request show. It runs after every move of a setup run to a terminal status, outside that transaction: in the runner event append, in the sweeper, in the cancel of a queued run and in `revokeRunner`'s cancel of the runner's open runs. `repositorySetup.refresh` runs it too, which covers an API restart between the two. `advanceSetup` holds `SELECT ... FOR UPDATE` on the setup row for its whole call, GitHub requests included, so a second call waits and then finds the status already moved (D36).
+`advanceSetup(deps, repositoryId)` moves a setup from what its run and pull request show. It runs after every move of a setup run to a terminal status, outside that transaction: in the runner event append, where `acceptRunEvents` in `runner-session.ts` returns `{ ackedSeq, ended }` and `runner-socket.ts` calls `advanceSetup` after the commit when `ended` is true, in the sweeper, in the cancel of a queued run and in `revokeRunner`'s cancel of the runner's open runs. `repositorySetup.refresh` runs it too, which covers an API restart between the two. `advanceSetup` holds `SELECT ... FOR UPDATE` on the setup row for its whole call, GitHub requests included, so a second call waits and then finds the status already moved (D36).
 
 | Setup status | Seen | Action | Next status |
 | --- | --- | --- | --- |
@@ -519,7 +581,7 @@ Each `agents/openai.yaml` template keeps this repository's shape, with a `short_
 
 A GitHub failure while opening the pull request moves the setup to `failed` with the GitHub status and message. In `refresh`, the same failure returns `GITHUB_FAILED` and leaves the status unchanged. The event append rejects a `setup.pushed` event on a test run as a protocol error.
 
-`renderSetupPullRequestBody(setup, pushed)` writes the title "Set up Plangineer skills" and a body with these sections: what the pull request adds and why, in two sentences; tables of the skills added, reused and moved, and the orchestrators written; the files outside `.agents/skills/` it changes; how to review generated skills; and **Authoring notes**, the setup run's final message with each skill's sources and review findings, as a quoted block cut to 10,000 characters. The body stays under 65,536 characters.
+`renderSetupPullRequestBody(setup, pushed)` writes the title "Set up Plangineer skills" and a body with these sections: what the pull request adds and why, in two sentences; tables of the skills added, reused and moved, and the orchestrators written; the files outside `.agents/skills/` it changes; how to review generated skills; and **Authoring notes**, the setup run's final message with each skill's sources and review findings, cut to 10,000 characters and placed in a fenced code block whose fence is longer than any backtick run in it, so GitHub renders no link, image or mention from it. The body stays under 65,536 characters.
 
 **Done when:**
 
@@ -528,28 +590,29 @@ A GitHub failure while opening the pull request moves the setup to `failed` with
 - 11c. A failed, cancelled, lease-lost or runner-revoked setup run moves the setup to `failed` with its message.
 - 11h. Two concurrent `advanceSetup` calls on a succeeded run create one pull request and leave the setup `pr_open`.
 - 11d. `refresh` moves a `pr_open` setup to `complete` on a merged pull request and to `failed` on a closed one.
+- 11i. A GitHub failure during `refresh` returns `GITHUB_FAILED` and leaves the setup's status unchanged.
 - 11e. A GitHub error while opening the pull request moves the setup to `failed` with its status and message.
 - 11f. A `setup.pushed` event sent for a test run fails that run with `protocol_error`.
-- 11g. The pull request body for 21 added, 200 reused and 200 moved skills and a 65,536-character final message stays under 65,536 characters, with the message cut to 10,000 characters in a quoted block.
+- 11g. The pull request body for 21 added, 200 reused and 200 moved skills and a 65,536-character final message stays under 65,536 characters, with the message cut to 10,000 characters in a fenced code block, and a message holding a run of six backticks stays inside its fence.
 
 ### Phase 3: runner
 
 ### 12. Publishing the runner
 
-**Files:** `apps/runner/package.json`, `apps/runner/tsdown.config.ts`, `apps/runner/README.md`, `apps/runner/src/package.test.ts`, `apps/runner/src/skills/skills-mirror.ts`, `scripts/publish-runner.mjs`, `package.json`, `knip.json`, `.gitignore`
+**Files:** `apps/runner/package.json`, `apps/runner/src/cli.ts`, `apps/runner/tsdown.config.ts`, `apps/runner/README.md`, `apps/runner/src/package.test.ts`, `apps/runner/src/skills/skills-mirror.ts`, `scripts/publish-runner.mjs`, `package.json`, `knip.json`, `.gitignore`
 
 Adds `tsdown` 0.23.0 to the runner's dev dependencies. Node does not strip types under `node_modules`, so the package ships built JavaScript (chunk 1, D4).
 
-- `tsdown.config.ts` builds `src/cli.ts` to `dist/cli.mjs` as ESM for Node 24, keeps the `#!/usr/bin/env node` line, and bundles `@plangineer/contracts`. Every other dependency stays external.
+- `src/cli.ts` gains `#!/usr/bin/env node` as its first line, which it lacks today. `tsdown.config.ts` builds it to `dist/cli.mjs` as ESM for Node 24, keeps that line, and bundles `@plangineer/contracts`. Every other dependency stays external.
 - `package.json` drops `"private": true`, sets `version` to `0.1.0`, `bin` to `{ "plangineer-runner": "./dist/cli.mjs" }`, `files` to `["dist"]`, `engines.node` to `>=24 <25`, adds `"build": "tsdown"`, and moves `@plangineer/contracts` to `devDependencies`. `dist/` is ignored by Git.
 - `pnpm runner:build` builds it. `pnpm runner:publish` runs `scripts/publish-runner.mjs`, which stops on a dirty working tree, builds, runs the runner's tests, then runs `npm publish --access public` in `apps/runner`. The engineer runs it, because publishing is visible outside the machine.
 - The drift fix text becomes "Edit the file under .agents/skills/, then run `npx plangineer-runner skills sync`." The staged variant adds "and stage .claude/skills/". `pnpm skills:sync` stays this repository's shortcut for the same command.
 - `README.md` covers installing, `pair`, `start`, and the three `skills` commands.
-- `package.test.ts` builds into a temporary directory, runs `node <dir>/cli.mjs --version` and `skills check` against a fixture folder, and checks `npm pack --dry-run --json` lists only `dist/`, `package.json` and `README.md`. It needs no network.
+- `package.test.ts` builds into `<tmp>/dist/`, copies `apps/runner/package.json` to `<tmp>/package.json` so `packageVersion()` finds it as it would in the installed package, checks that the first line of `<tmp>/dist/cli.mjs` is `#!/usr/bin/env node`, runs `node <tmp>/dist/cli.mjs --version` and `skills check` against a fixture folder, and checks `npm pack --dry-run --json` lists only `dist/`, `package.json` and `README.md`. It needs no network.
 
 **Done when:**
 
-- 12a. The built `dist/cli.mjs` prints the package version and runs `skills check` on a fixture with no import of `@plangineer/contracts` left in it.
+- 12a. The built `dist/cli.mjs` starts with `#!/usr/bin/env node`, prints the package version from the `package.json` beside its `dist/` folder, and runs `skills check` on a fixture with no import of `@plangineer/contracts` left in it.
 - 12b. `npm pack --dry-run` lists only the built CLI, `package.json` and `README.md`.
 - 12c. A drifted mirror's message names `npx plangineer-runner skills sync`.
 - 12d. `pnpm runner:publish` stops before building when the working tree has uncommitted changes.
@@ -560,14 +623,14 @@ Adds `tsdown` 0.23.0 to the runner's dev dependencies. Node does not strip types
 
 Setup checks generated skills against the same rules this repository's lint uses, so the generic checks move into the runner and the script keeps only what is specific to Plangineer. Adds `yaml` 2.9.1 to the runner's dependencies.
 
-- `lintSkill(skillsRoot, name, linkRoot)` returns a list of problems for one folder. A name ending in `-orchestrator` is an orchestrator, and every other name is a rule skill. It checks the `name`, `description` and frontmatter field rules from step 1, the tier settings from `agent-instructions`, `SKILL.md` under 500 lines, and that every relative link resolves to an existing file inside `linkRoot`.
+- `lintSkill(skillsRoot, name, linkRoot)` returns a list of problems for one folder. A name ending in `-orchestrator` is an orchestrator, and every other name is a rule skill. It checks the `name`, `description` and frontmatter field rules from step 1, the tier settings from `agent-instructions`, `SKILL.md` under 500 lines, and that every relative link resolves to an existing file inside `linkRoot`. Links inside inline code spans and fenced code blocks are text, not links, so `writing-style`'s example `` `[the Anthropic post](url)` `` passes.
 - `plangineer-runner skills lint` passes the repository root as `linkRoot`, so this repository's links to `docs/engineering/stack-decisions.md` pass. The setup job passes `.agents/skills/` as `linkRoot`, so generated output links only within the skills (step 15).
 - `plangineer-runner skills lint` lints every folder under `.agents/skills/` except `orchestrator-references`, prints each problem with its path, and exits non-zero on any problem.
 - `scripts/lint-skills.mjs` drops its frontmatter, tier, policy and link checks, keeps the routing, delegation and references checks, and first spawns `node apps/runner/src/cli.ts skills lint` with execa, stopping on its failure. `pnpm skills:lint` and the `lefthook.yml` pre-commit hook both run the script, so neither changes.
 
 **Done when:**
 
-- 13a. `lintSkill` reports each broken rule on a fixture skill: a name unlike its folder, a `claude` name, a long description, an extra frontmatter field, a rule skill without `disable-model-invocation` or `agents/openai.yaml`, an orchestrator with either, 500 lines, a broken link and a link that leaves `linkRoot`.
+- 13a. `lintSkill` reports each broken rule on a fixture skill: a name unlike its folder, a `claude` name, a long description, an extra frontmatter field, a rule skill without `disable-model-invocation` or `agents/openai.yaml`, an orchestrator with either, 500 lines, a broken link and a link that leaves `linkRoot`, and reports nothing for a link inside a code span or a fenced block.
 - 13b. `pnpm skills:lint` passes on this repository, links to `docs/` included, and fails on a skill with a broken link and on an orchestrator missing a routed skill.
 - 13c. `apps/api/src/setup/setup-files-lint.test.ts` writes step 9's rendering of a full selection into a temporary folder, with a minimal valid skill for each generated name, runs `node apps/runner/src/cli.ts skills lint` there as a child process, and sees it pass. The API spawns the runner's CLI and imports none of its code.
 
@@ -669,27 +732,27 @@ Hooks follow `runners.ts`: `useRepositoryList`, `useInstallableRepositoryList`, 
 
 ### 17. Seed data
 
-**Files:** `apps/api/src/db/seed.ts`, `apps/api/src/db/seed.test.ts`, `apps/api/src/db/reset-database.ts`, `scripts/dev.mjs`, `apps/api/src/test/e2e-session-cli.ts`
+**Files:** `apps/api/src/db/seed.ts`, `apps/api/src/db/seed.test.ts`, `apps/api/src/db/seed-cli.ts`, `apps/api/src/db/reset.ts`, `apps/api/package.json`, `scripts/dev.mjs`, `apps/api/src/test/e2e-session-cli.ts`
 
-Adds the dev seed that `persistence` describes, the first in this repository, so the screens can be checked against real data. `seedDatabase(db)` inserts through the app's repositories with fixed ids and timestamps and skips rows that already exist. `pnpm db:reset` calls it after migrating, and `pnpm dev` after applying migrations. It holds:
+Adds the dev seed that `persistence` describes, the first in this repository, so the screens can be checked against real data. `seedDatabase(db)` inserts through the app's repositories with fixed ids and timestamps and skips rows that already exist. `apps/api/src/db/reset.ts`, the `pnpm db:reset` entry, calls it after `resetDatabase`. A new `db:seed` script in `apps/api/package.json` runs `seed-cli.ts`, and `scripts/dev.mjs` runs it after `db:migrate`. `resetDatabase` itself never seeds, because it also builds the integration test template. Every user id it inserts is in `SEED_USER_IDS` from step 4. It holds:
 
 | Rows | Content |
 | --- | --- |
 | Users | `Seed Admin` (admin) and `Seed Member` (member) |
 | Runner | One runner owned by `Seed Admin`, with a fixed placeholder token hash |
 | Repositories | `acme/web-app` with no setup, and one repository per setup status: `acme/api-scanned`, `acme/api-generating`, `acme/api-pr-open`, `acme/api-complete` and `acme/api-failed` |
-| Setups | Each with a scan holding three skills (one `claude`), two instruction files and the full catalog's recommendations. The generating setup has a running setup run, and the failed setup a failed one. A seventh repository, `acme/api-unmovable`, is `scanned` with one unmovable path |
+| Setups | Each with a scan holding three skills (one `claude`), two instruction files and the full catalog's recommendations. The generating setup has a queued setup run on the seeded runner, which never connects, so the sweeper never touches it. The failed setup has a failed run. A seventh repository, `acme/api-unmovable`, is `scanned` with one unmovable path |
 
 `e2e-session-cli.ts` gains `--user seed-admin` and `--user seed-member`, which print a session cookie for that seeded user, for the screenshot checks.
 
 **Done when:**
 
-- 17a. `pnpm db:reset` leaves the seeded rows, and running the seed twice adds nothing.
+- 17a. `pnpm db:reset` leaves the seeded rows, running the seed twice adds nothing, and a database built by `resetDatabase` alone, as the test template is, holds no seeded row.
 - 17b. `e2e-session-cli.ts --user seed-admin` prints a cookie that `me.get` resolves to `Seed Admin`.
 
 ### 18. Repository screens
 
-**Files:** `apps/web/src/components/ui/checkbox.tsx`, `apps/web/src/features/runs/run-event-row.tsx`, `apps/web/src/features/runs/run-reasons.ts`, `apps/web/src/routes/_app/repositories/index.tsx`, `apps/web/src/routes/_app/repositories/$repositoryId.tsx`, `apps/web/src/features/app-shell/app-header.tsx`, and in `apps/web/src/features/repositories/`: `repositories-screen.tsx`, `add-repository-card.tsx`, `repository-list.tsx`, `repository-screen.tsx`, `repository-settings-card.tsx`, `setup-card.tsx`, `setup-checklists.tsx` and `setup-status-badge.tsx`, with component tests beside each
+**Files:** `apps/web/src/components/ui/checkbox.tsx`, `apps/web/src/features/runs/run-event-row.tsx`, `apps/web/src/features/runs/run-reasons.ts`, `apps/web/src/features/runs/runner-field.tsx`, `apps/web/src/features/runs/new-run-form.tsx`, `apps/web/src/routes/_app/repositories/index.tsx`, `apps/web/src/routes/_app/repositories/$repositoryId.tsx`, `apps/web/src/features/app-shell/app-header.tsx`, and in `apps/web/src/features/repositories/`: `repositories-screen.tsx`, `add-repository-card.tsx`, `repository-list.tsx`, `repository-screen.tsx`, `repository-settings-card.tsx`, `setup-card.tsx`, `setup-checklists.tsx` and `setup-status-badge.tsx`, with component tests beside each
 
 Adds the shadcn `checkbox` with `pnpm dlx shadcn@latest add checkbox`. The header gains **Repositories**. The screens use the existing tokens. The primary action on each card is the default `Button`. The setup status badge follows `visual-style`'s status table: `scanned` uses `muted-foreground`, `generating` the running role, `pr_open` `warning` (waiting on the engineer), `complete` the succeeded role and `failed` the failed role.
 
@@ -711,7 +774,7 @@ The run screens learn the new run shapes: `run-event-row.tsx` renders `setup.pus
   | `complete` | "Setup complete" and the pull request link | **Scan again** |
   | `failed` | The failure message in an `Alert` | **Generate pull request**, **Scan again** |
 
-- **Checklists.** Three groups of `Checkbox` rows. **Existing skills**: every scanned skill, ticked, with "Moves to .agents/skills" on `claude` ones and the description below. **Skills to add**: every recommendation, ticked when recommended, with its reason and its kind: "Ships as written" for `fixed`, "Filled in from your code" for `template` and "Written from your code" for `generated`. A required one is ticked and disabled with "Required by every setup" while anything is ticked. **Orchestrators**: the four, ticked, with one already in the repository disabled and marked "Already in the repository". A runner `Select` of the admin's runners, reusing `RunnerField`, sits above **Generate pull request**. An `INVALID_SELECTION` error shows its reason and names in an `Alert`.
+- **Checklists.** Three groups of `Checkbox` rows. **Existing skills**: every scanned skill, ticked, with "Moves to .agents/skills" on `claude` ones and the description below. **Skills to add**: every recommendation, ticked when recommended, with its reason and its kind: "Ships as written" for `fixed`, "Filled in from your code" for `template` and "Written from your code" for `generated`. A required one is ticked and disabled with "Required by every setup" while anything is ticked. **Orchestrators**: the four, ticked, with one already in the repository disabled and marked "Already in the repository". A runner `Select` of the admin's runners sits above **Generate pull request**. `RunnerField` becomes generic over the form's values and takes its element id prefix as a prop, so the new-run form and the setup form share it. An `INVALID_SELECTION` error shows its reason and names in an `Alert`.
 
 States for both screens: `Skeleton` while loading, an `Alert` with **Try again** on a failed load, and a mutation error under its button. A stale scan shows its commit and time, and **Scan again** refreshes it.
 
@@ -723,6 +786,7 @@ States for both screens: `Skeleton` while loading, an `Alert` with **Try again**
 - 18d. The checklists start ticked as described, lock required skills while anything is ticked, and send the ticked names to `repositorySetup.start`.
 - 18e. An `INVALID_SELECTION` response shows its reason and names.
 - 18f. The settings card saves a description, a model and the workflow settings. An empty model saves as null, and the round count shows only for **Fixed** and **Adaptive**.
+- 18j. The new-run form still picks a runner through the generic `RunnerField`.
 - 18g. Screenshots at desktop and 375 px show both screens in each setup status with no overflow.
 - 18h. A `setup.pushed` row and both new failure reasons render their text on the run screen.
 - 18i. The generating row links to the run for the admin who started it and shows only the status to anyone else, and an unmovable-content scan shows its paths and disables **Generate pull request**.
@@ -742,9 +806,10 @@ States for both screens: `Skeleton` while loading, an `Alert` with **Try again**
 - `mvp.md`: the workflow settings of D24 to D26 replace the automation levels and Auto-loop wherever they appear:
   - "Review and triage": the "Automation levels" table and the paragraph after it, the "Deciding on another review" table, and the deviations paragraph's "at any automation level", which gains the `fix_all` exception.
   - "Data model": the User row's "automation levels" becomes "workflow settings", and the Repository settings row lists workflow settings.
-  - "Screens": the Triage row no longer sets an automation level.
-  - "Phases": the Phase 4 row drops the assisted and automatic levels and auto-loop re-review.
-  - "Risks": the automatic-fix row's mitigation starts from the `ask` findings setting.
+  - "App screens": the Triage row no longer sets an automation level.
+  - "Build plan": the Phase 4 row drops the assisted and automatic levels and auto-loop re-review.
+  - "Risks": the automatic-fix row's mitigation starts from the `ask` findings setting, and the "Cost per feature" row's "auto-loop stops at 3 rounds" becomes the `adaptive` maximum.
+  - The goal line "moving to automatic fixes as trust grows" becomes "moving to `fix_all` as trust grows".
   - "Open decisions": "Auto-loop limit" is decided as the `adaptive` maximum of 1 to 5, and "Deviation handling" as engineer decisions unless `fix_all` is set.
 - `data-model-design`: the records table gains a Repository setup row: one per repository, mutable, holding the scan, selection, job, run and pull request, deleted with its repository.
 - `security`: the rule that an agent cannot mark a deviation decided gains one exception: a session under an engineer-set `fix_all` applies verification's recommended keep or revert.
@@ -759,7 +824,7 @@ Run `pnpm skills:sync` and `pnpm skills:lint` after the skill edits.
 
 ## Decisions
 
-All decisions were made on Oct 8, 2026. The engineer chose D1, D2, D3, D20, D24, D25, D26, D28, D30 and D31. The planner made the rest, and the engineer can overrule any of them.
+All decisions were made on Oct 8, 2026. The engineer chose D1, D2, D3, D10, D20, D24, D25, D26, D28, D30 and D31. The planner made the rest, and the engineer can overrule any of them.
 
 - **D1. The specifications are this plan's first step.** The engineer chose it. The plan still names every catalog entry and signal, so step 1 writes the docs from this plan's tables and a test keeps the doc and `BASELINE_CATALOG` in step. Rejected: writing them before the plan, and keeping them only in code.
 - **D2. Cross-repository orchestrators are left out.** The engineer chose it. Nothing uses them until chunk 3 has features across repositories, so their versioned table, generation and edit screen get the next plan. The gate needs only one repository.
@@ -770,7 +835,7 @@ All decisions were made on Oct 8, 2026. The engineer chose D1, D2, D3, D20, D24,
 - **D7. Deterministic work stays out of the agent.** The runner moves skills, writes the rendered orchestrators, references, fixed skills and template skills, syncs the mirror and writes `.gitattributes` and the workflow. The agent fills template slots and writes generated skills, the only parts that need judgment.
 - **D8. Setup runs skip the pre-run mirror check.** A repository with skills only under `.claude/skills/` fails the check before any agent starts, and setup is the job that fixes it. Every other run kind keeps the check.
 - **D9. Every `.claude/skills/`-only skill moves, ticked or not, and nothing else under `.claude/skills/` may be lost.** `skills sync` deletes a mirror file with no source, so an unmoved skill would be deleted. The existing-skills tick decides only whether orchestrators route to the skill. A skill in both folders keeps its `.agents/skills/` copy, and the sync rewrites the mirror from it. Content the move cannot carry, such as loose files or files only a `both` skill's mirror holds, blocks start until the team moves or deletes it, so setup never deletes it silently.
-- **D10. The first user to sign in becomes an admin.** It suits a self-hosted deployment that one person sets up, and needs no new setting. Two simultaneous first sign-ins can both become admins, which grants nothing beyond the team. Rejected: an admin list in the environment, which adds a variable for a one-time event.
+- **D10. The first user to sign in becomes an admin, and seeded users do not count.** The engineer chose to ignore seeded users, so the dev seed's `Seed Admin` never blocks the engineer's own sign-in. Rejected: a promote command, and seeding only on `db:reset`. The rule suits a self-hosted deployment that one person sets up, and needs no new setting. Two simultaneous first sign-ins can both become admins, which grants nothing beyond the team. Rejected: an admin list in the environment, which adds a variable for a one-time event.
 - **D11. Role settings store only values that work today.** Each role setting has one agent, one place to run and one sign-in. Each enum grows in the chunk that adds the option: Codex in chunk 9 and hosted runners in chunk 8. The model is the one free choice, read from chunk 3 on.
 - **D12. Following the pull request is on demand.** `advanceSetup` runs when a setup run ends and when an admin presses **Check pull request**. Webhooks arrive with the staleness check in chunk 7, which can then call the same function.
 - **D13. One setup per repository.** A repository has one setup row that a rescan replaces, and every run is kept in `runs`. Each setup reuses the branch `plangineer/setup`, force-pushed, so a rerun updates the open pull request instead of opening another.
@@ -796,7 +861,8 @@ All decisions were made on Oct 8, 2026. The engineer chose D1, D2, D3, D20, D24,
 - **D33. The installable list is bounded, not paged.** GitHub lists repositories per installation, so any page walks every installation. A team's deployment reaches tens to a few hundred repositories, so the list returns up to 1,000 sorted by owner and name, with `truncated` set past that, and `add` walks the same list. This list is the one exception to `api-contract-design`'s cursor rule. Rejected: an integer cursor, which still walks every installation per page.
 - **D34. Only the prompt's first two lines carry workflow settings.** Repository text, plans and findings reach prompts as data from chunk 4 on, so a settings block anywhere else could switch a run to `fix_all`. The app writes the block first, and the orchestrators ignore any other.
 - **D35. Start renders, checks and stores the whole job.** The variable lists go in an inputs document the runner writes into the worktree and deletes before committing, so the prompt stays a fixed size under `RUN_PROMPT_MAX`. Rendering at start returns `INVALID_SELECTION` before a run exists, and dispatch sends the stored job, so a rendering error can never roll back a claim.
-- **D36. Setup rows change under a row lock.** Scan, start and `advanceSetup` each lock the setup row with `SELECT ... FOR UPDATE`. `advanceSetup` keeps the lock across its GitHub calls, a few seconds at most, so two callers never open two pull requests.
+- **D36. Setup rows change under a row lock.** Scan locks the `repositories` row, since the first scan has no setup row yet. Start and `advanceSetup` lock the setup row with `SELECT ... FOR UPDATE`. `advanceSetup` keeps the lock across its GitHub calls, a few seconds at most, so two callers never open two pull requests.
+- **D37. Routing text comes from this repository's orchestrators.** Each catalog skill's "applies when" text is the row this repository's orchestrator already uses for it, so setup ships routing that has run here. Only `project-stack` and the generated skills, which have no row here, get new text. The routing table in step 1 also sets which orchestrators route each skill, in place of the earlier "Routed by" column.
 - **Inputs.** Base commit `a6831bef92d88030be6951b0d1e35ab67a2986b2` on `main`. The exploration context file was written in the planning session and its findings are folded into this plan.
 
 ## Constraints
@@ -805,10 +871,10 @@ All decisions were made on Oct 8, 2026. The engineer chose D1, D2, D3, D20, D24,
 | --- | --- | --- |
 | C1. App key and installation tokens stay secret | The key and tokens never appear in a log, error, response, database row or runner message | 4a, 5c and a log capture test |
 | C2. The setup agent changes only slots and new skills | Every change outside template slots and new `generateSkills` folders fails the run before the push | 14a, 15b, 15c |
-| C3. Bounded scan | At most 200 skills, 50 instruction files and 50 `package.json` files of 1 MiB each, and a truncated tree fails | 8a, 8b |
+| C3. Bounded scan | At most 200 skills, 50 instruction files and 50 `package.json` files of 1 MiB each, `SKILL.md` reads of 256 KiB, and a truncated tree fails | 8a, 8b, 8f, 8g |
 | C4. Bounded output | A setup job holds a prompt under `RUN_PROMPT_MAX`, inputs under `SETUP_INPUTS_MAX` and at most 64 files of 65,536 characters, and serializes to at most `SETUP_JOB_MAX_BYTES`. A `setup.pushed` event fits one events message, and the pull request body stays under 65,536 characters | 2b, 9d, 10f, 2c, 11g |
 | C5. Cross-platform runner | The build, lint and setup job tests pass on Windows, macOS and Linux | `pnpm verify` in the CI matrix |
-| C6. Bounded web access | The setup agent fetches only from github.com and raw.githubusercontent.com, and the research text reaches the pull request only as a quoted block of at most 10,000 characters | 14a and 11g |
+| C6. Bounded web access | The setup agent fetches only from github.com and raw.githubusercontent.com, and the research text reaches the pull request only as a fenced code block of at most 10,000 characters | 14a, 9j and 11g |
 
 ## Test plan
 
@@ -832,6 +898,7 @@ All decisions were made on Oct 8, 2026. The engineer chose D1, D2, D3, D20, D24,
 | 5a. GitHub functions map responses | | ✓ | | | | |
 | 5b. Token scoped to one repository | | ✓ | | | | |
 | 5c. GitHub errors mapped, nothing logged | | ✓ | | | | |
+| 5d. Error data reaches the client | | ✓ | | | | |
 | 6a. Migration applies from empty | | ✓ | | | | |
 | 6b. Constraints and cascade | | ✓ | | | | |
 | 7a. Admin adds a repository | | ✓ | | | | |
@@ -839,12 +906,16 @@ All decisions were made on Oct 8, 2026. The engineer chose D1, D2, D3, D20, D24,
 | 7c. Installable list sorted and bounded | | ✓ | | | | |
 | 7d. Update description and model | | ✓ | | | | |
 | 7e. Remove and `CONFLICT` | | ✓ | | | | |
+| 7f. GitHub failure in list and add | | ✓ | | | | |
 | 8a. Scan stores skills and signals | | ✓ | | | | |
 | 8b. Truncated tree | | ✓ | | | | |
 | 8c. Scan while generating | | ✓ | | | | |
 | 8d. Rescan clears state | | ✓ | | | | |
 | 8e. Unmovable content listed | | ✓ | | | | |
 | 8f. Blob, path and skill bounds | | ✓ | | | | |
+| 8g. `package.json` bounds and invalid JSON | | ✓ | | | | |
+| 8h. GitHub failure in scan | | ✓ | | | | |
+| 8i. Concurrent first scans | | ✓ | | | | |
 | 9a. Rendered orchestrators and routing | ✓ | | | | | |
 | 9b. No leftover placeholders or Plangineer terms | ✓ | | | | | |
 | 9e. Templates match this repository's files | ✓ | | | | | |
@@ -852,6 +923,7 @@ All decisions were made on Oct 8, 2026. The engineer chose D1, D2, D3, D20, D24,
 | 9g. `{{designSkills}}` rendering | ✓ | | | | | |
 | 9h. Workflow settings section in this repository | | ✓ | | | | ✓ |
 | 9i. Description escaped in a row | ✓ | | | | | |
+| 9j. Backticks stay fenced in the inputs | ✓ | | | | | |
 | 9c. References left out when present | ✓ | | | | | |
 | 9d. Prompt bound and snapshot | ✓ | | | | | |
 | 10a. Start stores run and status | | ✓ | | | | |
@@ -868,6 +940,7 @@ All decisions were made on Oct 8, 2026. The engineer chose D1, D2, D3, D20, D24,
 | 11f. `setup.pushed` on a test run | | ✓ | | | | |
 | 11g. Pull request body bound | ✓ | | | | | |
 | 11h. Concurrent advances | | ✓ | | | | |
+| 11i. GitHub failure in refresh | | ✓ | | | | |
 | 12a. Built CLI runs | | ✓ | | | | |
 | 12b. Pack lists only the build | | ✓ | | | | |
 | 12c. Drift message names npx | ✓ | | | | | |
@@ -893,6 +966,7 @@ All decisions were made on Oct 8, 2026. The engineer chose D1, D2, D3, D20, D24,
 | 18d. Checklists and start | | | ✓ | | | |
 | 18e. `INVALID_SELECTION` shown | | | ✓ | | | |
 | 18f. Settings save | | | ✓ | | | |
+| 18j. Generic `RunnerField` in the new-run form | | | ✓ | | | |
 | 18g. Desktop and 375 px screenshots | | | | | ✓ | |
 | 18h. New run rows and reasons | | | ✓ | | | |
 | 18i. Run link and unmovable content | | | ✓ | | | |
