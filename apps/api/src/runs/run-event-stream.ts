@@ -1,4 +1,9 @@
-import { isTerminalRunEvent, type RunEvent } from '@plangineer/contracts';
+import {
+  isTerminalRunEvent,
+  type RunEvent,
+  type RunStatus,
+  TERMINAL_RUN_STATUSES,
+} from '@plangineer/contracts';
 import type { Context } from 'hono';
 import { streamSSE, type SSEStreamingApi } from 'hono/streaming';
 import { z } from 'zod';
@@ -21,11 +26,14 @@ async function streamRunEvents(
     tail,
     runId,
     afterEventId,
+    endedBefore,
   }: {
     deps: ServiceDeps;
     tail: RunEventTail;
     runId: string;
     afterEventId: number;
+    /** The run was terminal before the backlog read, so the backlog holds its last event. */
+    endedBefore: boolean;
   },
   stream: SSEStreamingApi,
 ): Promise<void> {
@@ -77,6 +85,8 @@ async function streamRunEvents(
       page = await readRunEvents(deps.db, runId, lastSent, RUN_EVENTS_PAGE_SIZE);
       await send(page);
     } while (!isEnded() && page.length === RUN_EVENTS_PAGE_SIZE);
+    // A client resuming past the terminal event gets no terminal event to end on.
+    if (endedBefore) end();
     backlogSent.resolve();
     await finished.promise;
     await writes;
@@ -116,7 +126,15 @@ export function runEventStreamRoute({
       async (stream) => {
         try {
           await streamRunEvents(
-            { deps, tail, runId, afterEventId: Number(lastEventId ?? 0) },
+            {
+              deps,
+              tail,
+              runId,
+              afterEventId: Number(lastEventId ?? 0),
+              endedBefore: (TERMINAL_RUN_STATUSES as readonly RunStatus[]).includes(
+                run.value.status,
+              ),
+            },
             stream,
           );
         } catch (error) {

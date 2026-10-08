@@ -84,7 +84,7 @@ describe('startRunner', () => {
       commit,
       cli: { name: 'claude-code', version: '2.1.284' },
     });
-    const worktreeFolder = path.join(env.PLANGINEER_RUNNER_DATA_DIR, 'w', runId);
+    const worktreeFolder = path.join(env.PLANGINEER_RUNNER_DATA_DIR, 'w', `${runId}-1`);
     await expect(stat(worktreeFolder)).rejects.toMatchObject({ code: 'ENOENT' });
     for (const { message, bytes } of plane.received) {
       if (message.type !== 'run.events') continue;

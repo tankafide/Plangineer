@@ -1,4 +1,5 @@
 import { useRunnerList } from '@plangineer/api-client';
+import { useEffect } from 'react';
 import { type Control, Controller } from 'react-hook-form';
 import { Field, FieldError, FieldTitle } from '@/components/ui/field';
 import {
@@ -13,9 +14,14 @@ import type { NewRunInput, NewRunOutput } from './new-run-fields';
 const LABEL_ID = 'new-run-runner-label';
 const ERROR_ID = 'new-run-runner-error';
 
-/** The signed-in user's active runners, as select items. */
+/** The signed-in user's active runners from every page, as select items. */
 function useActiveRunners() {
   const runners = useRunnerList();
+  const { hasNextPage, isFetchingNextPage, isError, fetchNextPage } = runners;
+  // The select must offer every runner, so it loads the pages after the first one in turn.
+  useEffect(() => {
+    if (hasNextPage && !isFetchingNextPage && !isError) void fetchNextPage();
+  }, [hasNextPage, isFetchingNextPage, isError, fetchNextPage]);
   const items = (runners.data?.pages ?? [])
     .flatMap((page) => page.items)
     .filter((runner) => runner.status === 'active')

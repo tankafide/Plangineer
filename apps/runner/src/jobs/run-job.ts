@@ -113,7 +113,7 @@ export function createRunJob(context: RunJobContext): RunJob {
     const repository = job.repository;
     let worktree: { path: string; commit: string };
     try {
-      worktree = await worktrees.prepareWorktree({ repository, ref: job.ref, runId });
+      worktree = await worktrees.prepareWorktree({ repository, ref: job.ref, runId, attempt });
     } catch (error) {
       if (!(error instanceof GitError)) throw error;
       send(
@@ -162,7 +162,7 @@ export function createRunJob(context: RunJobContext): RunJob {
     } finally {
       clearTimeout(timer);
       sendStopEvent();
-      await worktrees.removeWorktree({ repository: job.repository, runId });
+      await worktrees.removeWorktree({ repository: job.repository, runId, attempt });
     }
   }
 

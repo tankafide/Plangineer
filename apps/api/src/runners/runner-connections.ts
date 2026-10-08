@@ -12,7 +12,10 @@ export interface HeldSocket {
 }
 
 export interface RunnerConnections {
-  /** Holds the socket for its runner, closing an older socket of the same runner with 4002. */
+  /**
+   * Holds the socket for its runner, closing an older socket of the same runner with 4002, and
+   * this one with 4001 if the runner was revoked after its handshake.
+   */
   attach: (runnerId: string, socket: HeldSocket) => void;
   detach: (runnerId: string, socket: HeldSocket) => void;
   /** Sends the runner its new assignments and the cancels its socket has not been told. */
@@ -63,14 +66,18 @@ export function createRunnerConnections({
     });
   }
 
+  /** Closes the held socket with 4001 when its runner is revoked. Returns whether it did. */
+  async function closeIfRevoked(runnerId: string, socket: HeldSocket): Promise<boolean> {
+    if ((await findRunnerStatus(deps.db, runnerId)) !== 'revoked') return false;
+    if (sockets.get(runnerId) === socket) sockets.delete(runnerId);
+    socket.close(RunnerSocketClose.revoked, 'Runner revoked');
+    return true;
+  }
+
   async function wake(runnerId: string): Promise<void> {
     const socket = sockets.get(runnerId);
     if (socket === undefined) return;
-    if ((await findRunnerStatus(deps.db, runnerId)) === 'revoked') {
-      sockets.delete(runnerId);
-      socket.close(RunnerSocketClose.revoked, 'Runner revoked');
-      return;
-    }
+    if (await closeIfRevoked(runnerId, socket)) return;
     await dispatch(runnerId);
   }
 
@@ -109,6 +116,11 @@ export function createRunnerConnections({
       if (previous !== undefined && previous !== socket) {
         previous.close(RunnerSocketClose.replaced, 'Replaced by a newer connection');
       }
+      // A revoke between the handshake's token check and this attach found no socket to
+      // close, so check again now that a wake would find it.
+      closeIfRevoked(runnerId, socket).catch((error: unknown) => {
+        logger.error({ err: error, runnerId }, 'Runner status check failed');
+      });
     },
     detach(runnerId, socket) {
       if (sockets.get(runnerId) === socket) sockets.delete(runnerId);

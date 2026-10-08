@@ -1,7 +1,13 @@
 import { mkdir, readdir, rm, rmdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { CommandResult } from '../command-result.ts';
-import { gitIndex, type SkillTree, toDisplayPath, workingTree } from './skill-trees.ts';
+import {
+  gitIndex,
+  SkillSymlinkError,
+  type SkillTree,
+  toDisplayPath,
+  workingTree,
+} from './skill-trees.ts';
 
 const SOURCE_DIR = '.agents/skills';
 const MIRROR_DIR = '.claude/skills';
@@ -82,11 +88,23 @@ export async function applySync(rootDir: string, plan: SyncPlan): Promise<void> 
   }
 }
 
-/** Checks the working tree's mirror against its source, for a run's checkout. */
+/**
+ * Checks the working tree's mirror against its source, for a run's checkout. A linked skill
+ * file is the repository's problem, not the runner's, so it is drift like any other.
+ */
 export async function checkSkillsMirror(
   repoRoot: string,
 ): Promise<{ ok: true } | { ok: false; message: string }> {
-  const plan = await planSync(workingTree(repoRoot));
+  let plan: SyncPlan;
+  try {
+    plan = await planSync(workingTree(repoRoot));
+  } catch (error) {
+    if (!(error instanceof SkillSymlinkError)) throw error;
+    return {
+      ok: false,
+      message: `${error.message}\nFix: Replace the link with a copy of the file.`,
+    };
+  }
   return hasDrift(plan) ? { ok: false, message: describeDrift(plan, FIX) } : { ok: true };
 }
 

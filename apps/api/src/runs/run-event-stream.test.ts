@@ -154,6 +154,16 @@ describe('run event stream', () => {
     expect(ended).toBe(true);
   });
 
+  it('ends the stream of a finished run when Last-Event-ID is past its terminal event', async () => {
+    const runId = await runningRun();
+    await appendRunnerEvents(deps(), runId, [succeededEvent], 2);
+
+    const { events, ended } = await readStream(await open(runId, { 'last-event-id': '4' }));
+
+    expect(events).toEqual([]);
+    expect(ended).toBe(true);
+  });
+
   it('answers 401 with no session', async () => {
     const runId = await runningRun();
 

@@ -135,6 +135,18 @@ describe('skills mirror', () => {
     await expect(plan()).rejects.toThrow('.agents/skills/alpha/linked');
   });
 
+  it('reports a linked folder as drift for a run checkout, naming it', async () => {
+    await sync();
+    await symlink(source('alpha', 'agents'), source('alpha', 'linked'), 'junction');
+
+    const result = await checkSkillsMirror(root);
+
+    expect(result).toEqual({
+      ok: false,
+      message: expect.stringContaining('.agents/skills/alpha/linked'),
+    });
+  });
+
   describe('with no source folder', () => {
     beforeEach(() => rm(path.join(root, '.agents'), { recursive: true }));
 

@@ -20,6 +20,7 @@ import {
 import { RunsScreen } from './runs-screen';
 
 const REVOKED_RUNNER_ID = '0199c1a2-0000-7d4e-8f90-a1b2c3d4e5f6';
+const OLDER_RUNNER_ID = '0199c1a2-0000-7d4e-8f90-a1b2c3d4e5f7';
 
 function answerRunners() {
   answerProcedure(
@@ -51,6 +52,21 @@ describe('RunsScreen form', () => {
 
     expect(await screen.findByRole('option', { name: 'ada-laptop' })).toBeTruthy();
     expect(screen.queryByRole('option', { name: 'old-box' })).toBeNull();
+  });
+
+  it('offers active runners from every page of the runner list', async () => {
+    answerProcedure(
+      'runner/list',
+      answerJson(page([runnerFixture()], OLDER_RUNNER_ID)),
+      answerJson(page([runnerFixture({ id: OLDER_RUNNER_ID, name: 'older-box' })])),
+    );
+    answerProcedure('run/list', answerJson(page([])));
+    await renderPage(RunsScreen);
+
+    await userEvent.click(await screen.findByRole('combobox', { name: 'Runner' }));
+
+    expect(await screen.findByRole('option', { name: 'older-box' })).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'ada-laptop' })).toBeTruthy();
   });
 
   it('blocks a ref starting with - and an invalid repository with field errors', async () => {

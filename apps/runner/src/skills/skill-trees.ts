@@ -24,8 +24,12 @@ export function toDisplayPath(...segments: string[]): string {
     .join('/');
 }
 
-function symlinkError(file: string): Error {
-  return new Error(`Symlinks are not allowed in skills: ${file}`);
+/** A skill file that is a link. Skills are copied, never linked, on every system. */
+export class SkillSymlinkError extends Error {
+  constructor(file: string) {
+    super(`Symlinks are not allowed in skills: ${file}`);
+    this.name = 'SkillSymlinkError';
+  }
 }
 
 function isMissing(error: unknown): boolean {
@@ -37,7 +41,7 @@ async function collectFiles(root: string, relDir: string, files: string[]): Prom
   for (const entry of entries) {
     const rel = relDir === '' ? entry.name : `${relDir}/${entry.name}`;
     const stats = await lstat(path.join(root, rel));
-    if (stats.isSymbolicLink()) throw symlinkError(toDisplayPath(root, rel));
+    if (stats.isSymbolicLink()) throw new SkillSymlinkError(toDisplayPath(root, rel));
     if (stats.isDirectory()) await collectFiles(root, rel, files);
     else files.push(rel);
   }
@@ -96,7 +100,7 @@ export function gitIndex(rootDir: string): SkillTree {
       const listing = await git(rootDir, ['ls-files', '--stage', '-z', '--', dir]);
       const entries = parseIndexEntries(listing);
       for (const entry of entries) {
-        if (entry.mode === SYMLINK_MODE) throw symlinkError(entry.file);
+        if (entry.mode === SYMLINK_MODE) throw new SkillSymlinkError(entry.file);
         if (entry.stage !== MERGED_STAGE) throw new Error(`Unmerged file in skills: ${entry.file}`);
       }
       if (entries.length === 0) return [];

@@ -7,12 +7,11 @@ import {
 } from '@plangineer/contracts';
 import { and, asc, desc, eq, inArray, lt } from 'drizzle-orm';
 import type { Executor, Transaction } from '../db/client.ts';
+import { toIsoOrNull } from '../lib/dates.ts';
 import { runners, runs } from '../db/schema.ts';
 import { runnerOnline } from '../runners/runner-repository.ts';
 
 const OPEN_STATUSES: RunStatus[] = ['queued', 'leased', 'running'];
-
-const iso = (date: Date | null) => (date === null ? null : date.toISOString());
 
 function summaryColumns(offlineAfterMs: number) {
   return {
@@ -63,15 +62,15 @@ function toSummary(row: SummaryRow) {
     attempt: row.attempt,
     cancelRequested: row.cancelRequested,
     createdAt: row.createdAt.toISOString(),
-    startedAt: iso(row.startedAt),
-    endedAt: iso(row.endedAt),
+    startedAt: toIsoOrNull(row.startedAt),
+    endedAt: toIsoOrNull(row.endedAt),
     commit: row.commit,
     runner: {
       id: row.runnerId,
       name: row.runnerName,
       online: row.runnerOnline,
-      lastSeenAt: iso(row.runnerLastSeenAt),
-      planLimitResetsAt: iso(row.runnerPlanLimitResetsAt),
+      lastSeenAt: toIsoOrNull(row.runnerLastSeenAt),
+      planLimitResetsAt: toIsoOrNull(row.runnerPlanLimitResetsAt),
     },
   };
 }
@@ -152,11 +151,19 @@ export async function lockOpenRunsOfRunner(tx: Transaction, runnerId: string): P
   return rows.map((row) => row.id);
 }
 
-/** The run's event id counter: the id of its newest event, or 0. */
+export class RunNotFoundError extends Error {
+  constructor(runId: string) {
+    super(`Run ${runId} does not exist`);
+    this.name = 'RunNotFoundError';
+  }
+}
+
+/** The run's event id counter: the id of its newest event, or 0 before any event. */
 export async function findLastEventId(executor: Executor, runId: string): Promise<number> {
   const [row] = await executor
     .select({ lastEventId: runs.lastEventId })
     .from(runs)
     .where(eq(runs.id, runId));
-  return row?.lastEventId ?? 0;
+  if (row === undefined) throw new RunNotFoundError(runId);
+  return row.lastEventId;
 }

@@ -1,6 +1,7 @@
 import { CliStatus, type PageInput, Runner, type RunnerPlatform } from '@plangineer/contracts';
 import { and, desc, eq, gt, isNull, lt, sql, type SQL } from 'drizzle-orm';
 import type { Executor, Transaction } from '../db/client.ts';
+import { toIsoOrNull } from '../lib/dates.ts';
 import { runnerPairingCodes, runners } from '../db/schema.ts';
 import { RUNNER_WAKE_CHANNEL } from '../realtime/notifications.ts';
 
@@ -8,8 +9,6 @@ import { RUNNER_WAKE_CHANNEL } from '../realtime/notifications.ts';
 export function runnerOnline(offlineAfterMs: number): SQL<boolean> {
   return sql<boolean>`coalesce(${runners.lastSeenAt} > now() - make_interval(secs => ${offlineAfterMs / 1000}), false)`;
 }
-
-const iso = (date: Date | null) => (date === null ? null : date.toISOString());
 
 function runnerColumns(offlineAfterMs: number) {
   return {
@@ -44,10 +43,10 @@ interface RunnerRow {
 function toRunner(row: RunnerRow): Runner {
   return Runner.parse({
     ...row,
-    lastSeenAt: iso(row.lastSeenAt),
-    planLimitResetsAt: iso(row.planLimitResetsAt),
+    lastSeenAt: toIsoOrNull(row.lastSeenAt),
+    planLimitResetsAt: toIsoOrNull(row.planLimitResetsAt),
     createdAt: row.createdAt.toISOString(),
-    revokedAt: iso(row.revokedAt),
+    revokedAt: toIsoOrNull(row.revokedAt),
     clis: CliStatus.array().parse(row.clis),
   });
 }

@@ -14,8 +14,8 @@ describe('runnerPaths', () => {
     expect(paths.bareClone({ owner: 'Acme', name: 'App' })).toBe(
       path.join(dataDir, 'repos', 'acme', 'app.git'),
     );
-    expect(paths.worktree(runId, { owner: 'Acme', name: 'App' })).toBe(
-      path.join(dataDir, 'w', runId, 'App'),
+    expect(paths.worktree(runId, 2, { owner: 'Acme', name: 'App' })).toBe(
+      path.join(dataDir, 'w', `${runId}-2`, 'App'),
     );
   });
 });

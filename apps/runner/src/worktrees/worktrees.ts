@@ -8,12 +8,13 @@ interface WorktreeRequest {
   repository: Repository;
   ref: string;
   runId: string;
+  attempt: number;
 }
 
 export interface Worktrees {
-  /** Checks out `ref` at its commit in a detached worktree for the run, from a fetched clone. */
+  /** Checks out `ref` at its commit in a detached worktree for the attempt, from a fetched clone. */
   prepareWorktree(request: WorktreeRequest): Promise<{ path: string; commit: string }>;
-  /** Removes the run's worktree folder, then prunes its entry from the clone. */
+  /** Removes the attempt's worktree folder, then prunes its entry from the clone. */
   removeWorktree(request: Omit<WorktreeRequest, 'ref'>): Promise<void>;
 }
 
@@ -74,14 +75,18 @@ export function createWorktrees(options: { paths: RunnerPaths; gitBaseUrl: strin
       '--end-of-options',
       `${request.ref}^{commit}`,
     ]);
-    const worktree = paths.worktree(request.runId, request.repository);
+    const worktree = paths.worktree(request.runId, request.attempt, request.repository);
     await mkdir(path.dirname(worktree), { recursive: true });
     await git(clone, ['worktree', 'add', '--detach', worktree, commit]);
     return { path: worktree, commit };
   }
 
   async function remove(request: Omit<WorktreeRequest, 'ref'>): Promise<void> {
-    await rm(paths.runFolder(request.runId), { recursive: true, force: true, maxRetries: 5 });
+    await rm(paths.runFolder(request.runId, request.attempt), {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+    });
     const clone = paths.bareClone(request.repository);
     if (await exists(clone)) await git(clone, ['worktree', 'prune']);
   }
