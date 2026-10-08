@@ -1,4 +1,4 @@
-import { onError } from '@orpc/server';
+import { onError, ORPCError } from '@orpc/server';
 import { RPCHandler } from '@orpc/server/fetch';
 import { SimpleCsrfProtectionHandlerPlugin } from '@orpc/server/plugins';
 import { Hono } from 'hono';
@@ -26,6 +26,11 @@ export function createApp({ auth, logger }: { auth: Auth; logger: Logger }) {
     plugins: [new SimpleCsrfProtectionHandlerPlugin()],
     interceptors: [
       onError((error, { context }) => {
+        // A 4xx ORPCError is an expected answer, such as UNAUTHORIZED; only the rest are failures.
+        if (error instanceof ORPCError && error.status < 500) {
+          context.logger.debug({ code: error.code, status: error.status }, 'RPC procedure refused');
+          return;
+        }
         context.logger.error({ err: error }, 'RPC procedure failed');
       }),
     ],

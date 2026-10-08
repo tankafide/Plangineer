@@ -1,4 +1,5 @@
 import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { describe, expect, it } from 'vitest';
 import { AUTH_URL, renderRoute, server } from '@/test/app-harness';
@@ -49,4 +50,20 @@ describe('routes', () => {
       expect(router.state.location.pathname).toBe(path);
     },
   );
+
+  it('re-runs the session check when Retry is clicked on the error page', async () => {
+    let calls = 0;
+    answerSession(() => {
+      calls += 1;
+      return calls === 1
+        ? HttpResponse.json({ message: 'Database down' }, { status: 500 })
+        : HttpResponse.json(null);
+    });
+    await renderRoute('/sign-in');
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+
+    expect(await screen.findByRole('button', { name: 'Sign in with GitHub' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Something went wrong' })).toBeNull();
+  });
 });
