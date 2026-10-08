@@ -51,7 +51,7 @@ Nothing imports from another `apps/*` package.
 | `pnpm dev` | Starts Postgres, applies migrations, then runs the API and web. MinIO, seed data and the fake agent join it with the features that need them |
 | `pnpm db:reset` | Drops and migrates the dev database. Seeding joins it with the first feature that has data |
 | `pnpm verify` | Format check, skills mirror check, Oxlint, typecheck, dependency-cruiser, Knip, Vitest, in that order. Must pass before work is done |
-| `pnpm test:e2e` | Playwright Test journeys against the local stack with seed data. Must pass before work that adds or changes a journey is done |
+| `pnpm test:e2e` | Playwright Test journeys against the local stack, on a database reset by `pnpm db:reset`. Must pass before work that adds or changes a journey is done |
 
 ## Conventions
 

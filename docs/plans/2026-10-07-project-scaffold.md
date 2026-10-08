@@ -308,8 +308,8 @@ This step is the first to run GitHub's manifest flow, so it proves the field nam
 
 - **`db/migrate-cli.ts`.** Parses the environment, creates the database, calls `migrateDatabase` and ends the pool. `apps/api` adds the `db:migrate` script that runs it.
 - **Test databases** (`persistence` and `testing`). These arrive here because they migrate, and the first migration exists only from this step.
-  - **`test/global-setup.ts`.** A Vitest `globalSetup`, set in `apps/api/vitest.config.ts`. It loads `.env` with `process.loadEnvFile`, calls `parseEnv(process.env)` and connects to the maintenance database on the server from `DATABASE_URL`. It recreates `plangineer_test_template`, migrates it and closes every connection.
-  - **`test/test-database.ts`.** Exports `createTestDatabase()`. The function clones `plangineer_test_<uuid without dashes>` from the template and returns `{ db, pool, url, drop }`. `drop` ends the pool, then drops the database. Each test file creates one in `beforeAll` and drops it in `afterAll`.
+  - **`test/global-setup.ts`.** A Vitest `globalSetup`, set in `apps/api/vitest.config.ts`. It reads `.env` with `util.parseEnv`, without loading it into `process.env`, which every Vitest project shares, and calls `parseEnv` on the result. It picks a prefix unique to the run, `plangineer_test_<8 hex>`, creates and migrates the run's template `<prefix>_template`, and closes every connection. Teardown drops the run's template and fails on any `<prefix>_*` database left behind. The unique prefix keeps two concurrent runs on one Postgres server from breaking each other.
+  - **`test/test-database.ts`.** Exports `createTestDatabase()`. The function clones `<prefix>_<uuid without dashes>` from the run's template and returns `{ db, pool, url, drop }`. `drop` ends the pool, then drops the database. Each test file creates one in `beforeAll` and drops it in `afterAll`.
 - **`rpc/context.ts`.** Defines `InitialContext = { logger: Logger, session: { user: { id, name, email, role } } | null }`.
 - **`rpc/router.ts`.**
   - Exports `router = implement(contract).$context<InitialContext>().router(...)`.
@@ -336,7 +336,7 @@ This step is the first to run GitHub's manifest flow, so it proves the field nam
 - 8f. `POST /rpc/me/get` without the CSRF header the plugin requires is rejected.
 - 8g. `pnpm --filter @plangineer/api start` with a variable missing from `.env` exits 1 and names the variable.
 - 8h. `resetDatabase` run against the URL of a database from `createTestDatabase()` drops it, recreates it and leaves every migration applied.
-- 8i. Two test files that run in parallel each get their own cloned database, and no `plangineer_test_*` database except the template remains after the run.
+- 8i. Two test files that run in parallel each get their own cloned database, no database with the run's prefix remains after the run, and two concurrent runs both pass.
 - 8j. A `POST /rpc/me/get` with a body over 1 MiB gets status 413.
 - 8k. `POST /rpc/me/get` through `app.request()` with the session cookie Better Auth issues for a stored user returns that user. Without a cookie it returns 401.
 - 8l. `POST /api/auth/update-user` with `{ "role": "admin" }` and a valid session leaves the user's role `member`, per `auth-and-access`.
@@ -650,7 +650,7 @@ Decisions D1 to D4 and D18 came from the engineer on Oct 7, 2026. The rest the p
 **What each layer covers.**
 
 - **Unit tests** cover the pure script modules (`env-file`, `github-app-manifest`, `github-app-callback`, `claude-hooks`), the API's `parseEnv` and `isLocalDatabaseUrl`, the contract schemas and the runner CLI. The runner CLI runs through `node` with execa from a temp folder.
-- **Integration tests** run in `apps/api` against real Postgres. Each file clones its own database from `plangineer_test_template`. They create users through Better Auth's adapter, and call the router and `app.request()`. No integration test calls GitHub, because Better Auth only builds the authorize URL.
+- **Integration tests** run in `apps/api` against real Postgres. Each file clones its own database from the run's template. They create users through Better Auth's adapter, and call the router and `app.request()`. No integration test calls GitHub, because Better Auth only builds the authorize URL.
 - **API client tests** render `useMe` on jsdom with MSW handlers for `/rpc/me/get`, and are marked as component-layer tests. The web component tests use Testing Library on jsdom with MSW, a fresh `QueryClient` per test, and a mocked `authClient.signIn.social` network call through MSW.
 - **The end-to-end journey** runs against a reset database and aborts the GitHub request.
 - **Agent checks** cover machine state, command behavior, CI results and the screenshots.

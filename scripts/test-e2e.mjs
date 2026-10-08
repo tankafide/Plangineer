@@ -12,8 +12,9 @@ const WEB_PORT = 5173;
 
 async function main() {
   const env = parseEnv(await readFile(path.join(repoRoot, '.env'), 'utf8'));
-  const apiPort = Number(env.API_PORT);
-  if (!Number.isInteger(apiPort) || apiPort < 1 || apiPort > 65535) {
+  // The same rule as the API's environment schema: digits only, from 1 to 65535.
+  const apiPort = /^\d+$/.test(env.API_PORT ?? '') ? Number(env.API_PORT) : Number.NaN;
+  if (!(apiPort >= 1 && apiPort <= 65535)) {
     throw new Error(`API_PORT in .env is missing or not a port number: ${env.API_PORT}`);
   }
   const busy = await findBusyPorts([WEB_PORT, apiPort]);

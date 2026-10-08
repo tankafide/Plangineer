@@ -11,13 +11,15 @@ if (typeof filePath !== 'string') {
     'PostToolUse hook input has no tool_input.file_path; the hook cannot check the edit',
   );
 }
-const target = lintTargets(filePath);
+const target = lintTargets(filePath, repoRoot);
 
 if (target !== undefined) {
   const checks = [
-    [binPath('oxfmt'), '--check', '--no-error-on-unmatched-pattern', target],
-    [binPath('oxlint'), '--type-aware', '--type-check', target],
+    [binPath('oxfmt'), '--check', '--no-error-on-unmatched-pattern', target.filePath],
   ];
+  if (target.lint) {
+    checks.push([binPath('oxlint'), '--type-aware', '--type-check', target.filePath]);
+  }
   const results = await Promise.all(
     checks.map((args) =>
       execa(process.execPath, args, { cwd: repoRoot, reject: false, all: true }),

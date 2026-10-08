@@ -7,32 +7,43 @@ import { databaseUrl, MAINTENANCE_DATABASE } from '../db/database-url.ts';
 import { resetDatabase } from '../db/reset-database.ts';
 import { parseEnv } from '../env.ts';
 import { createLogger } from '../logger.ts';
-import { TEMPLATE_DATABASE } from './test-database.ts';
+import { createTestRunPrefix, templateDatabase } from './test-database.ts';
 
-async function leftoverTestDatabases(serverUrl: string): Promise<string[]> {
+async function onMaintenance<T>(
+  serverUrl: string,
+  work: (client: Client) => Promise<T>,
+): Promise<T> {
   const client = new Client({ connectionString: databaseUrl(serverUrl, MAINTENANCE_DATABASE) });
   await client.connect();
   try {
-    const { rows } = await client.query<{ datname: string }>(
-      `SELECT datname FROM pg_database WHERE datname LIKE 'plangineer\\_test\\_%' AND datname <> $1`,
-      [TEMPLATE_DATABASE],
-    );
-    return rows.map((row) => row.datname);
+    return await work(client);
   } finally {
     await client.end();
   }
 }
 
-/** Recreates and migrates the template database that every test file clones. */
+/** Creates and migrates this run's template database, which every test file clones. */
 export default async function setup(project: TestProject): Promise<() => Promise<void>> {
   // Read .env without loading it into process.env, which every Vitest project shares.
   const envFile = readFileSync(fileURLToPath(new URL('../../../../.env', import.meta.url)), 'utf8');
   const env = parseEnv(parseEnvFile(envFile));
-  await resetDatabase(databaseUrl(env.DATABASE_URL, TEMPLATE_DATABASE), createLogger('warn'));
+  const runPrefix = createTestRunPrefix();
+  const template = templateDatabase(runPrefix);
+  await resetDatabase(databaseUrl(env.DATABASE_URL, template), createLogger('warn'));
   project.provide('databaseUrl', env.DATABASE_URL);
+  project.provide('testRunPrefix', runPrefix);
 
   return async () => {
-    const leftovers = await leftoverTestDatabases(env.DATABASE_URL);
+    const leftovers = await onMaintenance(env.DATABASE_URL, async (client) => {
+      await client.query(
+        `DROP DATABASE IF EXISTS ${client.escapeIdentifier(template)} WITH (FORCE)`,
+      );
+      const { rows } = await client.query<{ datname: string }>(
+        'SELECT datname FROM pg_database WHERE starts_with(datname, $1)',
+        [`${runPrefix}_`],
+      );
+      return rows.map((row) => row.datname);
+    });
     if (leftovers.length > 0) {
       throw new Error(`Test databases were not dropped: ${leftovers.join(', ')}`);
     }

@@ -1,24 +1,54 @@
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { lintTargets, parseStatusPaths, shouldRunVerify } from './claude-hooks.mjs';
 
 describe('lintTargets', () => {
+  const root = path.resolve('repo');
+  const inRepo = (...parts) => path.join(root, ...parts);
+
   it.each([
-    'apps/api/src/app.ts',
-    'apps/web/src/main.tsx',
-    'scripts/verify.mjs',
-    '.dependency-cruiser.cjs',
-    'package.json',
-    'C:\\repo\\apps\\api\\src\\app.ts',
-  ])('returns %s', (filePath) => {
-    expect(lintTargets(filePath)).toBe(filePath);
+    ['apps/api/src/app.ts'],
+    ['apps/web/src/main.tsx'],
+    ['scripts/verify.mjs'],
+    ['.dependency-cruiser.cjs'],
+  ])('format-checks and lints %s', (relative) => {
+    const filePath = inRepo(relative);
+
+    expect(lintTargets(filePath, root)).toEqual({ filePath, lint: true });
+  });
+
+  it('format-checks a JSON file without linting it', () => {
+    const filePath = inRepo('package.json');
+
+    expect(lintTargets(filePath, root)).toEqual({ filePath, lint: false });
+  });
+
+  it('checks a path given relative to the repository', () => {
+    expect(lintTargets('scripts/verify.mjs', root)).toEqual({
+      filePath: 'scripts/verify.mjs',
+      lint: true,
+    });
+  });
+
+  it('checks a file whose name starts with two dots', () => {
+    const filePath = inRepo('..eslintrc.cjs');
+
+    expect(lintTargets(filePath, root)).toEqual({ filePath, lint: true });
   });
 
   it.each(['docs/plans/plan.md', 'apps/web/src/styles/theme.css', 'lefthook.yml', 'README'])(
-    'returns nothing for %s',
-    (filePath) => {
-      expect(lintTargets(filePath)).toBeUndefined();
+    'checks nothing for %s',
+    (relative) => {
+      expect(lintTargets(inRepo(relative), root)).toBeUndefined();
     },
   );
+
+  it.each([
+    path.join(path.dirname(root), 'scratchpad', 'notes.json'),
+    path.join(path.dirname(root), 'other-repo', 'src', 'app.ts'),
+  ])('checks nothing outside the repository: %s', (filePath) => {
+    expect(lintTargets(filePath, root)).toBeUndefined();
+  });
 });
 
 describe('shouldRunVerify', () => {

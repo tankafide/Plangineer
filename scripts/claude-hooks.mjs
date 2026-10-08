@@ -1,8 +1,24 @@
-const LINT_EXTENSIONS = ['.ts', '.tsx', '.mjs', '.cjs', '.json'];
+import path from 'node:path';
 
-/** The edited file when the PostToolUse hook should format-check and lint it, otherwise undefined. */
-export function lintTargets(filePath) {
-  return LINT_EXTENSIONS.some((extension) => filePath.endsWith(extension)) ? filePath : undefined;
+const LINT_EXTENSIONS = ['.ts', '.tsx', '.mjs', '.cjs'];
+// Oxfmt formats JSON, but Oxlint does not lint it and exits 1 on a JSON-only target.
+const FORMAT_ONLY_EXTENSIONS = ['.json'];
+
+const hasExtension = (filePath, extensions) =>
+  extensions.some((extension) => filePath.endsWith(extension));
+
+/**
+ * The checks the PostToolUse hook runs on an edited file, or undefined when it checks nothing:
+ * a file outside the repository, or one with no matching extension.
+ */
+export function lintTargets(filePath, repoRoot) {
+  const relative = path.relative(repoRoot, path.resolve(repoRoot, filePath));
+  const outside =
+    relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
+  if (outside) return undefined;
+  if (hasExtension(filePath, LINT_EXTENSIONS)) return { filePath, lint: true };
+  if (hasExtension(filePath, FORMAT_ONLY_EXTENSIONS)) return { filePath, lint: false };
+  return undefined;
 }
 
 /** Whether the Stop hook should run pnpm verify for the turn's changed paths. */
