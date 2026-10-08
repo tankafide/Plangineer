@@ -10,8 +10,8 @@ An admin adds a GitHub repository, scans it, ticks skills from three checklists,
 
 | Item | Who | Status |
 | --- | --- | --- |
-| An npm account that can publish the unscoped package `plangineer-runner`, free on npm on Oct 8, 2026, signed in with `npm login` on the machine that runs `pnpm runner:publish` | Engineer | open |
-| The dev GitHub App installed on one real test repository, for the gate's human check | Engineer | open |
+| An npm account that can publish the unscoped package `plangineer-runner`, free on npm on Oct 8, 2026, signed in with `npm login` on the machine that runs `pnpm runner:publish` | Engineer | resolved |
+| The dev GitHub App installed on one real test repository, for the gate's human check | Engineer | resolved |
 
 ## Steps
 
@@ -216,7 +216,7 @@ Procedures:
 
 | Procedure | Who | Input | Output | Errors |
 | --- | --- | --- | --- | --- |
-| `repository.listInstallable` | admin | none | `{ items: InstallableRepository[] (max 1,000), truncated: boolean }`, not yet added, sorted by owner then name (D33) | `GITHUB_FAILED` |
+| `repository.listInstallable` | admin | none | `{ items: InstallableRepository[] (max 1,000), truncated: boolean, installUrl: z.url() }`, not yet added, sorted by owner then name (D33). `installUrl` is the App's GitHub install page (D38) | `GITHUB_FAILED` |
 | `repository.add` | admin | `{ githubRepositoryId, description: 1 to 200 characters }` | `RepositoryDetail` | `NOT_FOUND`, `CONFLICT`, `GITHUB_FAILED` |
 | `repository.list` | member | `PageInput` | page of `RepositorySummary` | |
 | `repository.get` | member | `{ repositoryId }` | `RepositoryDetail` | `NOT_FOUND` |
@@ -294,10 +294,11 @@ The contract router gains `repository` and `repositorySetup`.
 
 ### 4. Environment, first admin and role checks
 
-**Files:** `apps/api/src/env.ts`, `apps/api/src/auth/auth.ts`, `apps/api/src/db/seed-ids.ts`, `apps/api/src/rpc/router.ts`, `apps/api/src/test/fixtures.ts`, `scripts/setup-env.mjs`, `.github/workflows/ci.yml`, `.env.example`, tests beside each
+**Files:** `apps/api/src/env.ts`, `apps/api/src/auth/auth.ts`, `apps/api/src/db/seed-ids.ts`, `apps/api/src/rpc/router.ts`, `apps/api/src/test/fixtures.ts`, `scripts/setup-env.mjs`, `scripts/github-app-manifest.mjs`, `scripts/github-app-conversion.mjs`, `scripts/setup-github-app.mjs`, `.github/workflows/ci.yml`, `.env.example`, `README.md`, tests beside each
 
-- `EnvSchema` gains `GITHUB_APP_ID` (an integer of at least 1) and `GITHUB_APP_PRIVATE_KEY` (a PEM). The schema converts the key to PKCS#8 with `createPrivateKey(...).export({ type: 'pkcs8', format: 'pem' })`, and a key that fails to load is an invalid variable. The key never appears in a log or error message.
-- `pnpm setup:env` also writes `GITHUB_APP_ID=1` and a throwaway 2048-bit RSA key in PKCS#1 PEM, so the API starts before `pnpm setup:github-app` writes the real App. Until then every GitHub call fails with `GITHUB_FAILED`. Both CI jobs run `pnpm setup:env` in place of copying `.env.example`.
+- `EnvSchema` gains `GITHUB_APP_ID` (an integer of at least 1), `GITHUB_APP_SLUG` (lowercase letters, digits and hyphens) and `GITHUB_APP_PRIVATE_KEY` (a PEM). The schema converts the key to PKCS#8 with `createPrivateKey(...).export({ type: 'pkcs8', format: 'pem' })`, and a key that fails to load is an invalid variable. The key never appears in a log or error message.
+- `pnpm setup:env` also writes `GITHUB_APP_ID=1`, `GITHUB_APP_SLUG=plangineer-dev` and a throwaway 2048-bit RSA key in PKCS#1 PEM, so the API starts before `pnpm setup:github-app` writes the real App. Until then every GitHub call fails with `GITHUB_FAILED`. Both CI jobs run `pnpm setup:env` in place of copying `.env.example`.
+- **GitHub onboarding (D38).** The manifest asks for `contents: 'read'` in place of `write`, since the runner pushes with the engineer's credentials (D5), and sets `setup_url` to `http://localhost:5173/repositories` with `setup_on_update: true`, so GitHub sends the admin back to the Repositories screen after an install or a change of repositories. The conversion response's `slug` is read and written to `.env` as `GITHUB_APP_SLUG`. Once the credentials are written, `pnpm setup:github-app` opens `https://github.com/apps/<slug>/installations/new`, so creating the App flows straight into picking its repositories. The README's step names both.
 - `databaseHooks.user.create.before` sets `role: 'admin'` when no user with role `admin` exists outside `SEED_USER_IDS`, and leaves `member` otherwise (D10). `apps/api/src/db/seed-ids.ts` holds `SEED_USER_IDS`, the two fixed user ids that step 17 seeds.
 - `requireRole('admin')` is oRPC middleware in `router.ts` that raises `FORBIDDEN` for a member. Every admin procedure in step 2's table uses it at its call site.
 - `testEnv` gains a test key generated once per test process, and `storeUser` takes a `role` override.
@@ -308,6 +309,7 @@ The contract router gains `repository` and `repositorySetup`.
 - 4b. The first user to sign in becomes an admin, and the second becomes a member. With only the seeded `Seed Admin` stored, the first real sign-in still becomes an admin.
 - 4c. A member calling an admin procedure gets `FORBIDDEN`, and no row changes.
 - 4d. `pnpm setup:env` writes a `.env` that `parseEnv` accepts.
+- 4e. The manifest asks for read-only contents and sets the setup URL, and a conversion response without a `slug` is refused.
 
 ### 5. GitHub adapter
 
@@ -398,7 +400,7 @@ Generate the migration with `pnpm --filter @plangineer/api db:generate`, read th
 
 Follows the runner feature's shape: a service returning `Result`, a repository module for queries and router entries with `unwrap`.
 
-- `listInstallable` reads `listInstallableRepositories()`, drops repositories already in `repositories`, sorts by owner then name, returns the first 1,000 and sets `truncated` when more remain.
+- `listInstallable` reads `listInstallableRepositories()`, drops repositories already in `repositories`, sorts by owner then name, returns the first 1,000 and sets `truncated` when more remain. `installUrl` is `https://github.com/apps/<GITHUB_APP_SLUG>/installations/new`.
 - `add` looks the id up in `listInstallableRepositories()` and takes its `installationId`, raising `NOT_FOUND` when no installation reaches it and `CONFLICT` when it is added. It stores the installation id, owner, name, description, role settings of `{ agent: 'claude_code', model: null, runsOn: 'local_runner', signIn: 'engineer_login' }` for every role, and `DEFAULT_WORKFLOW_SETTINGS`.
 - `remove` raises `CONFLICT` while the setup is `generating`.
 - `get` and `list` are open to members. `update` replaces only the fields it is given.
@@ -407,7 +409,7 @@ Follows the runner feature's shape: a service returning `Result`, a repository m
 
 - 7a. An admin adds an installable repository and it appears in `repository.list` with the default role settings.
 - 7b. Adding a repository the App cannot reach returns `NOT_FOUND`, and adding one twice returns `CONFLICT`.
-- 7c. `repository.listInstallable` leaves out added repositories, sorts by owner then name, and sets `truncated` when 1,001 are installable.
+- 7c. `repository.listInstallable` leaves out added repositories, sorts by owner then name, sets `truncated` when 1,001 are installable, and returns the App's install URL.
 - 7d. `repository.update` changes the description, one role's model and the workflow settings, and rejects a role setting with an unknown agent and a fixed round count of 6.
 - 7e. `repository.remove` deletes the repository and its setup, and returns `CONFLICT` while the setup is `generating`.
 - 7f. A GitHub failure in `listInstallable` or `add` returns `GITHUB_FAILED` with its status and message.
@@ -758,7 +760,7 @@ Adds the shadcn `checkbox` with `pnpm dlx shadcn@latest add checkbox`. The heade
 
 The run screens learn the new run shapes: `run-event-row.tsx` renders `setup.pushed` as "Pushed plangineer/setup at <first 7 characters of the commit>, <changedPathCount> files", and `run-reasons.ts` labels `setup_invalid_output` "The setup output broke a skill rule" and `setup_publish_failed` "The setup branch could not be pushed".
 
-**Repositories (`/repositories`).** Phone: one column with the add card for admins on top, then the list of `Item` rows showing owner/name, description and status badge. Desktop: the list in a main column and the add card in a right column at `lg:`. The add card holds a `Select` of installable repositories, a description `Textarea` and **Add repository**. States: `Skeleton` rows while loading, `Empty` with "No repositories yet" (admins see "Install the GitHub App on a repository to add it" when nothing is installable), and an `Alert` with **Try again** on failure.
+**Repositories (`/repositories`).** Phone: one column with the add card for admins on top, then the list of `Item` rows showing owner/name, description and status badge. Desktop: the list in a main column and the add card in a right column at `lg:`. The add card holds a `Select` of installable repositories, a description `Textarea` and **Add repository**. States: `Skeleton` rows while loading, `Empty` with "No repositories yet", and an `Alert` with **Try again** on failure. When nothing is installable, the add card replaces its form with "Give Plangineer access to a repository on GitHub, then come back here" and an **Install on GitHub** button linking to `installUrl`. Otherwise a **Choose repositories on GitHub** link to the same URL sits under the `Select`, for a repository that is missing from it. GitHub returns the admin to `/repositories` after an install (D38), and the installable list refetches on window focus, so the new repository is in the `Select` either way.
 
 **Repository (`/repositories/$repositoryId`).** Phone: one column with the setup card, then the settings card. Desktop: setup in the main column and settings at `lg:` on the right. Members see both read-only, with no buttons.
 
@@ -781,6 +783,7 @@ States for both screens: `Skeleton` while loading, an `Alert` with **Try again**
 **Done when:**
 
 - 18a. The repositories screen shows the loading, empty, failed and loaded states, and an admin adds a repository from the add card.
+- 18k. With nothing installable, the add card shows **Install on GitHub** linking to `installUrl`, and with installable repositories it shows the **Choose repositories on GitHub** link.
 - 18b. A member sees the list and a repository with no add card, settings inputs or setup buttons.
 - 18c. The setup card shows the content and buttons in the table for each status.
 - 18d. The checklists start ticked as described, lock required skills while anything is ticked, and send the ticked names to `repositorySetup.start`.
@@ -824,7 +827,7 @@ Run `pnpm skills:sync` and `pnpm skills:lint` after the skill edits.
 
 ## Decisions
 
-All decisions were made on Oct 8, 2026. The engineer chose D1, D2, D3, D10, D20, D24, D25, D26, D28, D30 and D31. The planner made the rest, and the engineer can overrule any of them.
+All decisions were made on Oct 8, 2026. The engineer chose D1, D2, D3, D10, D20, D24, D25, D26, D28, D30, D31 and D38. The planner made the rest, and the engineer can overrule any of them.
 
 - **D1. The specifications are this plan's first step.** The engineer chose it. The plan still names every catalog entry and signal, so step 1 writes the docs from this plan's tables and a test keeps the doc and `BASELINE_CATALOG` in step. Rejected: writing them before the plan, and keeping them only in code.
 - **D2. Cross-repository orchestrators are left out.** The engineer chose it. Nothing uses them until chunk 3 has features across repositories, so their versioned table, generation and edit screen get the next plan. The gate needs only one repository.
@@ -863,6 +866,7 @@ All decisions were made on Oct 8, 2026. The engineer chose D1, D2, D3, D10, D20,
 - **D35. Start renders, checks and stores the whole job.** The variable lists go in an inputs document the runner writes into the worktree and deletes before committing, so the prompt stays a fixed size under `RUN_PROMPT_MAX`. Rendering at start returns `INVALID_SELECTION` before a run exists, and dispatch sends the stored job, so a rendering error can never roll back a claim.
 - **D36. Setup rows change under a row lock.** Scan locks the `repositories` row, since the first scan has no setup row yet. Start and `advanceSetup` lock the setup row with `SELECT ... FOR UPDATE`. `advanceSetup` keeps the lock across its GitHub calls, a few seconds at most, so two callers never open two pull requests.
 - **D37. Routing text comes from this repository's orchestrators.** Each catalog skill's "applies when" text is the row this repository's orchestrator already uses for it, so setup ships routing that has run here. Only `project-stack` and the generated skills, which have no row here, get new text. The routing table in step 1 also sets which orchestrators route each skill, in place of the earlier "Routed by" column.
+- **D38. GitHub onboarding is one path with no hunting.** The engineer asked for an onboarding flow that cannot go wrong. GitHub requires the repository owner to approve an App's access, so that click stays, and everything around it is linked: `pnpm setup:github-app` opens the install page right after creating the App, the add card links to the same page, and the App's setup URL brings the admin back to the Repositories screen. The App asks for read-only contents, since it never pushes. Rejected: a personal access token, which is manual, long-lived and tied to one person, and dropping the App for runner-only GitHub access, which webhooks in later chunks need anyway.
 - **Inputs.** Base commit `a6831bef92d88030be6951b0d1e35ab67a2986b2` on `main`. The exploration context file was written in the planning session and its findings are folded into this plan.
 
 ## Constraints
@@ -895,6 +899,7 @@ All decisions were made on Oct 8, 2026. The engineer chose D1, D2, D3, D10, D20,
 | 4b. First user becomes admin | | ✓ | | | | |
 | 4c. Member gets `FORBIDDEN` | | ✓ | | | | |
 | 4d. `setup:env` output parses | ✓ | | | | | |
+| 4e. Manifest and conversion for onboarding | ✓ | | | | | |
 | 5a. GitHub functions map responses | | ✓ | | | | |
 | 5b. Token scoped to one repository | | ✓ | | | | |
 | 5c. GitHub errors mapped, nothing logged | | ✓ | | | | |
@@ -903,7 +908,7 @@ All decisions were made on Oct 8, 2026. The engineer chose D1, D2, D3, D10, D20,
 | 6b. Constraints and cascade | | ✓ | | | | |
 | 7a. Admin adds a repository | | ✓ | | | | |
 | 7b. Add `NOT_FOUND` and `CONFLICT` | | ✓ | | | | |
-| 7c. Installable list sorted and bounded | | ✓ | | | | |
+| 7c. Installable list sorted, bounded, with install URL | | ✓ | | | | |
 | 7d. Update description and model | | ✓ | | | | |
 | 7e. Remove and `CONFLICT` | | ✓ | | | | |
 | 7f. GitHub failure in list and add | | ✓ | | | | |
@@ -961,6 +966,7 @@ All decisions were made on Oct 8, 2026. The engineer chose D1, D2, D3, D10, D20,
 | 17a. Seed runs and repeats | | ✓ | | | | |
 | 17b. Seeded session cookie | | ✓ | | | | |
 | 18a. Repositories screen states and add | | | ✓ | | | |
+| 18k. Install on GitHub links | | | ✓ | | | |
 | 18b. Member read-only | | | ✓ | | | |
 | 18c. Setup card per status | | | ✓ | | | |
 | 18d. Checklists and start | | | ✓ | | | |
