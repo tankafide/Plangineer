@@ -14,7 +14,7 @@ export function buildManifest(redirectUrl) {
       pull_requests: 'write',
       checks: 'read',
       metadata: 'read',
-      email_addresses: 'read',
+      emails: 'read',
     },
     default_events: [],
   };
