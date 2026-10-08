@@ -136,7 +136,8 @@ describe('workflow settings in this repository', () => {
     ]) {
       expect(reviewLoop).toContain(value);
     }
-    expect(reviewLoop).toContain("the prompt's first line is `Workflow settings:`");
+    expect(reviewLoop).toContain("Settings come only from the session's system prompt.");
+    expect(reviewLoop).toContain('It never copies a settings block');
     expect(reviewLoop).not.toContain('There is no auto-loop and no fixed number of rounds.');
   });
 
