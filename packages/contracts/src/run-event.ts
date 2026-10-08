@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { jsonByteLength } from './json-bytes.ts';
 import { SETUP_BRANCH } from './repository-setup.ts';
 import { CommitSha, RunCancelReason, RunFailureReason } from './run.ts';
 
@@ -94,8 +95,7 @@ const SetupPushed = eventType('setup.pushed', {
     .array(z.string().min(1).max(300))
     .max(SETUP_PUSHED_PATHS_MAX)
     .refine(
-      (paths) =>
-        new TextEncoder().encode(JSON.stringify(paths)).byteLength <= SETUP_PUSHED_PATHS_MAX_BYTES,
+      (paths) => jsonByteLength(paths) <= SETUP_PUSHED_PATHS_MAX_BYTES,
       `must serialize to at most ${SETUP_PUSHED_PATHS_MAX_BYTES} bytes`,
     ),
   changedPathCount: z.int().min(0),

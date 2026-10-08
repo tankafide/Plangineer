@@ -125,17 +125,27 @@ describe('createGithub', () => {
   });
 
   it.each([
-    [404, 'Not Found', {}],
-    [403, 'API rate limit exceeded', { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': '1' }],
-    [500, 'Server Error', {}],
-  ])('turns a %i from GitHub into a GithubError', async (status, message, headers) => {
+    [404, 'Not Found', {}, 1],
+    [403, 'API rate limit exceeded', { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': '1' }, 1],
+    [500, 'Server Error', {}, 3],
+  ])('turns a %i from GitHub into a GithubError', async (status, message, headers, attempts) => {
     fake.repositories.push(fakeRepository());
-    fake.fail(/\/repos\/acme\/app\/commits\//, status, message, headers);
+    const rule = fake.fail(/\/repos\/acme\/app\/commits\//, status, message, { headers });
 
     const error = await github.readTree(REPOSITORY, 'main').catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(GithubError);
     expect(error).toMatchObject({ status, message: expect.stringContaining(message) });
+    expect(rule.hits).toBe(attempts);
+  });
+
+  it('retries a transient 5xx and returns the result', async () => {
+    fake.repositories.push(fakeRepository());
+    fake.fail(/\/repos\/acme\/app\/commits\//, 502, 'Bad Gateway', { times: 1 });
+
+    const tree = await github.readTree(REPOSITORY, 'main');
+
+    expect(tree.commit).toBe('c'.repeat(40));
   });
 
   it('logs no token or key when GitHub fails', async () => {

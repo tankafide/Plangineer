@@ -234,8 +234,8 @@ describe('advanceSetup', () => {
     ]);
 
     await Promise.all([
-      advanceSetup(testDeps(database.db), repositoryId),
-      advanceSetup(testDeps(database.db), repositoryId),
+      advanceSetup(testDeps(database.db), repositoryId, 'run_ended'),
+      advanceSetup(testDeps(database.db), repositoryId, 'run_ended'),
     ]);
 
     expect(fake.pullRequests).toHaveLength(1);
@@ -260,17 +260,25 @@ describe('advanceSetup', () => {
     expect(detail.setup).toMatchObject({ status, failureMessage: message });
   });
 
-  it('refresh returns GITHUB_FAILED and keeps the status when GitHub fails', async () => {
-    const { repositoryId, runId } = await startedSetup();
-    await finishRun(runId, [startedEvent, pushedEvent, succeededEvent]);
-    fake.fail(/\/pulls\/1$/, 500, 'Server Error');
+  it.each([
+    ['pr_open', 'following', /\/pulls\/1$/],
+    ['generating', 'opening', /\/pulls$/],
+  ] as const)(
+    'refresh returns GITHUB_FAILED and keeps a %s setup when GitHub fails %s the pull request',
+    async (status, _action, path) => {
+      const { repositoryId, runId } = await startedSetup();
+      const events = [startedEvent, pushedEvent, succeededEvent];
+      await appendRunnerEvents(testDeps(database.db), runId, events);
+      if (status === 'pr_open') await refresh(repositoryId);
+      fake.fail(path, 403, 'Resource not accessible by integration');
 
-    await expect(refresh(repositoryId)).rejects.toMatchObject({
-      code: 'GITHUB_FAILED',
-      data: { status: 500, message: expect.stringContaining('Server Error') },
-    });
-    expect((await setupRow(repositoryId))?.status).toBe('pr_open');
-  });
+      await expect(refresh(repositoryId)).rejects.toMatchObject({
+        code: 'GITHUB_FAILED',
+        data: { status: 403, message: expect.stringContaining('Resource not accessible') },
+      });
+      expect(await setupRow(repositoryId)).toMatchObject({ status, failureMessage: null });
+    },
+  );
 
   it('fails the setup with GitHub status and message when opening the pull request fails', async () => {
     const { repositoryId, runId } = await startedSetup();

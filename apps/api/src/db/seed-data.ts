@@ -60,7 +60,7 @@ export function seedScan(unmovableContent: string[] = []): RepositoryScan {
     defaultBranch: 'main',
     scannedAt: SEED_AT.toISOString(),
     skills,
-    orchestratorReferencesExist: false,
+    orchestratorReferences: [],
     unmovableContent,
     instructionFiles: ['AGENTS.md', 'web/CLAUDE.md'],
     recommendations: recommendSkills({

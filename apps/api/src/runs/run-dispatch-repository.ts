@@ -1,4 +1,4 @@
-import { type RunJob, type RunStatus, SetupJob } from '@plangineer/contracts';
+import { type RunJob, type RunKind, type RunStatus, SetupJob } from '@plangineer/contracts';
 import { and, asc, count, eq, inArray, lt, sql } from 'drizzle-orm';
 import type { Executor, Transaction } from '../db/client.ts';
 import { repositorySetups, runs } from '../db/schema.ts';
@@ -23,7 +23,7 @@ export interface ClaimableRun {
 
 interface ClaimableRow {
   id: string;
-  kind: 'test' | 'setup';
+  kind: RunKind;
   repositoryOwner: string;
   repositoryName: string;
   ref: string;
@@ -33,13 +33,21 @@ interface ClaimableRow {
 
 /** A test run's job from its row, or the setup job that start rendered and stored. */
 function jobOf(row: ClaimableRow): RunJob {
-  if (row.kind === 'setup') return SetupJob.parse(row.setupJob);
-  return {
-    kind: 'test',
-    repository: { owner: row.repositoryOwner, name: row.repositoryName },
-    ref: row.ref,
-    prompt: row.prompt,
-  };
+  switch (row.kind) {
+    case 'test':
+      return {
+        kind: 'test',
+        repository: { owner: row.repositoryOwner, name: row.repositoryName },
+        ref: row.ref,
+        prompt: row.prompt,
+      };
+    case 'setup':
+      return SetupJob.parse(row.setupJob);
+    default: {
+      const unknownKind: never = row.kind;
+      throw new Error(`Unknown run kind ${String(unknownKind)}`);
+    }
+  }
 }
 
 /**

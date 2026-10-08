@@ -1,24 +1,27 @@
 import {
   DESCRIPTION_MAX,
+  INSTRUCTION_FILES_MAX,
+  ORCHESTRATOR_REFERENCES_MAX,
   type RepositoryScan,
   SCAN_PATH_MAX,
+  SCAN_SKILLS_MAX,
   type ScannedSkill,
   SkillName,
+  SKILLS_ROOT,
+  UNMOVABLE_CONTENT_MAX,
 } from '@plangineer/contracts';
 import { recommendSkills } from '@plangineer/domain';
 import { parse as parseYaml } from 'yaml';
 import type { Tree, TreeEntry } from '../github/github.ts';
 
-const SKILLS_MAX = 200;
-const UNMOVABLE_MAX = 200;
-const INSTRUCTION_FILES_MAX = 50;
 const PACKAGE_JSON_MAX = 50;
 const SKILL_FILE_MAX_BYTES = 256 * 1024;
 const PACKAGE_JSON_MAX_BYTES = 1024 * 1024;
 const REFERENCES_FOLDER = 'orchestrator-references';
 
-const AGENTS_SKILLS = '.agents/skills/';
+const AGENTS_SKILLS = `${SKILLS_ROOT}/`;
 const CLAUDE_SKILLS = '.claude/skills/';
+const REFERENCES_PREFIX = `${AGENTS_SKILLS}${REFERENCES_FOLDER}/`;
 const INSTRUCTION_FILE_NAMES = new Set([
   'AGENTS.md',
   'CLAUDE.md',
@@ -43,7 +46,7 @@ export interface ScanPlan {
   packageJsons: TreeEntry[];
   unmovableContent: string[];
   instructionFiles: string[];
-  orchestratorReferencesExist: boolean;
+  orchestratorReferences: string[];
 }
 
 const inNodeModules = (path: string) => path.split('/').includes('node_modules');
@@ -110,7 +113,7 @@ export function planScan(tree: Tree): ScanPlan | undefined {
   if (tree.truncated) return undefined;
   const blobs = tree.entries.filter((entry) => entry.type === 'blob');
   const skills = findSkills(blobs);
-  if (skills.length > SKILLS_MAX) return undefined;
+  if (skills.length > SCAN_SKILLS_MAX) return undefined;
   return {
     commit: tree.commit,
     paths: tree.entries.map((entry) => entry.path),
@@ -121,15 +124,18 @@ export function planScan(tree: Tree): ScanPlan | undefined {
       .slice(0, PACKAGE_JSON_MAX),
     // A path over the cap is shown cut, since it must still block the setup.
     unmovableContent: findUnmovable(blobs, skills)
-      .slice(0, UNMOVABLE_MAX)
+      .slice(0, UNMOVABLE_CONTENT_MAX)
       .map((path) => path.slice(0, SCAN_PATH_MAX)),
     instructionFiles: blobs
       .map((entry) => entry.path)
       .filter(isInstructionFile)
       .slice(0, INSTRUCTION_FILES_MAX),
-    orchestratorReferencesExist: blobs.some((entry) =>
-      entry.path.startsWith(`${AGENTS_SKILLS}${REFERENCES_FOLDER}/`),
-    ),
+    orchestratorReferences: blobs
+      .map((entry) => entry.path)
+      .filter((file) => file.startsWith(REFERENCES_PREFIX))
+      .map((file) => file.slice(REFERENCES_PREFIX.length))
+      .filter((name) => name.length <= SCAN_PATH_MAX)
+      .slice(0, ORCHESTRATOR_REFERENCES_MAX),
   };
 }
 
@@ -207,7 +213,7 @@ export function buildScan(
     defaultBranch: context.defaultBranch,
     scannedAt: context.scannedAt,
     skills,
-    orchestratorReferencesExist: plan.orchestratorReferencesExist,
+    orchestratorReferences: plan.orchestratorReferences,
     unmovableContent: plan.unmovableContent,
     instructionFiles: plan.instructionFiles,
     recommendations: recommendSkills({

@@ -63,12 +63,13 @@ type Access = 'read' | 'write';
 const BLOB_CONCURRENCY = 8;
 
 /**
- * Every call is an admin's own action, and some run under a row lock, so a failure surfaces at
- * once with GitHub's status instead of retrying or waiting out a rate limit.
+ * Octokit's own retry and throttling, with a small budget: some calls run under a setup row lock,
+ * which D36 bounds to a few seconds. A transient 5xx is retried twice, about 2.5 s in all, and a
+ * rate limit fails at once with GitHub's status instead of waiting it out.
  */
 const GithubOctokit = Octokit.defaults({
-  retry: { enabled: false },
-  throttle: { enabled: false },
+  retry: { retries: 2, retryAfterBaseValue: 500 },
+  throttle: { onRateLimit: () => false, onSecondaryRateLimit: () => false },
 });
 
 function toGithubError(error: unknown): GithubError {

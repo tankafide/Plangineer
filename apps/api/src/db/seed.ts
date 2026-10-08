@@ -5,6 +5,7 @@ import {
   RunEvent,
   type RunEventBody,
   type RunStatus,
+  type SetupStatus,
   SetupJob,
   SetupSelection,
   WorkflowSettings,
@@ -92,7 +93,8 @@ function runEventBodies(status: RunStatus): RunEventBody[] {
   ];
 }
 
-const RUN_STATUS: Record<string, RunStatus> = {
+/** The run each started setup status has. */
+const RUN_STATUS: Record<Exclude<SetupStatus, 'scanned'>, RunStatus> = {
   generating: 'queued',
   pr_open: 'succeeded',
   complete: 'succeeded',
@@ -160,7 +162,7 @@ async function seedSetup(db: Database, repository: SeedRepository): Promise<void
     return;
   }
   const job = seedJob(repository);
-  const runId = await seedRun(db, repository, RUN_STATUS[repository.setup] ?? 'queued', job);
+  const runId = await seedRun(db, repository, RUN_STATUS[repository.setup], job);
   const opened = repository.setup === 'pr_open' || repository.setup === 'complete';
   await db
     .insert(repositorySetups)
@@ -183,6 +185,8 @@ async function seedSetup(db: Database, repository: SeedRepository): Promise<void
 /**
  * Inserts the dev seed: two users, a runner that never connects, and one repository per setup
  * state. Ids and times are fixed, and a row that exists is skipped, so seeding twice adds nothing.
+ * Rows go in directly, not through the repository modules, because those take no fixed ids or
+ * times; each JSONB value is still parsed with its contract schema first.
  */
 export async function seedDatabase(db: Database): Promise<void> {
   await db

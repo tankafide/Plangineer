@@ -6,6 +6,7 @@ import {
   SkillName,
 } from './repository-setup.ts';
 import { CommitSha, GitRef, Repository, RUN_PROMPT_MAX } from './run.ts';
+import { jsonByteLength } from './json-bytes.ts';
 import { RunnerRunEventBody } from './run-event.ts';
 import { CliStatus, RunnerPlatform } from './runner.ts';
 
@@ -94,11 +95,6 @@ export const SetupFile = z.strictObject({
   content: z.string().max(SETUP_FILE_CONTENT_MAX),
 });
 export type SetupFile = z.infer<typeof SetupFile>;
-
-/** The UTF-8 byte length of a value serialized as JSON. */
-export function jsonByteLength(value: unknown): number {
-  return new TextEncoder().encode(JSON.stringify(value)).byteLength;
-}
 
 /** Everything a setup run needs, rendered and checked by the API when the setup starts. */
 export const SetupJob = z

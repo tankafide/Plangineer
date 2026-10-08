@@ -1,3 +1,4 @@
+import type { z } from 'zod';
 import {
   type InvalidSelectionData,
   type RepositoryDetail,
@@ -99,7 +100,20 @@ export async function scanRepository(
 
 const invalidSelection = (data: InvalidSelectionData) => err('INVALID_SELECTION', data);
 
-/** The setup job for a selection, rendered and checked against its bounds. */
+/**
+ * Whether a job failed only on a size bound: a string, an array or the whole job's byte cap,
+ * which is the job's one refinement at its root. Any other failure is a rendering bug.
+ */
+function overBoundsOnly(error: z.ZodError): boolean {
+  return error.issues.every(
+    (issue) => issue.code === 'too_big' || (issue.code === 'custom' && issue.path.length === 0),
+  );
+}
+
+/**
+ * The setup job for a selection, rendered and checked, or undefined when it is over a bound.
+ * A job that breaks any other rule throws, since setup rendered it wrong.
+ */
 function buildSetupJob(
   setup: LockedSetup,
   ref: RepositoryRef,
@@ -120,13 +134,15 @@ function buildSetupJob(
     templateSkills: rendered.templateSkills,
     generateSkills: rendered.generateSkills,
   });
-  return job.success ? job.data : undefined;
+  if (job.success) return job.data;
+  if (overBoundsOnly(job.error)) return undefined;
+  throw job.error;
 }
 
 /**
  * Renders and checks the whole setup job, then queues it as a setup run on the admin's runner,
- * in one transaction holding the runner's and the setup's locks, so no run exists for a job
- * that could not be built.
+ * in one transaction holding the runner's, the repository's and the setup's locks, so no run
+ * exists for a job that could not be built and no scan or remove slips in between.
  */
 export async function startSetup(
   deps: ServiceDeps,
@@ -137,8 +153,9 @@ export async function startSetup(
   const started = await db.transaction(async (tx) => {
     const runner = await lockRunnerForUser(tx, userId, runnerId);
     if (runner === undefined || runner.status === 'revoked') return fail('NOT_FOUND');
-    const setup = await lockSetup(tx, repositoryId);
-    const ref = await findRepositoryRef(tx, repositoryId);
+    // Scan and remove lock the repository row before they read the setup, so start does too.
+    const ref = await lockRepository(tx, repositoryId);
+    const setup = ref === undefined ? undefined : await lockSetup(tx, repositoryId);
     if (setup === undefined || ref === undefined) return fail('NOT_FOUND');
     if (!nextSetupStatus(setup.status, 'started').ok) return fail('CONFLICT');
     const check = validateSetupSelection(setup.scan, selection);
@@ -171,7 +188,7 @@ export async function refreshSetup(
   repositoryId: string,
 ): Promise<Result<RepositoryDetail, 'NOT_FOUND' | 'GITHUB_FAILED'>> {
   if ((await findRepositoryRef(deps.db, repositoryId)) === undefined) return fail('NOT_FOUND');
-  const advanced = await advanceSetup(deps, repositoryId);
+  const advanced = await advanceSetup(deps, repositoryId, 'refresh');
   if (!advanced.ok) return advanced;
   return ok(await readSetupDetail(deps, repositoryId, userId));
 }

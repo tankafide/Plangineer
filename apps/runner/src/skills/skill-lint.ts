@@ -1,13 +1,10 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
+import { DESCRIPTION_MAX, SkillName, SKILLS_ROOT } from '@plangineer/contracts';
 import { parse as parseYaml } from 'yaml';
 import type { CommandResult } from '../command-result.ts';
 
-const SKILLS_DIR = '.agents/skills';
 const REFERENCES_FOLDER = 'orchestrator-references';
-const NAME_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-const NAME_MAX = 64;
-const DESCRIPTION_MAX = 1_024;
 const LINES_MAX = 500;
 const FRONTMATTER_FIELDS = new Set(['name', 'description', 'disable-model-invocation']);
 const FRONTMATTER_PATTERN = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/;
@@ -62,8 +59,8 @@ function checkFrontmatter(name: string, frontmatter: Record<string, unknown>): s
   }
   const { description } = frontmatter;
   if (frontmatter['name'] !== name) problems.push('frontmatter name must equal the folder name');
-  if (name.length > NAME_MAX || !NAME_PATTERN.test(name)) {
-    problems.push(`name must be at most ${NAME_MAX} lowercase letters, digits and hyphens`);
+  if (!SkillName.safeParse(name).success) {
+    problems.push('name must be at most 64 lowercase letters, digits and single hyphens');
   }
   if (/claude|anthropic/.test(name)) problems.push('name must not contain claude or anthropic');
   if (typeof description !== 'string' || description.trim() === '') {
@@ -145,7 +142,7 @@ export async function lintSkill(
 
 /** `skills lint`: lints every skill under .agents/skills/, with links resolving in the repository. */
 export async function lintSkills(repoRoot: string): Promise<CommandResult> {
-  const skillsRoot = path.join(repoRoot, SKILLS_DIR);
+  const skillsRoot = path.join(repoRoot, SKILLS_ROOT);
   const entries = await readdir(skillsRoot, { withFileTypes: true });
   const names = entries
     .filter((entry) => entry.isDirectory() && entry.name !== REFERENCES_FOLDER)
@@ -154,7 +151,7 @@ export async function lintSkills(repoRoot: string): Promise<CommandResult> {
   const problems: string[] = [];
   for (const name of names) {
     for (const problem of await lintSkill(skillsRoot, name, repoRoot)) {
-      problems.push(`${SKILLS_DIR}/${name}: ${problem}`);
+      problems.push(`${SKILLS_ROOT}/${name}: ${problem}`);
     }
   }
   return problems.length === 0

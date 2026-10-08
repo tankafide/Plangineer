@@ -31,7 +31,7 @@ export function testScan(overrides: Partial<RepositoryScan> = {}): RepositorySca
     defaultBranch: 'main',
     scannedAt: '2026-10-08T12:00:00.000Z',
     skills: [],
-    orchestratorReferencesExist: false,
+    orchestratorReferences: [],
     unmovableContent: [],
     instructionFiles: [],
     recommendations: [],

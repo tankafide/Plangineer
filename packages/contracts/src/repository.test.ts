@@ -116,7 +116,7 @@ describe('RepositoryDetail', () => {
         defaultBranch: 'main',
         scannedAt: AT,
         skills: [],
-        orchestratorReferencesExist: false,
+        orchestratorReferences: [],
         unmovableContent: [],
         instructionFiles: [],
         recommendations: [],

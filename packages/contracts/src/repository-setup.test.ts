@@ -15,7 +15,7 @@ function scan(overrides: Record<string, unknown> = {}) {
     defaultBranch: 'main',
     scannedAt: AT,
     skills: [{ name: 'testing', description: 'How we test.', location: 'both' }],
-    orchestratorReferencesExist: false,
+    orchestratorReferences: [],
     unmovableContent: [],
     instructionFiles: ['AGENTS.md'],
     recommendations: [

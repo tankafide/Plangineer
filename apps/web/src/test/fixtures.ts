@@ -83,7 +83,7 @@ export function scanFixture(overrides: Partial<RepositoryScan> = {}): Repository
       { name: 'deploy', description: 'Ships the app.', location: 'agents' },
       { name: 'legacy-notes', description: null, location: 'claude' },
     ],
-    orchestratorReferencesExist: false,
+    orchestratorReferences: [],
     unmovableContent: [],
     instructionFiles: ['AGENTS.md', 'CLAUDE.md'],
     recommendations: [

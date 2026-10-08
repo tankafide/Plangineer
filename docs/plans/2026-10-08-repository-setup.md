@@ -203,7 +203,7 @@ New shared values:
 | `defaultBranch` | `GitRef` |
 | `scannedAt` | `z.iso.datetime()` |
 | `skills` | Up to 200 of `{ name: SkillName, description: string (max 1,024) or null, location: 'agents' or 'claude' or 'both' }` |
-| `orchestratorReferencesExist` | `boolean`: `.agents/skills/orchestrator-references/` already holds a file |
+| `orchestratorReferences` | Up to 50 names of the files already under `.agents/skills/orchestrator-references/`, each at most 300 characters |
 | `unmovableContent` | Up to 200 paths under `.claude/skills/` that `skills sync` would delete because setup moves no source for them |
 | `instructionFiles` | Up to 50 paths, each at most 300 characters |
 | `recommendations` | Up to 32 of `{ name: SkillName, kind: CatalogKind, recommended: boolean, required: boolean, reason: string (max 200) }` |
@@ -234,7 +234,7 @@ Run changes in `run.ts`:
 - `RunFailureReason` gains `setup_invalid_output` and `setup_publish_failed`.
 - `PermissionMode` is deleted. The job kind sets what the agent may do (D6).
 
-Run event changes in `run-event.ts`: a runner-sent type `setup.pushed` with `{ branch: z.literal(SETUP_BRANCH), commit: CommitSha, changedPaths: string[] (each max 300, at most 1,000), changedPathCount: z.int().min(0) }`. A push that changes more than 1,000 paths sends the first 1,000 in path order and the full count. It joins `RunEventType`, `RunEventBody`, `RunnerRunEventBody` and `RunEvent`.
+Run event changes in `run-event.ts`: a runner-sent type `setup.pushed` with `{ branch: z.literal(SETUP_BRANCH), commit: CommitSha, changedPaths: string[] (each max 300, at most 1,000, and at most 320 KiB as JSON), changedPathCount: z.int().min(0) }`. A push that changes more paths than fit sends the first ones in path order and the full count. The byte cap keeps any valid event, fully escaped, inside one events message. It joins `RunEventType`, `RunEventBody`, `RunnerRunEventBody` and `RunEvent`.
 
 Every consumer that switches over these shapes changes in the step that owns it: `nextRunStatus` in step 3, `dispatch.ts` and `dispatch.test.ts` in step 10, the runner's `test-runner.ts` in step 14, and `run-event-row.tsx` and `run-reasons.ts` in step 18.
 
@@ -300,7 +300,7 @@ The contract router gains `repository` and `repositorySetup`.
 - `pnpm setup:env` also writes `GITHUB_APP_ID=1`, `GITHUB_APP_SLUG=plangineer-dev` and a throwaway 2048-bit RSA key in PKCS#1 PEM, so the API starts before `pnpm setup:github-app` writes the real App. Until then every GitHub call fails with `GITHUB_FAILED`. Both CI jobs run `pnpm setup:env` in place of copying `.env.example`.
 - **GitHub onboarding (D38).** The manifest asks for `contents: 'read'` in place of `write`, since the runner pushes with the engineer's credentials (D5), and sets `setup_url` to `http://localhost:5173/repositories` with `setup_on_update: true`, so GitHub sends the admin back to the Repositories screen after an install or a change of repositories. The conversion response's `slug` is read and written to `.env` as `GITHUB_APP_SLUG`. Once the credentials are written, `pnpm setup:github-app` opens `https://github.com/apps/<slug>/installations/new`, so creating the App flows straight into picking its repositories. The README's step names both.
 - `databaseHooks.user.create.before` sets `role: 'admin'` when no user with role `admin` exists outside `SEED_USER_IDS`, and leaves `member` otherwise (D10). `apps/api/src/db/seed-ids.ts` holds `SEED_USER_IDS`, the two fixed user ids that step 17 seeds.
-- `requireRole('admin')` is oRPC middleware in `router.ts` that raises `FORBIDDEN` for a member. Every admin procedure in step 2's table uses it at its call site.
+- `admin` in `router.ts` is `authed` with middleware that raises the contract's `FORBIDDEN` for a member. Every admin procedure in step 2's table is built from it, so the rule shows at its call site.
 - `testEnv` gains a test key generated once per test process, and `storeUser` takes a `role` override.
 
 **Done when:**
@@ -421,7 +421,7 @@ Follows the runner feature's shape: a service returning `Result`, a repository m
 `repositorySetup.scan` raises `CONFLICT` while the setup is `generating`. Otherwise it reads the repository's current owner, name and default branch, then the tree at the default branch's head commit.
 
 1. A tree with `truncated: true` raises `REPOSITORY_TOO_LARGE`.
-2. **Skills.** Every `.agents/skills/<name>/SKILL.md` and `.claude/skills/<name>/SKILL.md` whose folder is a valid `SkillName`, with location `agents`, `claude` or `both`. More than 200 skills raises `REPOSITORY_TOO_LARGE`. The frontmatter is read from the blob with the `yaml` package 2.9.1, added to `apps/api`, only when the tree entry is at most 256 KiB. A larger `SKILL.md`, or a `description` that fails to parse, is stored with a null description. The folder `orchestrator-references` is never a skill, and any file under it sets `orchestratorReferencesExist`.
+2. **Skills.** Every `.agents/skills/<name>/SKILL.md` and `.claude/skills/<name>/SKILL.md` whose folder is a valid `SkillName`, with location `agents`, `claude` or `both`. More than 200 skills raises `REPOSITORY_TOO_LARGE`. The frontmatter is read from the blob with the `yaml` package 2.9.1, added to `apps/api`, only when the tree entry is at most 256 KiB. A larger `SKILL.md`, or a `description` that fails to parse, is stored with a null description. The folder `orchestrator-references` is never a skill, and the names of the files under it fill `orchestratorReferences`.
 3. **Unmovable content.** Every file under `.claude/skills/` whose path, with `.claude/` swapped for `.agents/`, will not exist once the `claude` skills move: loose files, folders that are not a valid `SkillName` or hold no `SKILL.md`, and files that a `both` skill's `.agents/skills/` copy lacks. Up to 200 paths go in `unmovableContent`, and start refuses the setup until they are gone (D9).
 4. **Instruction files.** Paths named `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.cursorrules`, `.windsurfrules` or `.clinerules` at any depth, plus `.github/copilot-instructions.md` and any file under `.cursor/rules/`, up to 50, outside `node_modules`. A path over 300 characters is skipped.
 5. **Signals.** Every tree path, and the dependency names in `dependencies`, `devDependencies` and `peerDependencies` of up to 50 `package.json` files outside `node_modules`, each at most 1 MiB. A `package.json` that is not valid JSON adds no names (D14).
@@ -510,7 +510,7 @@ Each `agents/openai.yaml` template keeps this repository's shape, with a `short_
 **Rendering.** `renderSetupFiles(scan, selection)` returns `{ files, templateSkills, generateSkills }` for the `SetupJob`:
 
 - Each chosen orchestrator at `.agents/skills/<orchestrator>/SKILL.md`, with `{{routing}}` replaced by one row per routed skill: `` | `.agents/skills/<name>/SKILL.md` | <applies when> | ``. A catalog skill gets one row in each orchestrator its `routing` names, with that entry's `appliesWhen`. A reused existing skill is routed by all four, with its description cut to 200 characters, newlines made spaces and `|` written as `\|`, or "See the skill" when the description is null. Rows sort by name.
-- The four reference files, whenever anything is chosen and `orchestratorReferencesExist` is false, because the fixed and template skills link to them.
+- Each of the four reference files the scan did not find, whenever anything is chosen, because the fixed and template skills link to them. A repository holding only some of them gets the rest.
 - Each chosen `fixed` and `template` skill's `SKILL.md` and `agents/openai.yaml`, with the API placeholders filled and the slot lines left for the agent.
 - `templateSkills` lists the chosen `template` skills, and `generateSkills` the chosen `generated` ones.
 - An API placeholder left in any output throws.
@@ -533,7 +533,7 @@ Each `agents/openai.yaml` template keeps this repository's shape, with a `short_
 
 - 9a. Rendering a selection with two orchestrators and one reused skill writes those two orchestrators and the four references, each routing table holding exactly its skills in name order.
 - 9b. No rendered file, `agents/openai.yaml` files included, holds `{{`, `pnpm`, `stack-decisions`, `apps/` or `Plangineer`.
-- 9c. The references are left out when `orchestratorReferencesExist` is true, and written for a selection of skills with no orchestrator.
+- 9c. Only the references the scan did not find are written, and they are written for a selection of skills with no orchestrator.
 - 9d. The prompt stays under `RUN_PROMPT_MAX`, the inputs for 21 catalog skills, 200 reused skills with 1,024-character descriptions and 50 instruction files of 300 characters stay under `SETUP_INPUTS_MAX`, and inline snapshots of a small prompt and inputs show each part.
 - 9e. Each fixed skill, orchestrator and reference template equals this repository's file of the same name after the replacement table.
 - 9f. Each template skill holds exactly the `fact` and `rule` slots in its table row, every slot line matches `SLOT_LINE_PATTERN`, and every relative link in the rendering of the minimal selection (the required skills only) and of the full selection resolves inside the rendered set.
@@ -549,9 +549,9 @@ Each `agents/openai.yaml` template keeps this repository's shape, with a `short_
 `repositorySetup.start` renders and checks everything before a run exists (D35):
 
 1. Opens one transaction and locks the runner with `lockRunnerForUser`, as `createRun` does, raising `NOT_FOUND` unless it belongs to the caller and is not revoked. A concurrent revoke then either commits first or waits.
-2. In the same transaction, locks the setup row with `SELECT ... FOR UPDATE` (D36), raising `NOT_FOUND` when the repository or its setup is missing, and `CONFLICT` unless `nextSetupStatus(status, 'started')` is ok.
+2. In the same transaction, locks the repository row and then the setup row with `SELECT ... FOR UPDATE`, the order scan and remove use (D36), raising `NOT_FOUND` when the repository or its setup is missing, and `CONFLICT` unless `nextSetupStatus(status, 'started')` is ok.
 3. Raises `INVALID_SELECTION` with the reason and names from `validateSetupSelection`.
-4. Builds the `SetupJob` from `renderSetupFiles`, `renderSetupInputs` and `renderSetupPrompt`, with `moveSkills` set to the scan's skills with location `claude`, and parses it with the `SetupJob` schema. A job over a bound raises `INVALID_SELECTION` with reason `too_large`.
+4. Builds the `SetupJob` from `renderSetupFiles`, `renderSetupInputs` and `renderSetupPrompt`, with `moveSkills` set to the scan's skills with location `claude`, and parses it with the `SetupJob` schema. A job over a bound raises `INVALID_SELECTION` with reason `too_large`. A job that breaks any other rule is a rendering bug and throws.
 5. In the same transaction, inserts a `runs` row with `kind: 'setup'`, the repository's owner and name, `ref` set to the scan's commit and the job's `prompt`, appends `run.queued`, and sets the setup's `selection`, `job`, `run_id` and status `generating`. After the commit it wakes the runner as `run.create` does.
 
 `run.create` sets `kind: 'test'`. `lockClaimableRuns` stays a query and locks only `runs`, with `.for('update', { of: runs, skipLocked: true })`, because Postgres refuses `FOR UPDATE` on the nullable side of an outer join. It returns each claimed row with its `kind`, and a setup run's stored `job` through a left join on `repository_setups.run_id`. `claimRuns` in `dispatch.ts` builds the `RunJob`: a `TestJob` from the row's fields, or the stored `SetupJob` as it is. `dispatch.test.ts` moves from `permissionMode` to the job kinds.
@@ -581,7 +581,7 @@ Each `agents/openai.yaml` template keeps this repository's shape, with a `short_
 | `pr_open` | Pull request closed unmerged | None | `failed`: "The setup pull request was closed without merging." |
 | `pr_open` | Pull request open | None | unchanged |
 
-A GitHub failure while opening the pull request moves the setup to `failed` with the GitHub status and message. In `refresh`, the same failure returns `GITHUB_FAILED` and leaves the status unchanged. The event append rejects a `setup.pushed` event on a test run as a protocol error.
+When a run ends, a GitHub failure while opening the pull request moves the setup to `failed` with the GitHub status and message. In `refresh`, the same failure returns `GITHUB_FAILED` and leaves the status unchanged, whether the setup is `generating` or `pr_open`, so the admin can check again. The event append rejects a `setup.pushed` event on a test run as a protocol error.
 
 `renderSetupPullRequestBody(setup, pushed)` writes the title "Set up Plangineer skills" and a body with these sections: what the pull request adds and why, in two sentences; tables of the skills added, reused and moved, and the orchestrators written; the files outside `.agents/skills/` it changes; how to review generated skills; and **Authoring notes**, the setup run's final message with each skill's sources and review findings, cut to 10,000 characters and placed in a fenced code block whose fence is longer than any backtick run in it, so GitHub renders no link, image or mention from it. The body stays under 65,536 characters.
 
@@ -736,7 +736,7 @@ Hooks follow `runners.ts`: `useRepositoryList`, `useInstallableRepositoryList`, 
 
 **Files:** `apps/api/src/db/seed.ts`, `apps/api/src/db/seed.test.ts`, `apps/api/src/db/seed-cli.ts`, `apps/api/src/db/reset.ts`, `apps/api/package.json`, `scripts/dev.mjs`, `apps/api/src/test/e2e-session-cli.ts`
 
-Adds the dev seed that `persistence` describes, the first in this repository, so the screens can be checked against real data. `seedDatabase(db)` inserts through the app's repositories with fixed ids and timestamps and skips rows that already exist. `apps/api/src/db/reset.ts`, the `pnpm db:reset` entry, calls it after `resetDatabase`. A new `db:seed` script in `apps/api/package.json` runs `seed-cli.ts`, and `scripts/dev.mjs` runs it after `db:migrate`. `resetDatabase` itself never seeds, because it also builds the integration test template. Every user id it inserts is in `SEED_USER_IDS` from step 4. It holds:
+Adds the dev seed that `persistence` describes, the first in this repository, so the screens can be checked against real data. `seedDatabase(db)` inserts rows with fixed ids and timestamps, each JSONB value parsed with its contract schema, and skips rows that already exist. It inserts directly, because the repository modules take no fixed ids or timestamps. `apps/api/src/db/reset.ts`, the `pnpm db:reset` entry, calls it after `resetDatabase`. A new `db:seed` script in `apps/api/package.json` runs `seed-cli.ts`, and `scripts/dev.mjs` runs it after `db:migrate`. `resetDatabase` itself never seeds, because it also builds the integration test template. Every user id it inserts is in `SEED_USER_IDS` from step 4. It holds:
 
 | Rows | Content |
 | --- | --- |
@@ -864,9 +864,10 @@ All decisions were made on Oct 8, 2026. The engineer chose D1, D2, D3, D10, D20,
 - **D33. The installable list is bounded, not paged.** GitHub lists repositories per installation, so any page walks every installation. A team's deployment reaches tens to a few hundred repositories, so the list returns up to 1,000 sorted by owner and name, with `truncated` set past that, and `add` walks the same list. This list is the one exception to `api-contract-design`'s cursor rule. Rejected: an integer cursor, which still walks every installation per page.
 - **D34. Only the prompt's first two lines carry workflow settings.** Repository text, plans and findings reach prompts as data from chunk 4 on, so a settings block anywhere else could switch a run to `fix_all`. The app writes the block first, and the orchestrators ignore any other.
 - **D35. Start renders, checks and stores the whole job.** The variable lists go in an inputs document the runner writes into the worktree and deletes before committing, so the prompt stays a fixed size under `RUN_PROMPT_MAX`. Rendering at start returns `INVALID_SELECTION` before a run exists, and dispatch sends the stored job, so a rendering error can never roll back a claim.
-- **D36. Setup rows change under a row lock.** Scan locks the `repositories` row, since the first scan has no setup row yet. Start and `advanceSetup` lock the setup row with `SELECT ... FOR UPDATE`. `advanceSetup` keeps the lock across its GitHub calls, a few seconds at most, so two callers never open two pull requests.
+- **D36. Setup rows change under a row lock.** Scan and remove lock the `repositories` row, since the first scan has no setup row yet. Start locks the repository row and then the setup row, in the same order, and `advanceSetup` locks the setup row, with `SELECT ... FOR UPDATE`. `advanceSetup` keeps the lock across its GitHub calls, a few seconds at most, so two callers never open two pull requests.
 - **D37. Routing text comes from this repository's orchestrators.** Each catalog skill's "applies when" text is the row this repository's orchestrator already uses for it, so setup ships routing that has run here. Only `project-stack` and the generated skills, which have no row here, get new text. The routing table in step 1 also sets which orchestrators route each skill, in place of the earlier "Routed by" column.
 - **D38. GitHub onboarding is one path with no hunting.** The engineer asked for an onboarding flow that cannot go wrong. GitHub requires the repository owner to approve an App's access, so that click stays, and everything around it is linked: `pnpm setup:github-app` opens the install page right after creating the App, the add card links to the same page, and the App's setup URL brings the admin back to the Repositories screen. The App asks for read-only contents, since it never pushes. Rejected: a personal access token, which is manual, long-lived and tied to one person, and dropping the App for runner-only GitHub access, which webhooks in later chunks need anyway.
+- **D39. GitHub calls retry briefly.** The adapter keeps Octokit's retry and throttling with a small budget: two retries of a 5xx, about 2.5 s in all, and a rate limit fails at once with GitHub's status. Every call is an admin's action, and `advanceSetup` holds a row lock across its calls (D36), so a long wait is worse than a clear failure.
 - **Inputs.** Base commit `a6831bef92d88030be6951b0d1e35ab67a2986b2` on `main`. The exploration context file was written in the planning session and its findings are folded into this plan.
 
 ## Constraints

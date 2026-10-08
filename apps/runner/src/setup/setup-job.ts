@@ -4,6 +4,7 @@ import {
   type RunnerRunEventBody,
   SETUP_BRANCH,
   type SetupJob,
+  SKILLS_ROOT,
 } from '@plangineer/contracts';
 import { lintSkill } from '../skills/skill-lint.ts';
 import { GitError } from '../worktrees/git.ts';
@@ -12,9 +13,9 @@ import {
   checkAgentWork,
   lintedSkills,
   moveSkills,
+  refuseLinkedPaths,
   SetupOutputError,
   type SkillSnapshot,
-  SKILLS_DIR,
   snapshotSkills,
   writeSetupFiles,
 } from './setup-tree.ts';
@@ -57,6 +58,7 @@ async function step<T>(work: () => Promise<T>): Promise<SetupStep<T>> {
  */
 export function prepareSetup(worktree: string, job: SetupJob): Promise<SetupStep<SkillSnapshot>> {
   return step(async () => {
+    await refuseLinkedPaths(worktree);
     await moveSkills(worktree, job.moveSkills);
     await writeSetupFiles(worktree, job);
     return snapshotSkills(worktree, job);
@@ -64,7 +66,7 @@ export function prepareSetup(worktree: string, job: SetupJob): Promise<SetupStep
 }
 
 async function lintProblems(worktree: string, job: SetupJob): Promise<string[]> {
-  const skillsRoot = path.join(worktree, SKILLS_DIR);
+  const skillsRoot = path.join(worktree, SKILLS_ROOT);
   const problems: string[] = [];
   for (const name of lintedSkills(job)) {
     for (const problem of await lintSkill(skillsRoot, name, skillsRoot)) {
@@ -90,6 +92,7 @@ export async function finishSetup(
       ...(await lintProblems(worktree, job)),
     ];
     if (problems.length > 0) throw new SetupOutputError(problems.join('\n'));
+    await refuseLinkedPaths(worktree);
     await finishRepositoryFiles(worktree, { defaultBranch: job.defaultBranch, runnerVersion });
     await guardChangedPaths(worktree);
   });

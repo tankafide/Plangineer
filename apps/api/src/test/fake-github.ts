@@ -16,14 +16,23 @@ export function startFakeGithub() {
   server.listen({ onUnhandledFrame: 'error' });
   return {
     ...state,
-    /** Answers every request whose path matches with this status and message. */
+    /** Answers matching requests with this status and message, `times` times or every time. */
     fail(
       pathPattern: RegExp,
       status: number,
       message: string,
-      headers: Record<string, string> = {},
+      options: { headers?: Record<string, string>; times?: number } = {},
     ) {
-      state.failures.push({ pathPattern, status, message, headers });
+      const rule = {
+        pathPattern,
+        status,
+        message,
+        headers: options.headers ?? {},
+        remaining: options.times ?? Number.POSITIVE_INFINITY,
+        hits: 0,
+      };
+      state.failures.push(rule);
+      return rule;
     },
     /** Clears the test's state. Issued tokens stay valid, since the App caches them. */
     reset() {

@@ -39,8 +39,11 @@ export const SkillFilePath = z
   .regex(SKILL_FILE_PATH, 'must be a file under .agents/skills/')
   .refine((path) => !path.split('/').includes('..'), 'must not contain a .. segment');
 
-const SCAN_SKILLS_MAX = 200;
-const INSTRUCTION_FILES_MAX = 50;
+/** The scan bounds, which the API scan applies and the schema checks. */
+export const SCAN_SKILLS_MAX = 200;
+export const INSTRUCTION_FILES_MAX = 50;
+export const ORCHESTRATOR_REFERENCES_MAX = 50;
+export const UNMOVABLE_CONTENT_MAX = 200;
 const RECOMMENDATIONS_MAX = 32;
 export const DESCRIPTION_MAX = 1_024;
 export const SCAN_PATH_MAX = 300;
@@ -71,8 +74,9 @@ export const RepositoryScan = z.object({
   defaultBranch: GitRef,
   scannedAt: z.iso.datetime(),
   skills: z.array(ScannedSkill).max(SCAN_SKILLS_MAX),
-  orchestratorReferencesExist: z.boolean(),
-  unmovableContent: z.array(ScanPath).max(SCAN_SKILLS_MAX),
+  /** The files already under .agents/skills/orchestrator-references/, by name. */
+  orchestratorReferences: z.array(ScanPath).max(ORCHESTRATOR_REFERENCES_MAX),
+  unmovableContent: z.array(ScanPath).max(UNMOVABLE_CONTENT_MAX),
   instructionFiles: z.array(ScanPath).max(INSTRUCTION_FILES_MAX),
   recommendations: z.array(Recommendation).max(RECOMMENDATIONS_MAX),
 });

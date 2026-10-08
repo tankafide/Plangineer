@@ -1,4 +1,4 @@
-export { isApiError } from './api-error.ts';
+export { invalidSelectionData, isApiError } from './api-error.ts';
 export { ApiProvider } from './api-provider.tsx';
 export { useMe } from './me.ts';
 export {

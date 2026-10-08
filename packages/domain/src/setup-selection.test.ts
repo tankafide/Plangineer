@@ -14,7 +14,7 @@ function scan(overrides: Partial<RepositoryScan> = {}): RepositoryScan {
       { name: 'legacy-rules', description: null, location: 'claude' },
       { name: 'plan-orchestrator', description: null, location: 'agents' },
     ],
-    orchestratorReferencesExist: false,
+    orchestratorReferences: [],
     unmovableContent: [],
     instructionFiles: [],
     recommendations: [],

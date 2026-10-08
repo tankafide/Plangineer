@@ -132,14 +132,14 @@ describe('renderSetupFiles', () => {
     );
   });
 
-  it('leaves the references out when the repository has them', () => {
+  it('writes only the references the repository lacks', () => {
     const { files } = renderSetupFiles(
-      testScan({ orchestratorReferencesExist: true }),
+      testScan({ orchestratorReferences: ['review-loop.md', 'notes.md'] }),
       selection({ orchestrators: ['plan-orchestrator'] }),
     );
 
-    expect(paths(files).some((filePath) => filePath.includes('orchestrator-references'))).toBe(
-      false,
+    expect(paths(files).filter((filePath) => filePath.includes('orchestrator-references'))).toEqual(
+      REFERENCES.filter((filePath) => !filePath.endsWith('/review-loop.md')),
     );
   });
 

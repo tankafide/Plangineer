@@ -38,10 +38,13 @@ export {
 export {
   CatalogKind,
   DESCRIPTION_MAX,
+  INSTRUCTION_FILES_MAX,
   Orchestrator,
+  ORCHESTRATOR_REFERENCES_MAX,
   Recommendation,
   RepositoryScan,
   SCAN_PATH_MAX,
+  SCAN_SKILLS_MAX,
   ScannedSkill,
   SelectionError,
   SETUP_BRANCH,
@@ -54,6 +57,7 @@ export {
   SkillName,
   SKILLS_ROOT,
   SLOT_LINE_PATTERN,
+  UNMOVABLE_CONTENT_MAX,
 } from './repository-setup.ts';
 export {
   CommitSha,
@@ -102,7 +106,6 @@ export {
   MAX_EVENTS_MESSAGE_BYTES,
   MAX_EVENTS_PER_MESSAGE,
   MAX_SOCKET_MESSAGE_BYTES,
-  jsonByteLength,
   RunJob,
   RunnerSocketClose,
   RunnerToServerMessage,

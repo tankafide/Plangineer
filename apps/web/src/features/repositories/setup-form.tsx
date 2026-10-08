@@ -1,7 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useStartSetup } from '@plangineer/api-client';
+import { invalidSelectionData, useStartSetup } from '@plangineer/api-client';
 import {
-  InvalidSelectionData,
   type RepositoryScan,
   type SelectionError,
   type SetupSelection,
@@ -32,16 +31,8 @@ const SELECTION_ERRORS: Record<SelectionError, string> = {
   too_large: 'The setup is too large to send to a runner.',
 };
 
-/** The INVALID_SELECTION data of a failed start, or null for any other error. */
-function invalidSelection(error: Error): InvalidSelectionData | null {
-  if (!('defined' in error) || error.defined !== true) return null;
-  if (!('code' in error) || error.code !== 'INVALID_SELECTION' || !('data' in error)) return null;
-  const data = InvalidSelectionData.safeParse(error.data);
-  return data.success ? data.data : null;
-}
-
 function StartFailure({ error }: { error: Error }) {
-  const selection = invalidSelection(error);
+  const selection = invalidSelectionData(error);
   return (
     <Alert variant="destructive">
       <CircleAlert aria-hidden />

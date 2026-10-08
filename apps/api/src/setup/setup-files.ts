@@ -114,11 +114,14 @@ function skillFiles(entry: CatalogEntry, defaultBranch: string): SetupFile[] {
   }));
 }
 
-function referenceFiles(defaultBranch: string): SetupFile[] {
-  return ['execution.md', 'review-loop.md', 'git-workflow.md', 'finding-format.md'].map((file) => ({
-    path: skillPath(REFERENCES_FOLDER, file),
-    content: fill(`${REFERENCES_FOLDER}/${file}`, { defaultBranch }),
-  }));
+/** The reference files the skills link to, except any the repository already holds. */
+function referenceFiles(scan: RepositoryScan): SetupFile[] {
+  return ['execution.md', 'review-loop.md', 'git-workflow.md', 'finding-format.md']
+    .filter((file) => !scan.orchestratorReferences.includes(file))
+    .map((file) => ({
+      path: skillPath(REFERENCES_FOLDER, file),
+      content: fill(`${REFERENCES_FOLDER}/${file}`, { defaultBranch: scan.defaultBranch }),
+    }));
 }
 
 export interface SetupFiles {
@@ -139,7 +142,7 @@ export function renderSetupFiles(scan: RepositoryScan, selection: SetupSelection
       ...selection.orchestrators.map((orchestrator) =>
         orchestratorFile(orchestrator, scan, selection),
       ),
-      ...(anything && !scan.orchestratorReferencesExist ? referenceFiles(scan.defaultBranch) : []),
+      ...(anything ? referenceFiles(scan) : []),
       ...entries
         .filter((entry) => entry.kind !== 'generated')
         .flatMap((entry) => skillFiles(entry, scan.defaultBranch)),

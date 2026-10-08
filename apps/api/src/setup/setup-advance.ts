@@ -54,7 +54,7 @@ async function openPullRequest(
   });
 }
 
-/** Moves a generating setup from what its run reported. A GitHub failure fails the setup. */
+/** Moves a generating setup from what its run reported. A GitHub failure is the caller's to handle. */
 async function advanceGenerating(
   deps: ServiceDeps,
   tx: Transaction,
@@ -83,15 +83,9 @@ async function advanceGenerating(
     await markFailed(tx, setup.id, 'The runner reported no pushed branch.');
     return;
   }
-  try {
-    const pullRequest = await openPullRequest(deps, repository, setup, { ...outcome, pushed });
-    expectMove(setup, 'pr_opened');
-    await markPullRequestOpen(tx, setup.id, pullRequest);
-  } catch (error) {
-    if (!(error instanceof GithubError)) throw error;
-    expectMove(setup, 'generation_failed');
-    await markFailed(tx, setup.id, githubMessage(error));
-  }
+  const pullRequest = await openPullRequest(deps, repository, setup, { ...outcome, pushed });
+  expectMove(setup, 'pr_opened');
+  await markPullRequestOpen(tx, setup.id, pullRequest);
 }
 
 /** Moves an open pull request's setup when the pull request merged or closed. */
@@ -115,13 +109,20 @@ async function advancePullRequestOpen(
 }
 
 /**
+ * Who asks for the advance. When a run ends, nobody is waiting, so a GitHub failure while opening
+ * the pull request fails the setup with GitHub's message. On refresh the admin is waiting, so the
+ * failure returns GITHUB_FAILED and the setup stays as it was, to try again.
+ */
+export type AdvanceTrigger = 'run_ended' | 'refresh';
+
+/**
  * Moves a setup from what its run and pull request show, under the setup row's lock for the
  * whole call, GitHub requests included, so a second call waits and finds the status moved.
- * Returns GITHUB_FAILED, changing nothing, when GitHub fails while following a pull request.
  */
 export async function advanceSetup(
   deps: ServiceDeps,
   repositoryId: string,
+  trigger: AdvanceTrigger,
 ): Promise<Result<void, 'GITHUB_FAILED'>> {
   return deps.db.transaction(async (tx) => {
     const setup = await lockSetup(tx, repositoryId);
@@ -134,15 +135,18 @@ export async function advanceSetup(
       owner: ref.owner,
       name: ref.name,
     };
-    if (setup.status === 'generating') {
-      await advanceGenerating(deps, tx, repository, setup);
-    } else if (setup.status === 'pr_open') {
-      try {
+    try {
+      if (setup.status === 'generating') await advanceGenerating(deps, tx, repository, setup);
+      else if (setup.status === 'pr_open')
         await advancePullRequestOpen(deps, tx, repository, setup);
-      } catch (error) {
-        if (!(error instanceof GithubError)) throw error;
-        return err('GITHUB_FAILED', { status: error.status, message: error.message });
+    } catch (error) {
+      if (!(error instanceof GithubError)) throw error;
+      if (setup.status === 'generating' && trigger === 'run_ended') {
+        expectMove(setup, 'generation_failed');
+        await markFailed(tx, setup.id, githubMessage(error));
+        return ok(undefined);
       }
+      return err('GITHUB_FAILED', { status: error.status, message: error.message });
     }
     return ok(undefined);
   });
@@ -156,7 +160,7 @@ export async function advanceSetup(
 export async function advanceSetupOfRun(deps: ServiceDeps, runId: string): Promise<void> {
   try {
     const repositoryId = await findRepositoryIdForRun(deps.db, runId);
-    if (repositoryId !== undefined) await advanceSetup(deps, repositoryId);
+    if (repositoryId !== undefined) await advanceSetup(deps, repositoryId, 'run_ended');
   } catch (error) {
     deps.logger.error({ err: error, runId }, 'Setup could not advance after its run ended');
   }

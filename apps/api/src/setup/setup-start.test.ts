@@ -3,7 +3,8 @@ import { SetupJob, type SetupSelection } from '@plangineer/contracts';
 import { BASELINE_CATALOG } from '@plangineer/domain';
 import { count, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { repositorySetups, runs } from '../db/schema.ts';
+import { ZodError } from 'zod';
+import { repositories, repositorySetups, runs } from '../db/schema.ts';
 import type { InitialContext } from '../rpc/context.ts';
 import { router } from '../rpc/router.ts';
 import { claimRuns } from '../runs/dispatch.ts';
@@ -195,5 +196,17 @@ describe('repositorySetup.start', () => {
       code: 'INVALID_SELECTION',
       data: { reason: 'too_large', names: [] },
     });
+  });
+
+  it('fails loudly, storing no run, when the job breaks a rule other than a bound', async () => {
+    const repositoryId = await scannedRepository();
+    await database.db
+      .update(repositories)
+      .set({ owner: 'not a github owner' })
+      .where(eq(repositories.id, repositoryId));
+    const before = await runCount();
+
+    await expect(start(repositoryId)).rejects.toBeInstanceOf(ZodError);
+    expect(await runCount()).toBe(before);
   });
 });

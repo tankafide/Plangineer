@@ -82,8 +82,12 @@ export function githubHandlers(state: GithubState): HttpHandler[] {
   return [
     http.all(`${API}/*`, ({ request }) => {
       const path = new URL(request.url).pathname;
-      const failure = state.failures.find((rule) => rule.pathPattern.test(path));
+      const failure = state.failures.find(
+        (rule) => rule.remaining > 0 && rule.pathPattern.test(path),
+      );
       if (failure === undefined) return undefined;
+      failure.remaining -= 1;
+      failure.hits += 1;
       return HttpResponse.json(
         { message: failure.message, documentation_url: 'https://docs.github.com/rest' },
         { status: failure.status, headers: failure.headers },

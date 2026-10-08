@@ -1,5 +1,5 @@
 import { contract, UserRole } from '@plangineer/contracts';
-import { implement, ORPCError, os as orpc } from '@orpc/server';
+import { implement } from '@orpc/server';
 import type { Result } from '../lib/result.ts';
 import {
   addRepository,
@@ -26,13 +26,11 @@ const authed = os.use(({ context, next, errors }) => {
   return next({ context: { user: context.session.user } });
 });
 
-/** Refuses a signed-in user without the role, so each admin procedure names its rule. */
-function requireRole(role: UserRole) {
-  return orpc.$context<{ user: { role: string } }>().middleware(({ context, next }) => {
-    if (context.user.role !== role) throw new ORPCError('FORBIDDEN');
-    return next();
-  });
-}
+/** A signed-in admin. Every admin procedure is built from it, so its rule shows at the call site. */
+const admin = authed.use(({ context, next, errors }) => {
+  if (UserRole.parse(context.user.role) !== 'admin') throw errors.FORBIDDEN();
+  return next();
+});
 
 type ErrorMaker = (options?: { data: unknown }) => Error;
 
@@ -89,46 +87,32 @@ export const router = os.router({
     ),
   },
   repository: {
-    listInstallable: authed.repository.listInstallable
-      .use(requireRole('admin'))
-      .handler(async ({ context, errors }) =>
-        unwrap(await listInstallableRepositories(context), errors),
-      ),
-    add: authed.repository.add
-      .use(requireRole('admin'))
-      .handler(async ({ context, input, errors }) =>
-        unwrap(await addRepository(context, context.user.id, input), errors),
-      ),
+    listInstallable: admin.repository.listInstallable.handler(async ({ context, errors }) =>
+      unwrap(await listInstallableRepositories(context), errors),
+    ),
+    add: admin.repository.add.handler(async ({ context, input, errors }) =>
+      unwrap(await addRepository(context, context.user.id, input), errors),
+    ),
     list: authed.repository.list.handler(({ context, input }) => listRepositories(context, input)),
     get: authed.repository.get.handler(async ({ context, input, errors }) =>
       unwrap(await getRepository(context, context.user.id, input.repositoryId), errors),
     ),
-    update: authed.repository.update
-      .use(requireRole('admin'))
-      .handler(async ({ context, input, errors }) =>
-        unwrap(await changeRepository(context, context.user.id, input), errors),
-      ),
-    remove: authed.repository.remove
-      .use(requireRole('admin'))
-      .handler(async ({ context, input, errors }) =>
-        unwrap(await removeRepository(context, input.repositoryId), errors),
-      ),
+    update: admin.repository.update.handler(async ({ context, input, errors }) =>
+      unwrap(await changeRepository(context, context.user.id, input), errors),
+    ),
+    remove: admin.repository.remove.handler(async ({ context, input, errors }) =>
+      unwrap(await removeRepository(context, input.repositoryId), errors),
+    ),
   },
   repositorySetup: {
-    scan: authed.repositorySetup.scan
-      .use(requireRole('admin'))
-      .handler(async ({ context, input, errors }) =>
-        unwrap(await scanRepository(context, context.user.id, input.repositoryId), errors),
-      ),
-    start: authed.repositorySetup.start
-      .use(requireRole('admin'))
-      .handler(async ({ context, input, errors }) =>
-        unwrap(await startSetup(context, context.user.id, input), errors),
-      ),
-    refresh: authed.repositorySetup.refresh
-      .use(requireRole('admin'))
-      .handler(async ({ context, input, errors }) =>
-        unwrap(await refreshSetup(context, context.user.id, input.repositoryId), errors),
-      ),
+    scan: admin.repositorySetup.scan.handler(async ({ context, input, errors }) =>
+      unwrap(await scanRepository(context, context.user.id, input.repositoryId), errors),
+    ),
+    start: admin.repositorySetup.start.handler(async ({ context, input, errors }) =>
+      unwrap(await startSetup(context, context.user.id, input), errors),
+    ),
+    refresh: admin.repositorySetup.refresh.handler(async ({ context, input, errors }) =>
+      unwrap(await refreshSetup(context, context.user.id, input.repositoryId), errors),
+    ),
   },
 });

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { jsonByteLength } from './json-bytes.ts';
 import { SETUP_INPUTS_MAX, SETUP_JOB_MAX_BYTES } from './repository-setup.ts';
 import {
-  jsonByteLength,
   RunJob,
   RunnerToServerMessage,
   SETUP_FILE_CONTENT_MAX,

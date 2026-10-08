@@ -1,9 +1,8 @@
 import { createHash } from 'node:crypto';
 import { access, lstat, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { SLOT_LINE_PATTERN, type SetupJob } from '@plangineer/contracts';
+import { SKILLS_ROOT, SLOT_LINE_PATTERN, type SetupJob } from '@plangineer/contracts';
 
-export const SKILLS_DIR = '.agents/skills';
 const MIRROR_DIR = '.claude/skills';
 export const INPUTS_DIR = '.plangineer-setup';
 
@@ -45,15 +44,48 @@ async function listFiles(dir: string, rel = ''): Promise<string[]> {
 
 const toPath = (root: string, rel: string) => path.join(root, ...rel.split('/'));
 
+/** Every path setup writes, deletes or creates folders through. None may be a link. */
+const WRITTEN_PATHS = [
+  '.agents',
+  SKILLS_ROOT,
+  '.claude',
+  MIRROR_DIR,
+  INPUTS_DIR,
+  '.github',
+  '.github/workflows',
+  '.github/workflows/plangineer-skills.yml',
+  '.gitattributes',
+];
+
+/**
+ * Fails when the checkout makes any path setup writes through a link, which would send its
+ * writes and the mirror sync's deletes outside the worktree.
+ */
+export async function refuseLinkedPaths(worktree: string): Promise<void> {
+  for (const rel of WRITTEN_PATHS) {
+    let isLink: boolean;
+    try {
+      isLink = (await lstat(toPath(worktree, rel))).isSymbolicLink();
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') continue;
+      throw error;
+    }
+    if (isLink) throw new SetupOutputError(`${rel} is a link, so setup will not write through it`);
+  }
+  // Listing fails on any link inside the skill trees, such as a linked skill folder.
+  await listFiles(path.join(worktree, SKILLS_ROOT));
+  await listFiles(path.join(worktree, MIRROR_DIR));
+}
+
 /** Copies each claude-only skill to .agents/skills/ byte for byte. */
 export async function moveSkills(worktree: string, names: readonly string[]): Promise<void> {
   for (const name of names) {
     const source = path.join(worktree, MIRROR_DIR, name);
-    const target = path.join(worktree, SKILLS_DIR, name);
+    const target = path.join(worktree, SKILLS_ROOT, name);
     if ((await lstat(source)).isSymbolicLink()) {
       throw new SetupOutputError(`The skill ${name} is a link`);
     }
-    if (await exists(target)) throw new SetupOutputError(`${SKILLS_DIR}/${name} already exists`);
+    if (await exists(target)) throw new SetupOutputError(`${SKILLS_ROOT}/${name} already exists`);
     for (const rel of await listFiles(source)) {
       const file = toPath(target, rel);
       await mkdir(path.dirname(file), { recursive: true });
@@ -64,12 +96,12 @@ export async function moveSkills(worktree: string, names: readonly string[]): Pr
 
 /** Writes the rendered files, which must be new and inside .agents/skills/, and the inputs. */
 export async function writeSetupFiles(worktree: string, job: SetupJob): Promise<void> {
-  const skillsRoot = path.join(worktree, SKILLS_DIR);
+  const skillsRoot = path.join(worktree, SKILLS_ROOT);
   for (const file of job.files) {
     const target = toPath(worktree, file.path);
     const inside = path.relative(skillsRoot, target);
     if (inside.startsWith('..') || path.isAbsolute(inside)) {
-      throw new SetupOutputError(`${file.path} is outside ${SKILLS_DIR}`);
+      throw new SetupOutputError(`${file.path} is outside ${SKILLS_ROOT}`);
     }
     if (await exists(target)) throw new SetupOutputError(`${file.path} already exists`);
     await mkdir(path.dirname(target), { recursive: true });
@@ -109,7 +141,7 @@ function fixedSegments(text: string): string[] {
 }
 
 export async function snapshotSkills(worktree: string, job: SetupJob): Promise<SkillSnapshot> {
-  const root = path.join(worktree, SKILLS_DIR);
+  const root = path.join(worktree, SKILLS_ROOT);
   const templates = new Set(job.templateSkills.map(templatePath));
   const snapshot: SkillSnapshot = { hashes: new Map(), templates: new Map(), folders: new Set() };
   for (const rel of await listFiles(root)) {
@@ -145,34 +177,34 @@ export async function checkAgentWork(
   job: SetupJob,
   snapshot: SkillSnapshot,
 ): Promise<string[]> {
-  const root = path.join(worktree, SKILLS_DIR);
+  const root = path.join(worktree, SKILLS_ROOT);
   const files = new Set(await listFiles(root));
   const problems: string[] = [];
   for (const [rel, hash] of snapshot.hashes) {
-    if (!files.has(rel)) problems.push(`${SKILLS_DIR}/${rel} was deleted`);
+    if (!files.has(rel)) problems.push(`${SKILLS_ROOT}/${rel} was deleted`);
     else if (sha256(await readFile(toPath(root, rel))) !== hash) {
-      problems.push(`${SKILLS_DIR}/${rel} was changed`);
+      problems.push(`${SKILLS_ROOT}/${rel} was changed`);
     }
   }
   for (const [rel, segments] of snapshot.templates) {
     const text = files.has(rel) ? (await readFile(toPath(root, rel))).toString('utf8') : '';
     if (!keepsSegments(text, segments)) {
-      problems.push(`${SKILLS_DIR}/${rel} changed text outside its slots`);
+      problems.push(`${SKILLS_ROOT}/${rel} changed text outside its slots`);
     }
     if (text.split('\n').some(isSlotLine))
-      problems.push(`${SKILLS_DIR}/${rel} still has a slot line`);
+      problems.push(`${SKILLS_ROOT}/${rel} still has a slot line`);
   }
   const generated = new Set(job.generateSkills);
   for (const rel of files) {
     if (snapshot.hashes.has(rel) || snapshot.templates.has(rel)) continue;
     const folder = rel.split('/')[0] ?? '';
     if (snapshot.folders.has(folder) || !rel.includes('/') || !generated.has(folder)) {
-      problems.push(`${SKILLS_DIR}/${rel} is a new file outside a skill the job asked for`);
+      problems.push(`${SKILLS_ROOT}/${rel} is a new file outside a skill the job asked for`);
     }
   }
   for (const name of job.generateSkills) {
     if (!files.has(templatePath(name)))
-      problems.push(`${SKILLS_DIR}/${name}/SKILL.md was not written`);
+      problems.push(`${SKILLS_ROOT}/${name}/SKILL.md was not written`);
   }
   return problems;
 }

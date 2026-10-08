@@ -92,7 +92,7 @@ describe('repositorySetup.scan', () => {
         { name: 'shared', description: 'Shared rules.', location: 'both' },
         { name: 'testing', description: 'How we test.', location: 'agents' },
       ],
-      orchestratorReferencesExist: false,
+      orchestratorReferences: [],
       unmovableContent: [],
       instructionFiles: ['.cursor/rules/style.mdc', 'AGENTS.md', 'web/CLAUDE.md'],
     });
@@ -188,7 +188,7 @@ describe('repositorySetup.scan', () => {
       '.claude/skills/notes.md',
       '.claude/skills/shared/extra.md',
     ]);
-    expect(detail.setup?.scan.orchestratorReferencesExist).toBe(true);
+    expect(detail.setup?.scan.orchestratorReferences).toEqual(['review-loop.md']);
   });
 
   it('stores a SKILL.md over 256 KiB with no description and never reads it, and skips a long instruction path', async () => {

@@ -34,12 +34,15 @@ interface TokenRequest {
   permissions: Record<string, string>;
 }
 
-/** A failure to answer on every request whose path matches. */
+/** A failure to answer on requests whose path matches, a number of times or every time. */
 interface FailureRule {
   pathPattern: RegExp;
   status: number;
   message: string;
   headers: Record<string, string>;
+  remaining: number;
+  /** How many requests the rule answered. */
+  hits: number;
 }
 
 /** What an issued token reaches: its installation, and one repository when it was scoped. */
