@@ -13,7 +13,7 @@ Rules for `packages/api-client`, the only place the web app talks to the API. Co
 ### Client and hooks
 
 - Build one client from the `contracts` router with `RPCLink`, and wrap it once with `createTanstackQueryUtils` from `@orpc/tanstack-query`. Never hand-write a request or response type.
-- Add `ResponseValidationLinkPlugin` with the contract, so every response is parsed on the client. A parse failure is an error the UI shows as failed, never data.
+- Add `ResponseValidationPlugin` from `@orpc/contract/plugins` with the contract, so every response is parsed on the client. A parse failure is an error the UI shows as failed, never data.
 - Export one hook per procedure, named for what it returns or does (`useFeature`, `useFeatureList`), built on the utils' `queryOptions`, `infiniteOptions` or `mutationOptions`.
 - Disable a query whose input is not ready with `skipToken` as the input, not `enabled: false`.
 - Branch on errors with `isDefinedError(error)` and `error.code`, never on a message string.

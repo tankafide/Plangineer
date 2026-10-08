@@ -1,0 +1,16 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreDependencies": ["@swc/core"],
+  "workspaces": {
+    ".": {
+      "entry": ["scripts/*.mjs"]
+    },
+    "packages/contracts": {},
+    "packages/api-client": {},
+    "apps/api": {
+      "entry": ["src/auth/auth-cli.ts"]
+    },
+    "apps/web": {},
+    "apps/runner": {}
+  }
+}

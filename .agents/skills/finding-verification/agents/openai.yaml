@@ -1,6 +1,6 @@
 interface:
-  display_name: "Finding Verification"
+  display_name: 'Finding Verification'
   short_description: "Verify a reviewer's candidate findings in a clean context and recommend what to do with each"
-  default_prompt: "Use $finding-verification when an orchestrator or the user asks for it."
+  default_prompt: 'Use $finding-verification when an orchestrator or the user asks for it.'
 policy:
   allow_implicit_invocation: false

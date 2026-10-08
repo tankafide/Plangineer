@@ -1,6 +1,6 @@
 interface:
-  display_name: "Plan Conformance"
-  short_description: "Match every plan step, decision and done-when line to the diff and every change back to a step, raise deviations and extras, and state a plan audit row per step"
-  default_prompt: "Use $plan-conformance when an orchestrator or the user asks for it."
+  display_name: 'Plan Conformance'
+  short_description: 'Match every plan step, decision and done-when line to the diff and every change back to a step, raise deviations and extras, and state a plan audit row per step'
+  default_prompt: 'Use $plan-conformance when an orchestrator or the user asks for it.'
 policy:
   allow_implicit_invocation: false

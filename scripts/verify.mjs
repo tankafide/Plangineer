@@ -1,18 +1,25 @@
 import { spawnSync } from 'node:child_process';
-import { createRequire } from 'node:module';
-import path from 'node:path';
-
-const require = createRequire(import.meta.url);
-
-function binPath(packageName, binName = packageName) {
-  const packageJsonPath = require.resolve(`${packageName}/package.json`);
-  const { bin } = require(packageJsonPath);
-  return path.resolve(path.dirname(packageJsonPath), typeof bin === 'string' ? bin : bin[binName]);
-}
+import { binPath } from './bin-path.mjs';
 
 const steps = [
+  { name: 'format check', args: [binPath('oxfmt'), '--check'] },
   { name: 'skills mirror check', args: ['scripts/sync-skills.mjs', '--check'] },
-  { name: 'unit tests', args: [binPath('vitest'), 'run'] },
+  { name: 'Oxlint', args: [binPath('oxlint'), '--type-aware', '--type-check'] },
+  { name: 'typecheck', args: [binPath('turbo'), 'run', 'typecheck'] },
+  {
+    name: 'dependency-cruiser',
+    args: [
+      binPath('dependency-cruiser'),
+      '--config',
+      '.dependency-cruiser.cjs',
+      '--output-type',
+      'err-long',
+      'apps',
+      'packages',
+    ],
+  },
+  { name: 'Knip', args: [binPath('knip')] },
+  { name: 'Vitest', args: [binPath('vitest'), 'run'] },
 ];
 
 for (const { name, args } of steps) {

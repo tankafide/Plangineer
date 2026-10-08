@@ -1,0 +1,12 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "singleQuote": true,
+  "endOfLine": "lf",
+  "printWidth": 100,
+  "ignorePatterns": [
+    "**/*.md",
+    ".claude/skills/**",
+    "apps/web/src/routeTree.gen.ts",
+    "apps/api/drizzle/**"
+  ]
+}

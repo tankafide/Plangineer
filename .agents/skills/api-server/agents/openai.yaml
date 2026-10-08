@@ -1,6 +1,6 @@
 interface:
-  display_name: "API Server"
-  short_description: "Hono and oRPC routers in apps/api, handlers, middleware, environment parsing, pino logging, S3 evidence storage and typed errors."
-  default_prompt: "Use $api-server when an orchestrator or the user asks for it."
+  display_name: 'API Server'
+  short_description: 'Hono and oRPC routers in apps/api, handlers, middleware, environment parsing, pino logging, S3 evidence storage and typed errors.'
+  default_prompt: 'Use $api-server when an orchestrator or the user asks for it.'
 policy:
   allow_implicit_invocation: false

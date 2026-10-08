@@ -1,0 +1,17 @@
+{
+  "name": "plangineer-runner",
+  "version": "0.0.0",
+  "private": true,
+  "bin": {
+    "plangineer-runner": "./src/cli.ts"
+  },
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.1",
+    "execa": "10.1.0",
+    "vitest": "5.0.3"
+  }
+}

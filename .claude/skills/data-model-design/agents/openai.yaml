@@ -1,6 +1,6 @@
 interface:
-  display_name: "Data Model Design"
-  short_description: "Design Postgres tables with Drizzle, including immutable plan revisions, run_events, constraints, indexes and migrations"
-  default_prompt: "Use $data-model-design when an orchestrator or the user asks for it."
+  display_name: 'Data Model Design'
+  short_description: 'Design Postgres tables with Drizzle, including immutable plan revisions, run_events, constraints, indexes and migrations'
+  default_prompt: 'Use $data-model-design when an orchestrator or the user asks for it.'
 policy:
   allow_implicit_invocation: false

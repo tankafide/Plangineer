@@ -21,9 +21,35 @@ const ORCHESTRATORS = [
 ];
 const RULE = 'Work inline by default.';
 
+async function put(file, content) {
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFile(file, content);
+}
+
+function orchestratorText(
+  name,
+  {
+    rule = RULE,
+    routing = '`.agents/skills/alpha/SKILL.md`',
+    link = '[ref](../orchestrator-references/execution.md)',
+  } = {},
+) {
+  return `---\nname: ${name}\ndescription: d\n---\n\n${link}\n\n## Delegation rule\n\n${rule}\n\n## Routing\n\n${routing}\n`;
+}
+
+function ruleText(name, hidden = true) {
+  return `---\nname: ${name}\ndescription: d\n${hidden ? 'disable-model-invocation: true\n' : ''}---\n\nStub.\n`;
+}
+
+function policyText(value) {
+  return `interface:\n  display_name: "A"\npolicy:\n  allow_implicit_invocation: ${value}\n`;
+}
+
 describe('parseFrontmatter', () => {
   it('returns the data and the body', () => {
-    const { data, body } = parseFrontmatter('---\nname: a\ndisable-model-invocation: true\n---\nBody\n');
+    const { data, body } = parseFrontmatter(
+      '---\nname: a\ndisable-model-invocation: true\n---\nBody\n',
+    );
     expect(data).toEqual({ name: 'a', 'disable-model-invocation': true });
     expect(body).toBe('Body\n');
   });
@@ -61,7 +87,8 @@ describe('extractSection', () => {
 
 describe('extractRelativeLinks', () => {
   it('returns relative targets without anchors', () => {
-    const markdown = '[a](../x/y.md) [b](z.md#part) [c](https://example.com) [d](#top) [e](mailto:a@b.c)';
+    const markdown =
+      '[a](../x/y.md) [b](z.md#part) [c](https://example.com) [d](#top) [e](mailto:a@b.c)';
     expect(extractRelativeLinks(markdown)).toEqual(['../x/y.md', 'z.md']);
   });
 });
@@ -84,15 +111,6 @@ describe('extractRoutedSkills', () => {
 describe('lintSkills on a temporary skills folder', () => {
   let root;
   const skill = (...parts) => path.join(root, '.agents', 'skills', ...parts);
-  const put = async (file, content) => {
-    await mkdir(path.dirname(file), { recursive: true });
-    await writeFile(file, content);
-  };
-  const orchestratorText = (name, { rule = RULE, routing = '`.agents/skills/alpha/SKILL.md`', link = '[ref](../orchestrator-references/execution.md)' } = {}) =>
-    `---\nname: ${name}\ndescription: d\n---\n\n${link}\n\n## Delegation rule\n\n${rule}\n\n## Routing\n\n${routing}\n`;
-  const ruleText = (name, hidden = true) =>
-    `---\nname: ${name}\ndescription: d\n${hidden ? 'disable-model-invocation: true\n' : ''}---\n\nStub.\n`;
-  const policyText = (value) => `interface:\n  display_name: "A"\npolicy:\n  allow_implicit_invocation: ${value}\n`;
 
   beforeEach(async () => {
     root = await mkdtemp(path.join(os.tmpdir(), 'lint-skills-'));
@@ -122,7 +140,9 @@ describe('lintSkills on a temporary skills folder', () => {
 
   it('fails a rule skill that is not hidden from the model', async () => {
     await put(skill('alpha', 'SKILL.md'), ruleText('alpha', false));
-    expect(await lintSkills(root)).toEqual(['alpha: frontmatter must set disable-model-invocation: true']);
+    expect(await lintSkills(root)).toEqual([
+      'alpha: frontmatter must set disable-model-invocation: true',
+    ]);
   });
 
   it('fails a rule skill with no openai.yaml', async () => {
@@ -153,7 +173,10 @@ describe('lintSkills on a temporary skills folder', () => {
   it('fails an orchestrator that is hidden from the model', async () => {
     await put(
       skill('plan-orchestrator', 'SKILL.md'),
-      orchestratorText('plan-orchestrator').replace('description: d\n', 'description: d\ndisable-model-invocation: true\n'),
+      orchestratorText('plan-orchestrator').replace(
+        'description: d\n',
+        'description: d\ndisable-model-invocation: true\n',
+      ),
     );
     expect(await lintSkills(root)).toEqual([
       'plan-orchestrator: an orchestrator must not set disable-model-invocation',
@@ -210,7 +233,9 @@ describe('lintSkills on a temporary skills folder', () => {
   it('fails an orchestrator with no delegation rule section', async () => {
     const text = orchestratorText('plan-orchestrator').replace('## Delegation rule', '## Other');
     await put(skill('plan-orchestrator', 'SKILL.md'), text);
-    expect(await lintSkills(root)).toEqual(['plan-orchestrator: missing a "## Delegation rule" section']);
+    expect(await lintSkills(root)).toEqual([
+      'plan-orchestrator: missing a "## Delegation rule" section',
+    ]);
   });
 
   it('fails an orchestrator with no routing section', async () => {
@@ -247,7 +272,10 @@ describe('the real skills folder', () => {
   });
 
   it('has no SKILL.md in orchestrator-references, so neither CLI lists it', async () => {
-    const exists = await stat(path.join(skills, 'orchestrator-references', 'SKILL.md')).then(() => true, () => false);
+    const exists = await stat(path.join(skills, 'orchestrator-references', 'SKILL.md')).then(
+      () => true,
+      () => false,
+    );
     expect(exists).toBe(false);
   });
 });

@@ -10,9 +10,9 @@ Put every prerequisite for MVP development in place: the machine toolchain, the 
 
 | Item | Who | Status |
 | --- | --- | --- |
-| Approve the Windows admin (UAC) prompt when step 1 installs Node 24.21.0 | Engineer | open |
-| Click "Create GitHub App" on github.com when step 5 opens the manifest page, signed in as `tankafide` | Engineer | open |
-| Approve, when step 13 asks, pushing `chore/project-scaffold`, opening its pull request and setting branch protection on `main` | Engineer | open |
+| Approve the Windows admin (UAC) prompt when step 1 installs Node 24.21.0 | Engineer | resolved |
+| Click "Create GitHub App" on github.com when step 5 opens the manifest page, signed in as `tankafide` | Engineer | resolved |
+| Approve, when step 13 asks, pushing `chore/project-scaffold`, opening its pull request and setting branch protection on `main` | Engineer | resolved |
 
 ## Steps
 
@@ -28,7 +28,7 @@ The agent prepares this Windows machine. Each command runs from the agent's shel
 | --- | --- | --- |
 | Node | 22.13.1 in `C:\Program Files\nodejs` | Download `node-v24.21.0-x64.msi` and `SHASUMS256.txt` from `https://nodejs.org/dist/v24.21.0/`, check the SHA-256, then run `msiexec /i <msi> /passive /norestart`. The engineer approves the download and the UAC prompt |
 | pnpm | 10.2.0, installed globally through npm | No action. pnpm 10 switches itself to the `packageManager` version that step 2 pins |
-| Docker | Docker Desktop installed per user, engine stopped | Start `%LOCALAPPDATA%\Programs\DockerDesktop\Docker Desktop.exe` and poll `docker info` every 5 seconds for up to 3 minutes |
+| Docker | Docker Desktop installed per user, engine stopped | Run the machine's Docker startup helper named in the engineer's user-level Claude Code instructions. It starts Desktop through `docker desktop start`, waits for `docker info` and recovers the known stale-socket failure |
 | `playwright-cli` | Not installed | `npm install --global @playwright/cli@0.1.22`, used for UI checks per `ui-design-system` |
 
 **Done when:**

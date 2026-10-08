@@ -1,6 +1,6 @@
 interface:
-  display_name: "Runner Adapters"
-  short_description: "The local runner in apps/runner, its control-plane connection, worktrees, the job queue, skills sync and check, and one adapter per agent CLI that emits RunEvents."
-  default_prompt: "Use $runner-adapters when an orchestrator or the user asks for it."
+  display_name: 'Runner Adapters'
+  short_description: 'The local runner in apps/runner, its control-plane connection, worktrees, the job queue, skills sync and check, and one adapter per agent CLI that emits RunEvents.'
+  default_prompt: 'Use $runner-adapters when an orchestrator or the user asks for it.'
 policy:
   allow_implicit_invocation: false

@@ -1,0 +1,25 @@
+// Claude Code PostToolUse hook: format-checks and lints the edited file. Exit 2 feeds the output back.
+import { execa } from 'execa';
+import { binPath } from './bin-path.mjs';
+import { lintTargets, readHookInput } from './claude-hooks.mjs';
+import { repoRoot } from './script-entry.mjs';
+
+const input = await readHookInput();
+const target = lintTargets(input.tool_input?.file_path ?? '');
+
+if (target !== undefined) {
+  const checks = [
+    [binPath('oxfmt'), '--check', '--no-error-on-unmatched-pattern', target],
+    [binPath('oxlint'), '--type-aware', '--type-check', target],
+  ];
+  const results = await Promise.all(
+    checks.map((args) =>
+      execa(process.execPath, args, { cwd: repoRoot, reject: false, all: true }),
+    ),
+  );
+  const failed = results.filter((result) => result.exitCode !== 0);
+  if (failed.length > 0) {
+    process.stderr.write(failed.map((result) => result.all).join('\n'));
+    process.exitCode = 2;
+  }
+}

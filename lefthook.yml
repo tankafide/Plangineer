@@ -3,5 +3,10 @@ pre-commit:
     skills-check:
       run: node scripts/sync-skills.mjs --check --staged
     skills-lint:
-      glob: ".agents/skills/**"
+      glob: '.agents/skills/**'
       run: node scripts/lint-skills.mjs
+
+pre-push:
+  commands:
+    verify:
+      run: node scripts/verify.mjs

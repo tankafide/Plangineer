@@ -13,7 +13,7 @@ Pin these majors. Versions checked against npm on 6 October 2026.
 
 | Area | Choice |
 | --- | --- |
-| Runtime | Node 24 everywhere (server and runner). pnpm workspaces, Turborepo |
+| Runtime | Node 24 everywhere (server and runner). pnpm 10.34.6 workspaces, Turborepo |
 | Language | TypeScript 7, strictest tsconfig |
 | Web | React 19, Vite 8, TanStack Router (not Start), TanStack Query, Tailwind v4, shadcn/ui on Base UI (never Radix) in the Nova style, Lucide icons, Geist and Geist Mono fonts, React Hook Form, dnd-kit, CodeMirror 6, `diff`, react-diff-view, `eventsource-parser` 4 |
 | API | Hono 4, oRPC 1.x (not the 2.0 beta), Zod 4 |
@@ -44,9 +44,13 @@ Nothing imports from another `apps/*` package.
 
 | Command | Does |
 | --- | --- |
-| `pnpm dev` | Starts Postgres and MinIO (Docker Compose), API, web and the fake agent, with seed data |
-| `pnpm db:reset` | Drops, migrates and reseeds the dev database |
-| `pnpm verify` | Format check, Oxlint, typecheck, dependency-cruiser, Knip, Vitest. Must pass before work is done |
+| `pnpm setup:env` | Creates `.env` from `.env.example` with a fresh `BETTER_AUTH_SECRET` |
+| `pnpm setup:github-app` | Creates the dev GitHub App through GitHub's manifest flow and writes its credentials to `.env` |
+| `pnpm db:up` | Starts Postgres (Docker Compose) and waits for its healthcheck |
+| `pnpm db:migrate` | Applies pending migrations to the dev database |
+| `pnpm dev` | Starts Postgres, applies migrations, then runs the API and web. MinIO, seed data and the fake agent join it with the features that need them |
+| `pnpm db:reset` | Drops and migrates the dev database. Seeding joins it with the first feature that has data |
+| `pnpm verify` | Format check, skills mirror check, Oxlint, typecheck, dependency-cruiser, Knip, Vitest, in that order. Must pass before work is done |
 | `pnpm test:e2e` | Playwright Test journeys against the local stack with seed data. Must pass before work that adds or changes a journey is done |
 
 ## Conventions
@@ -56,6 +60,7 @@ Nothing imports from another `apps/*` package.
 - Browsers read SSE with `fetch` and `eventsource-parser`, never `EventSource`, so the client controls headers, status codes and reconnects.
 - Primary keys are `uuid` columns defaulted to Postgres 18's `uuidv7()`. Better Auth sets `advanced.database.generateId: "uuid"`, so its Drizzle adapter leaves ids to that default.
 - Plan revisions are immutable rows with JSONB bodies.
+- Migrations come only from `drizzle-kit generate` (`pnpm --filter @plangineer/api db:generate`). Never `drizzle-kit push` or Better Auth's `migrate`.
 - Each app parses its environment with a Zod schema at startup and exits on any missing or invalid variable. Every variable is listed in `.env.example`.
 - The API and runner log JSON with pino to stdout and `logs/<app>.log`.
 - Hooks and repo scripts are Node scripts (`node scripts/<name>.mjs`), never bash or PowerShell. No shell syntax in `package.json` scripts.

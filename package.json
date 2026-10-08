@@ -2,17 +2,44 @@
   "name": "plangineer",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@10.2.0",
   "scripts": {
     "prepare": "lefthook install",
+    "dev": "node scripts/dev.mjs",
+    "setup:env": "node scripts/setup-env.mjs",
+    "setup:github-app": "node scripts/setup-github-app.mjs",
+    "db:up": "node scripts/db-up.mjs",
+    "db:migrate": "pnpm --filter @plangineer/api db:migrate",
+    "db:reset": "pnpm --filter @plangineer/api db:reset",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "lint": "oxlint --type-aware --type-check",
+    "typecheck": "turbo run typecheck",
+    "deps:check": "depcruise --config .dependency-cruiser.cjs --output-type err-long apps packages",
+    "knip": "knip",
+    "test": "vitest run",
+    "test:e2e": "node scripts/test-e2e.mjs",
     "skills:sync": "node scripts/sync-skills.mjs",
     "skills:lint": "node scripts/lint-skills.mjs",
     "skills:check": "node scripts/sync-skills.mjs --check",
     "verify": "node scripts/verify.mjs"
   },
   "devDependencies": {
-    "lefthook": "^2.1.17",
-    "vitest": "^5.0.3",
-    "yaml": "^2.9.1"
-  }
+    "@swc/core": "1.16.13",
+    "dependency-cruiser": "18.5.0",
+    "execa": "10.1.0",
+    "knip": "6.40.0",
+    "lefthook": "2.1.17",
+    "open": "11.0.4",
+    "oxfmt": "0.72.0",
+    "oxlint": "1.87.0",
+    "oxlint-tsgolint": "7.0.2003",
+    "turbo": "2.11.7",
+    "typescript": "7.0.2",
+    "vitest": "5.0.3",
+    "yaml": "2.9.1"
+  },
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "packageManager": "pnpm@10.34.6"
 }

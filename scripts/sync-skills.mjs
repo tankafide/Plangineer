@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { lstat, mkdir, readdir, readFile, rm, rmdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { isEntryPoint, repoRoot } from './script-entry.mjs';
 
 const SOURCE_DIR = '.agents/skills';
 const MIRROR_DIR = '.claude/skills';
@@ -11,13 +11,20 @@ const USAGE = 'Usage: node scripts/sync-skills.mjs [--check [--staged]]';
 const SYMLINK_MODE = '120000';
 const MERGED_STAGE = '0';
 
+function compareText(a, b) {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
 export function normalizeContent(content) {
   if (content.includes(0)) return content;
   return Buffer.from(content.toString('latin1').replaceAll('\r\n', '\n'), 'latin1');
 }
 
 export function toDisplayPath(...segments) {
-  return path.join(...segments).split(path.sep).join('/');
+  return path
+    .join(...segments)
+    .split(path.sep)
+    .join('/');
 }
 
 function symlinkError(file) {
@@ -29,7 +36,7 @@ export function workingTree(rootDir) {
     async list(dir) {
       const files = [];
       await collectFiles(path.join(rootDir, dir), '', files);
-      return files.sort();
+      return files.toSorted(compareText);
     },
     read: (dir, rel) => readFile(path.join(rootDir, dir, rel)),
   };
@@ -92,7 +99,7 @@ export function gitIndex(rootDir) {
       const input = entries.map((entry) => `${entry.sha}\n`).join('');
       const blobs = parseBlobBatch(git(rootDir, ['cat-file', '--batch'], input), entries.length);
       entries.forEach((entry, index) => contents.set(entry.file, blobs[index]));
-      return entries.map((entry) => entry.file.slice(dir.length + 1)).sort();
+      return entries.map((entry) => entry.file.slice(dir.length + 1)).toSorted(compareText);
     },
     read: async (dir, rel) => contents.get(`${dir}/${rel}`),
   };
@@ -189,7 +196,6 @@ export async function main(rootDir, args) {
   return 0;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-  process.exitCode = await main(rootDir, process.argv.slice(2));
+if (isEntryPoint(import.meta.url)) {
+  process.exitCode = await main(repoRoot, process.argv.slice(2));
 }
