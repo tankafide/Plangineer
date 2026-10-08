@@ -158,6 +158,17 @@ describe('runner login outputs', () => {
     expect(RunnerPollLoginOutput.parse({ ...output, tokenHash: 'h' })).toEqual(output);
   });
 
+  it('RunnerStartLoginOutput rejects an approval link that is not http or https', () => {
+    const start = {
+      deviceSecret: DEVICE_SECRET,
+      userCode: 'ABCD-EFGH-JKMN',
+      approveUrl: 'file:///etc/passwd',
+      expiresAt: AT,
+      pollIntervalMs: 2000,
+    };
+    expect(RunnerStartLoginOutput.safeParse(start).success).toBe(false);
+  });
+
   it('RunnerPollLoginOutput strips a token from a status that has none', () => {
     expect(RunnerPollLoginOutput.parse({ status: 'denied', token: 't' })).toEqual({
       status: 'denied',

@@ -52,7 +52,7 @@ export const RunnerStartLoginInput = z.strictObject({
 export const RunnerStartLoginOutput = z.object({
   deviceSecret: z.string(),
   userCode: z.string(),
-  approveUrl: z.url(),
+  approveUrl: z.url({ protocol: /^https?$/ }),
   expiresAt: z.iso.datetime(),
   pollIntervalMs: z.int(),
 });
