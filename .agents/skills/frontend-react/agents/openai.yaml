@@ -1,6 +1,6 @@
 interface:
-  display_name: "Frontend React"
-  short_description: "React 19 components and TanStack Router routes in apps/web, with explicit loading, empty, failed and stale states, plus forms, drag and drop, the editor and diffs."
-  default_prompt: "Use $frontend-react when an orchestrator or the user asks for it."
+  display_name: 'Frontend React'
+  short_description: 'React 19 components and TanStack Router routes in apps/web, with explicit loading, empty, failed and stale states, plus forms, drag and drop, the editor and diffs.'
+  default_prompt: 'Use $frontend-react when an orchestrator or the user asks for it.'
 policy:
   allow_implicit_invocation: false

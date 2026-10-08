@@ -1,0 +1,36 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "import", "react", "jsx-a11y", "vitest"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error"
+  },
+  "rules": {
+    "import/no-cycle": "error",
+    "import/no-unassigned-import": ["error", { "allow": ["**/*.css"] }],
+    // The automatic JSX runtime ("jsx": "react-jsx") needs no React in scope.
+    "react/react-in-jsx-scope": "off",
+    "max-lines": ["error", 300],
+    "no-console": "error",
+    "no-restricted-imports": [
+      "error",
+      {
+        "patterns": [
+          {
+            "group": ["@radix-ui/*", "radix-ui", "vaul", "@base-ui-components/react"],
+            "message": "Use @base-ui/react through shadcn/ui"
+          }
+        ]
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": ["scripts/**", "apps/runner/src/cli.ts"],
+      "rules": {
+        "no-console": "off"
+      }
+    }
+  ],
+  "ignorePatterns": ["apps/web/src/routeTree.gen.ts", "apps/api/drizzle/**"]
+}

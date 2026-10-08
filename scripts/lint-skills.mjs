@@ -1,6 +1,6 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { isEntryPoint, repoRoot } from './script-entry.mjs';
 import { parse } from 'yaml';
 
 const SKILLS_DIR = '.agents/skills';
@@ -18,6 +18,10 @@ const LINK_PATTERN = /\[[^\]]*\]\(([^)\s]+)\)/g;
 const EXTERNAL_TARGET_PATTERN = /^([a-z][a-z0-9+.-]*:|#)/i;
 const FRONTMATTER_PATTERN = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/;
 
+function compareText(a, b) {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
 export function toLf(text) {
   return text.replaceAll('\r\n', '\n');
 }
@@ -34,7 +38,10 @@ export function extractSection(markdown, heading) {
   if (start === -1) return null;
   const length = lines.slice(start + 1).findIndex((line) => line.startsWith('## '));
   const end = length === -1 ? lines.length : start + 1 + length;
-  return lines.slice(start + 1, end).join('\n').trim();
+  return lines
+    .slice(start + 1, end)
+    .join('\n')
+    .trim();
 }
 
 export function extractRelativeLinks(markdown) {
@@ -50,7 +57,10 @@ export function extractRoutedSkills(section) {
 }
 
 async function isFile(file) {
-  return stat(file).then((stats) => stats.isFile(), () => false);
+  return stat(file).then(
+    (stats) => stats.isFile(),
+    () => false,
+  );
 }
 
 async function readText(file) {
@@ -164,7 +174,7 @@ async function listSkillNames(skillsRoot) {
   return entries
     .filter((entry) => entry.isDirectory() && entry.name !== REFERENCES_DIR)
     .map((entry) => entry.name)
-    .sort();
+    .toSorted(compareText);
 }
 
 export async function lintSkills(rootDir) {
@@ -200,7 +210,6 @@ export async function main(rootDir) {
   return 0;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-  process.exitCode = await main(rootDir);
+if (isEntryPoint(import.meta.url)) {
+  process.exitCode = await main(repoRoot);
 }

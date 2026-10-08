@@ -1,6 +1,6 @@
 interface:
-  display_name: "Persistence"
-  short_description: "Drizzle queries and transactions, seed data and integration tests on template databases"
-  default_prompt: "Use $persistence when an orchestrator or the user asks for it."
+  display_name: 'Persistence'
+  short_description: 'Drizzle queries and transactions, seed data and integration tests on template databases'
+  default_prompt: 'Use $persistence when an orchestrator or the user asks for it.'
 policy:
   allow_implicit_invocation: false

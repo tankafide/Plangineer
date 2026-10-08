@@ -1,6 +1,6 @@
 interface:
-  display_name: "GitHub Integration"
-  short_description: "The GitHub App and Octokit, installation tokens, webhook verification and handling, and opening pull requests."
-  default_prompt: "Use $github-integration when an orchestrator or the user asks for it."
+  display_name: 'GitHub Integration'
+  short_description: 'The GitHub App and Octokit, installation tokens, webhook verification and handling, and opening pull requests.'
+  default_prompt: 'Use $github-integration when an orchestrator or the user asks for it.'
 policy:
   allow_implicit_invocation: false

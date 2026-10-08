@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: ikalnytskyi/action-setup-postgres@v8
+        with:
+          username: plangineer
+          password: plangineer
+          database: plangineer
+          postgres-version: '18'
+      - run: node --eval "require('node:fs').copyFileSync('.env.example', '.env')"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm verify
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: ikalnytskyi/action-setup-postgres@v8
+        with:
+          username: plangineer
+          password: plangineer
+          database: plangineer
+          postgres-version: '18'
+      - run: node --eval "require('node:fs').copyFileSync('.env.example', '.env')"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @plangineer/web exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/

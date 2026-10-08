@@ -1,0 +1,13 @@
+packages:
+  - packages/*
+  - apps/*
+
+engineStrict: true
+
+allowBuilds:
+  # The prepare script runs lefthook install.
+  lefthook: false
+  # Its postinstall only checks the native binary, which arrives as an optional dependency.
+  '@swc/core': false
+  # Its platform binary also arrives as an optional dependency.
+  esbuild: false

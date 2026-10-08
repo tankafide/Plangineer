@@ -17,6 +17,18 @@ import {
 
 const FIX = 'edit the file under .agents/skills/, then run pnpm skills:sync';
 
+async function put(file, content) {
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFile(file, content);
+}
+
+function exists(file) {
+  return stat(file).then(
+    () => true,
+    () => false,
+  );
+}
+
 describe('toDisplayPath', () => {
   it('joins segments with forward slashes', () => {
     expect(toDisplayPath('.claude/skills', 'a', 'SKILL.md')).toBe('.claude/skills/a/SKILL.md');
@@ -42,12 +54,13 @@ describe('skills mirror', () => {
   let root;
   const source = (...parts) => path.join(root, '.agents', 'skills', ...parts);
   const mirror = (...parts) => path.join(root, '.claude', 'skills', ...parts);
-  const put = async (file, content) => {
-    await mkdir(path.dirname(file), { recursive: true });
-    await writeFile(file, content);
-  };
-  const exists = (file) => stat(file).then(() => true, () => false);
   const plan = () => planSync(workingTree(root));
+  const stagedPlan = () => planSync(gitIndex(root));
+  const git = (...args) => {
+    const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
+    if (result.status !== 0) throw new Error(result.stderr);
+    return result.stdout.trim();
+  };
   const sync = async () => applySync(root, await plan());
 
   beforeEach(async () => {
@@ -123,7 +136,7 @@ describe('skills mirror', () => {
 
   it('fails loudly when the source folder does not exist', async () => {
     await rm(path.join(root, '.agents'), { recursive: true });
-    await expect(plan()).rejects.toThrow();
+    await expect(plan()).rejects.toThrow('ENOENT');
   });
 
   it('fails loudly when the source folder is empty', async () => {
@@ -157,13 +170,6 @@ describe('skills mirror', () => {
   });
 
   describe('staged check', () => {
-    const git = (...args) => {
-      const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
-      if (result.status !== 0) throw new Error(result.stderr);
-      return result.stdout.trim();
-    };
-    const stagedPlan = () => planSync(gitIndex(root));
-
     beforeEach(async () => {
       git('init', '--quiet');
       await sync();

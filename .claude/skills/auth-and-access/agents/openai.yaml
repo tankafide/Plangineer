@@ -1,6 +1,6 @@
 interface:
-  display_name: "Auth and Access"
-  short_description: "Better Auth with GitHub sign-in, roles, and runner pairing with hashed tokens, and the rule that the app never reads, stores or relays a vendor login."
-  default_prompt: "Use $auth-and-access when an orchestrator or the user asks for it."
+  display_name: 'Auth and Access'
+  short_description: 'Better Auth with GitHub sign-in, roles, and runner pairing with hashed tokens, and the rule that the app never reads, stores or relays a vendor login.'
+  default_prompt: 'Use $auth-and-access when an orchestrator or the user asks for it.'
 policy:
   allow_implicit_invocation: false

@@ -8,8 +8,8 @@
 
 :root {
   --radius: 0.5rem;
-  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "Geist Mono Variable", ui-monospace, monospace;
+  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, monospace;
 
   --sidebar: var(--background);
   --sidebar-foreground: var(--foreground);

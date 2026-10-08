@@ -15,7 +15,7 @@ Rules for the workspace, scripts, hooks, CI and check configuration. The stack a
 - Packages live under `packages/*` and `apps/*`, as the stack's package layout lists them. `pnpm-workspace.yaml` holds the workspace globs and every pnpm setting. No `.npmrc`.
 - Each package declares every dependency it imports. Internal dependencies use `workspace:*`. Never hoist to hide an undeclared import.
 - The root `package.json` pins `packageManager` to an exact pnpm version and sets `engines.node` to `>=24 <25`. Commit `pnpm-lock.yaml`.
-- pnpm 10 blocks dependency install scripts. List each package that needs one in `onlyBuiltDependencies`. Never set `dangerouslyAllowAllBuilds`.
+- pnpm 10 blocks dependency install scripts. List every package that has one in the `allowBuilds` map in `pnpm-workspace.yaml`: `true` when its script must run, `false` when it is not needed, with the reason in a YAML comment. Never set `dangerouslyAllowAllBuilds`.
 - Turborepo 2 runs in strict env mode, so a task sees only variables named in its `env` or in `globalEnv`. Declare each variable a task reads, and list `.env*` files it loads in `inputs`, or the cache returns stale results.
 - Every cached task declares `outputs`, and `build` depends on `^build`. Long-running tasks such as `dev` set `cache: false` and `persistent: true`.
 
@@ -23,7 +23,7 @@ Rules for the workspace, scripts, hooks, CI and check configuration. The stack a
 
 - Repo scripts are `scripts/<kebab-name>.mjs`, run as `node scripts/<name>.mjs`.
 - No shell syntax in `package.json` scripts: no `&&`, `|`, `$VAR`, `>`, `rm`, `cp` or shell globs. A script that needs more than one command becomes a Node script.
-- Run a package's CLI by resolving its JavaScript bin with `require.resolve` and spawning it with `process.execPath`, as `scripts/verify.mjs` does. Use `execa` for anything else. Never spawn a `.cmd` shim or use `shell: true`.
+- Run a package's CLI by resolving its JavaScript bin with `binPath` from `scripts/bin-path.mjs` and spawning it with `process.execPath`, as `scripts/verify.mjs` does. Use `execa` for anything else. Never spawn a `.cmd` shim or use `shell: true`.
 - A script exits non-zero on any failure and prints what failed and the fix. Mutating commands (`format`, `skills:sync`) are separate scripts from read-only checks (`format:check`, `skills:check`).
 - A script that holds logic has a Vitest test beside it, as `scripts/sync-skills.test.mjs` does.
 
@@ -39,7 +39,10 @@ Rules for the workspace, scripts, hooks, CI and check configuration. The stack a
 - `lefthook.yml` holds every hook, and each command is `node scripts/<name>.mjs`. Scope a command to its files with `glob`, as `skills-lint` does.
 - A hook never mutates files and never uses `stage_fixed`, because it can overwrite an unstaged edit.
 - Pre-commit checks the staged files (`--check --staged`), not the working tree.
+- Pre-push runs `node scripts/verify.mjs`, so a failing `pnpm verify` stops the push.
 - `prepare` runs `lefthook install`. Hooks can be skipped with `--no-verify`, so CI is the gate.
+- `.claude/settings.json` registers two Claude Code hooks. `PostToolUse` on `Edit|Write` runs `scripts/claude-post-edit.mjs`, which format-checks and lints the edited file and never rewrites it. `Stop` runs `scripts/claude-stop.mjs`, which runs `pnpm verify` unless the stop hook is already active or every changed path is under `docs/`. Both exit 2 on failure, the only code that blocks, so the output reaches the agent.
+- A Claude Code hook command names its script as `node "${CLAUDE_PROJECT_DIR}/scripts/<name>.mjs"`. Hooks run in the session's current directory, so a relative path breaks after the agent changes directory.
 
 ### CI
 
@@ -84,7 +87,9 @@ Check a diff against these rules. Report each breach as a finding in the shared 
 | A hook that mutates files, or a hook command that is not a Node script | blocker |
 | A check or lint rule disabled, loosened or skipped to get green, with no reason | blocker |
 | The CI matrix drops one of the three systems, enables `fail-fast`, skips integration tests on a system, or does not run `pnpm verify` | blocker |
-| `dangerouslyAllowAllBuilds`, or a pnpm setting in `.npmrc` | should fix |
+| `dangerouslyAllowAllBuilds`, a dependency install script missing from `allowBuilds`, or a pnpm setting in `.npmrc` | should fix |
+| A Claude Code hook that rewrites files, uses a relative script path, or blocks with an exit code other than 2 | should fix |
+| The pre-push `pnpm verify` removed or skipped | should fix |
 | A workspace package imports a dependency it does not declare, or uses a version range where `workspace:*` is required | should fix |
 | A Turborepo task that reads a variable or `.env` file missing from its `env`, `globalEnv` or `inputs`, or a cached task with no `outputs` | should fix |
 | A new check not in `scripts/verify.mjs`, or missing from the `pnpm verify` row in the stack decisions | should fix |
