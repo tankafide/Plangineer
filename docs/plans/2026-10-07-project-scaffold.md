@@ -191,10 +191,10 @@ The agent prepares this Windows machine. Each command runs from the agent's shel
 | `callback_urls` | `["http://localhost:5173/api/auth/callback/github"]` |
 | `public` | `false` |
 | `hook_attributes` | `{ "url": "https://example.com/plangineer-dev-webhook", "active": false }` |
-| `default_permissions` | `contents: write`, `pull_requests: write`, `checks: read`, `metadata: read`, `email_addresses: read` |
+| `default_permissions` | `contents: write`, `pull_requests: write`, `checks: read`, `metadata: read`, `emails: read` |
 | `default_events` | `[]` |
 
-This step is the first to run GitHub's manifest flow, so it proves the field names above, including `email_addresses`. If GitHub rejects a field, fix the manifest here before step 8 builds on it.
+This step is the first to run GitHub's manifest flow, so it proves the field names above. GitHub rejected `email_addresses`, the REST API's name for this permission, with "Default permission records resource is not included in the list". The manifest takes the internal name `emails`.
 
 **Done when:**
 
@@ -552,7 +552,7 @@ Decisions D1 to D4 and D18 came from the engineer on Oct 7, 2026. The rest the p
   - The dev GitHub App comes from a local manifest-flow script (step 5), so the engineer's only GitHub action is one click.
   - The product's setup screen, which registers each deployment's app, is MVP work and separate from this dev script.
   - The app's webhook is inactive and subscribes to no events, because local dev has no public URL. The GitHub integration feature activates webhooks.
-  - The permissions match `github-integration`, plus `email_addresses: read` for sign-in per `auth-and-access`, so the app does not change when that feature lands.
+  - The permissions match `github-integration`, plus `emails: read` for sign-in per `auth-and-access`, so the app does not change when that feature lands.
 - **D4. Branching.** Decided by the engineer. The project-skills work was committed, fast-forwarded into `main` and pushed as `df4e990`. This plan's branch, `chore/project-scaffold`, starts from that commit.
 - **D5. Migrations come only from `drizzle-kit generate`.** `data-model-design` forbids `push`. That rule wins over the `push` advice in [tech stack](../engineering/tech-stack.md), and step 14 records it in the stack decisions.
 - **D6. Same origin in development.** Vite proxies `/api` and `/rpc` to the API, so Better Auth's cookies and the GitHub callback all use `http://localhost:5173`, and no CORS is needed. Serving the built web app from the API in production is deployment work and left out.
