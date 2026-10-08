@@ -43,7 +43,7 @@ describe('claimRuns', () => {
     expect((await runRow(database.db, queued[2] ?? '')).status).toBe('queued');
   });
 
-  it('returns the job with plan permission mode and a lease expiry', async () => {
+  it('returns a test job and a lease expiry', async () => {
     const runnerId = await storeRunner(database.db, { userId });
     const runId = await queueRun(deps(), userId, runnerId);
 
@@ -53,10 +53,10 @@ describe('claimRuns', () => {
       runId,
       attempt: 1,
       job: {
+        kind: 'test',
         repository: { owner: 'acme', name: 'app' },
         ref: 'main',
         prompt: 'List the files.',
-        permissionMode: 'plan',
       },
     });
     expect((await runRow(database.db, runId)).leaseExpiresAt).not.toBeNull();

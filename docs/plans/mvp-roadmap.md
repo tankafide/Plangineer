@@ -11,10 +11,13 @@ Chunks 1 to 9 cover MVP Phases 1 to 3. Chunk 10 is Phase 4, which is rollout and
 | Item | Status |
 | --- | --- |
 | Phase 0 loop | The four orchestrators and the rule skills are written in `.agents/skills/`, and the scaffold went through the full loop. The MVP's exit gate asks for 3 to 5 features |
-| Skill specification and baseline catalog | Not written. Chunk 2 needs both, and they can be written alongside chunk 1 |
+| Skill specification and baseline catalog | Written on Oct 8, 2026 as the [skill specification](../product/skill-specification.md) and the [baseline catalog](../product/baseline-catalog.md) |
 | Project scaffold | Merged to `main` on Oct 7, 2026. It includes the workspace, every check, CI on three systems, local Postgres, GitHub sign-in, the user record with its admin or member role, and the development GitHub App |
 | Skills mirror | The runner's `skills sync` and `skills check` commands sync and check this repository, through `pnpm skills:sync`, `pnpm verify` and the pre-commit hook. A run fails with `skills_drift` when its worktree's mirror drifts |
 | Runner | Chunk 1 built it: pairing with a one-time code, one WebSocket to the API, dispatch from the `runs` table with leases and a sweeper, the Claude Code adapter in plan mode, a worktree per run, plan limits, and SSE to the Runs screens. It runs from the checkout with `pnpm runner`, and `pnpm runner:fake` runs it with the fake agent |
+| Repository setup | Chunk 2 built it on Oct 8, 2026, as the [repository setup plan](2026-10-08-repository-setup.md) describes: adding a repository, the scan, the three checklists, and one setup pull request with the four orchestrators and the chosen rule skills. Each repository's workflow settings are on its settings card |
+| Runner on npm | The runner is prepared for publishing to npm as `plangineer-runner`. The engineer publishes it with `pnpm runner:publish` |
+| Cross-repository orchestrators | Not built. They get their own plan |
 
 ## Chunks
 
@@ -31,7 +34,7 @@ Chunks 1 to 9 cover MVP Phases 1 to 3. Chunk 10 is Phase 4, which is rollout and
 | 9 | Codex and implementation review | 2 | A review on a different model produces a plan audit with every deviation decided, which is the Phase 2 gate |
 | 10 | Verification | 3 | Every feature gets an evidence report, which is the Phase 3 gate |
 
-Phase 4, auto-fix and rollout, stays out of the MVP. It covers the assisted and automatic triage levels, auto-loop re-review, fix commits that can be reverted, push notifications and metrics.
+Phase 4, auto-fix and rollout, stays out of the MVP. It covers fix commits that can be reverted, push notifications and metrics.
 
 ### 1. Runner and run pipeline
 
@@ -53,7 +56,7 @@ A feature cannot start until a repository has finished setup.
 
 - **Prerequisites.** The skill specification and the baseline catalog, written as product docs.
 - **Repository list.** Admins add repositories, each with a short description.
-- **Repository settings.** The agent and model per role, where each role runs, how it signs in, and the automation level.
+- **Repository settings.** The agent and model per role, where each role runs, how it signs in, and the workflow settings.
 - **Setup flow.** Detect existing skills and agent instruction files, recommend from the baseline catalog, let the engineer choose from three checklists, generate the chosen skills and the four orchestrators, and open one setup pull request.
 - **Existing skills.** Setup never rewrites one. A skill found only under `.claude/skills/` moves unchanged to `.agents/skills/`.
 - **Mirror in the target repository.** The setup pull request adds `skills check` to CI and marks the mirror as generated in `.gitattributes`.
@@ -97,8 +100,8 @@ The finding pipeline is built once here, on plans, and chunk 9 reuses it for dif
 
 - **Finding record.** Location, claim, kind, severity, suggested change, source skill, author verdict, rule outcome and decision.
 - **Pipeline.** Review, confirm by the authoring model, apply triage rules, fix, and assess the round.
-- **Triage rules.** Read from the repository, at the manual automation level.
-- **Re-review.** The Ask setting: the engineer sees the assessment and chooses whether to review again.
+- **Triage rules.** Read from the repository, and applied as the plan review's `findings` setting says.
+- **Re-review.** The plan review's `rounds` setting: under `ask`, the engineer sees the assessment and chooses whether to review again.
 - **Inline findings.** Shown against the plan lines they refer to, with accept and reject buttons. Disputed findings are collapsed and can be overruled.
 - **Triage screen.** One finding per card.
 

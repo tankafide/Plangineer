@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { isTerminalRunEvent, RunnerSocketClose } from '@plangineer/contracts';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { packageVersion } from './package-version.ts';
 import { parseRunnerEnv, type RunnerEnv } from './config/runner-env.ts';
 import { type Runner, startCommand } from './start-command.ts';
 import { isProcessRunning } from './test/fake-agent.ts';
@@ -80,7 +81,7 @@ describe('the control plane socket', () => {
 
     expect(await plane.waitFor(isMessage('hello'))).toEqual({
       type: 'hello',
-      runnerVersion: '0.0.0',
+      runnerVersion: packageVersion(),
       platform: process.platform,
       concurrencyLimit: 2,
       clis: [

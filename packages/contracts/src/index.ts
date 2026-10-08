@@ -1,17 +1,69 @@
 import { meGet } from './me.ts';
+import {
+  repositoryAdd,
+  repositoryGet,
+  repositoryList,
+  repositoryListInstallable,
+  repositoryRemove,
+  repositorySetupRefresh,
+  repositorySetupScan,
+  repositorySetupStart,
+  repositoryUpdate,
+} from './repository.ts';
 import { runCancel, runCreate, runGet, runList } from './run.ts';
 import { runnerCreatePairingCode, runnerList, runnerPair, runnerRevoke } from './runner.ts';
 
 export { MeGetOutput, UserRole } from './me.ts';
 export { PageInput } from './pagination.ts';
 export {
+  AgentRole,
+  DEFAULT_WORKFLOW_SETTINGS,
+  GITHUB_FAILED_MESSAGE_MAX,
+  GithubRepositoryId,
+  INSTALLABLE_REPOSITORIES_MAX,
+  InstallableRepository,
+  InvalidSelectionData,
+  RepositoryAddInput,
+  RepositoryDetail,
+  RepositoryListInstallableOutput,
+  RepositorySummary,
+  RepositoryUpdateInput,
+  ReviewRounds,
+  ReviewSettings,
+  RoleSetting,
+  RoleSettings,
+  SetupStartInput,
+  WorkflowSettings,
+} from './repository.ts';
+export {
+  CatalogKind,
+  DESCRIPTION_MAX,
+  Orchestrator,
+  Recommendation,
+  RepositoryScan,
+  SCAN_PATH_MAX,
+  ScannedSkill,
+  SelectionError,
+  SETUP_BRANCH,
+  SETUP_INPUTS_MAX,
+  SETUP_JOB_MAX_BYTES,
+  SetupSelection,
+  SetupStatus,
+  SkillFilePath,
+  SkillLocation,
+  SkillName,
+  SKILLS_ROOT,
+  SLOT_LINE_PATTERN,
+} from './repository-setup.ts';
+export {
+  CommitSha,
   GitRef,
-  PermissionMode,
   Repository,
   Run,
   RunCancelReason,
   RunCreateInput,
   RunFailureReason,
+  RunKind,
   RunStatus,
   RunSummary,
   RUN_PROMPT_MAX,
@@ -29,6 +81,8 @@ export {
   RunEventType,
   runEventsPath,
   RunnerRunEventBody,
+  SETUP_PUSHED_PATHS_MAX,
+  SETUP_PUSHED_PATHS_MAX_BYTES,
   SKILL_NAME_MAX,
   SKILLS_MAX,
   STDERR_LINE_MAX,
@@ -48,10 +102,16 @@ export {
   MAX_EVENTS_MESSAGE_BYTES,
   MAX_EVENTS_PER_MESSAGE,
   MAX_SOCKET_MESSAGE_BYTES,
+  jsonByteLength,
   RunJob,
   RunnerSocketClose,
   RunnerToServerMessage,
   ServerToRunnerMessage,
+  SETUP_FILE_CONTENT_MAX,
+  SETUP_FILES_MAX,
+  SetupFile,
+  SetupJob,
+  TestJob,
 } from './runner-protocol.ts';
 
 export const contract = {
@@ -63,4 +123,17 @@ export const contract = {
     revoke: runnerRevoke,
   },
   run: { create: runCreate, get: runGet, list: runList, cancel: runCancel },
+  repository: {
+    listInstallable: repositoryListInstallable,
+    add: repositoryAdd,
+    list: repositoryList,
+    get: repositoryGet,
+    update: repositoryUpdate,
+    remove: repositoryRemove,
+  },
+  repositorySetup: {
+    scan: repositorySetupScan,
+    start: repositorySetupStart,
+    refresh: repositorySetupRefresh,
+  },
 };

@@ -6,6 +6,7 @@ import { fail, ok, type Result } from '../lib/result.ts';
 import type { ServiceDeps } from '../lib/service-deps.ts';
 import { appendRunEvents } from '../runs/run-events-repository.ts';
 import { lockOpenRunsOfRunner } from '../runs/run-repository.ts';
+import { advanceSetupOfRun } from '../setup/setup-advance.ts';
 import {
   generatePairingCode,
   generateRunnerToken,
@@ -81,13 +82,15 @@ export async function listRunners({ db, env }: ServiceDeps, userId: string, page
  * to close it, and its late events reach runs that have already ended.
  */
 export async function revokeRunner(
-  { db, env, logger }: ServiceDeps,
+  deps: ServiceDeps,
   userId: string,
   runnerId: string,
 ): Promise<Result<Runner, 'NOT_FOUND'>> {
-  return db.transaction(async (tx) => {
+  const { db, env, logger } = deps;
+  const revoked = await db.transaction(async (tx) => {
     const locked = await lockRunnerForUser(tx, userId, runnerId);
     if (locked === undefined) return fail('NOT_FOUND');
+    const cancelledRunIds: string[] = [];
     if (locked.status === 'active') {
       await markRunnerRevoked(tx, runnerId);
       for (const runId of await lockOpenRunsOfRunner(tx, runnerId)) {
@@ -97,13 +100,17 @@ export async function revokeRunner(
           [{ body: { type: 'run.cancelled', reason: 'runner_revoked' } }],
           { leaseDurationMs: env.RUN_LEASE_DURATION_MS, logger },
         );
+        cancelledRunIds.push(runId);
       }
       await wakeRunner(tx, runnerId);
     }
     const runner = await findRunnerForUser(tx, userId, runnerId, env.RUNNER_OFFLINE_AFTER_MS);
     if (runner === undefined) throw new Error(`Runner ${runnerId} vanished under its lock`);
-    return ok(runner);
+    return ok({ runner, cancelledRunIds });
   });
+  if (!revoked.ok) return revoked;
+  for (const runId of revoked.value.cancelledRunIds) await advanceSetupOfRun(deps, runId);
+  return ok(revoked.value.runner);
 }
 
 /** The active runner a token belongs to, looked up by the token's hash. */

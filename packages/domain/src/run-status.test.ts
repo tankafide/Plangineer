@@ -40,6 +40,13 @@ const EVENTS: Record<string, RunEventBody> = {
   'run.cancel_requested': { type: 'run.cancel_requested' },
   'run.lease_lost requeued': { type: 'run.lease_lost', attempt: 1, requeued: true },
   'run.lease_lost kept': { type: 'run.lease_lost', attempt: 1, requeued: false },
+  'setup.pushed': {
+    type: 'setup.pushed',
+    branch: 'plangineer/setup',
+    commit: 'b'.repeat(40),
+    changedPaths: ['.agents/skills/testing/SKILL.md'],
+    changedPathCount: 1,
+  },
   'run.succeeded': {
     type: 'run.succeeded',
     resultText: 'x',
@@ -84,6 +91,7 @@ const ALLOWED: Record<string, RunStatus> = {
   'running run.cancel_requested': 'running',
   'leased run.lease_lost kept': 'leased',
   'running run.lease_lost kept': 'running',
+  'running setup.pushed': 'running',
   ...Object.fromEntries(AGENT_EVENTS.map((type) => [`running ${type}`, 'running'])),
 };
 

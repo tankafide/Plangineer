@@ -3,19 +3,36 @@ import type { Readable } from 'node:stream';
 import {
   CLAUDE_CODE_MIN_VERSION,
   type CliStatus,
-  type PermissionMode,
   type RunnerRunEventBody,
   STDERR_LINE_MAX,
   STDERR_TAIL_LINES,
 } from '@plangineer/contracts';
 import { execa } from 'execa';
 import { stopProcess, trackProcess } from '../../process/stop-process.ts';
-import type { AgentAdapter, AgentJob } from '../agent-adapter.ts';
+import type { AgentAccess, AgentAdapter, AgentJob } from '../agent-adapter.ts';
 import { createClaudeMapping } from './claude-code-mapping.ts';
 import { childEnv } from './child-env.ts';
 
 const DETECT_TIMEOUT_MS = 30_000;
-const TOOLS = 'Read,Glob,Grep,Skill';
+/**
+ * The CLI flags for each access level. `dontAsk` denies anything the allow rules miss, and an
+ * `Edit(...)` rule covers every file tool. Web fetches reach only GitHub, so injected text
+ * cannot send repository code elsewhere.
+ */
+const ACCESS: Record<AgentAccess, { permissionMode: string; tools: string; allowedTools: string }> =
+  {
+    read_only: {
+      permissionMode: 'plan',
+      tools: 'Read,Glob,Grep,Skill',
+      allowedTools: 'Read,Glob,Grep,Skill',
+    },
+    write_skills: {
+      permissionMode: 'dontAsk',
+      tools: 'Read,Glob,Grep,Edit,Write,WebSearch,WebFetch,Agent',
+      allowedTools:
+        'Read Glob Grep Edit(.agents/skills/**) WebSearch WebFetch(domain:github.com) WebFetch(domain:raw.githubusercontent.com) Agent',
+    },
+  };
 /** Repository hooks and credential helpers never run; project skills still load. */
 const SETTINGS = JSON.stringify({
   disableAllHooks: true,
@@ -27,7 +44,8 @@ const SETTINGS = JSON.stringify({
 });
 
 /** Claude Code's arguments for a job. Never `--bare`, which skips skills and the user's login. */
-export function claudeArgs(permissionMode: PermissionMode): string[] {
+export function claudeArgs(access: AgentAccess): string[] {
+  const { permissionMode, tools, allowedTools } = ACCESS[access];
   return [
     '-p',
     '--output-format',
@@ -38,9 +56,9 @@ export function claudeArgs(permissionMode: PermissionMode): string[] {
     '--permission-prompts',
     'none',
     '--tools',
-    TOOLS,
+    tools,
     '--allowedTools',
-    TOOLS,
+    allowedTools,
     '--strict-mcp-config',
     '--settings',
     SETTINGS,
@@ -91,7 +109,7 @@ export function createClaudeCodeAdapter(command: readonly string[]): AgentAdapte
 
   async function* run(job: AgentJob, signal: AbortSignal): AsyncGenerator<RunnerRunEventBody> {
     if (signal.aborted) return;
-    const child = execa(file, [...prefix, ...claudeArgs(job.permissionMode)], {
+    const child = execa(file, [...prefix, ...claudeArgs(job.access)], {
       ...spawnOptions,
       input: job.prompt,
       cwd: job.cwd,

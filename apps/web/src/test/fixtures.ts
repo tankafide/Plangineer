@@ -1,4 +1,15 @@
-import type { Run, RunEvent, Runner } from '@plangineer/contracts';
+import {
+  DEFAULT_WORKFLOW_SETTINGS,
+  type InstallableRepository,
+  type RepositoryDetail,
+  type RepositoryScan,
+  type RepositorySummary,
+  type RoleSetting,
+  type Run,
+  type RunEvent,
+  type Runner,
+  type UserRole,
+} from '@plangineer/contracts';
 import { delay, http, HttpResponse } from 'msw';
 import { AUTH_URL, RPC_URL, rpcBody, server } from './app-harness.tsx';
 
@@ -26,6 +37,7 @@ export function runnerFixture(overrides: Partial<Runner> = {}): Runner {
 export function runFixture(overrides: Partial<Run> = {}): Run {
   return {
     id: RUN_ID,
+    kind: 'test',
     status: 'running',
     repository: { owner: 'acme', name: 'app' },
     ref: 'main',
@@ -46,6 +58,132 @@ export function runFixture(overrides: Partial<Run> = {}): Run {
     ...overrides,
   };
 }
+
+export const REPOSITORY_ID = '0199c1a4-2222-7d4e-8f90-a1b2c3d4e5f6';
+
+/** The signed-in user with this role. */
+export function answerMe(role: UserRole) {
+  return answerProcedure(
+    'me/get',
+    answerJson({
+      id: '0199c1a5-3333-7d4e-8f90-a1b2c3d4e5f6',
+      name: 'Ada',
+      email: 'ada@example.com',
+      role,
+    }),
+  );
+}
+
+export function scanFixture(overrides: Partial<RepositoryScan> = {}): RepositoryScan {
+  return {
+    commit: COMMIT,
+    defaultBranch: 'main',
+    scannedAt: '2026-10-08T09:00:00.000Z',
+    skills: [
+      { name: 'deploy', description: 'Ships the app.', location: 'agents' },
+      { name: 'legacy-notes', description: null, location: 'claude' },
+    ],
+    orchestratorReferencesExist: false,
+    unmovableContent: [],
+    instructionFiles: ['AGENTS.md', 'CLAUDE.md'],
+    recommendations: [
+      {
+        name: 'testing',
+        kind: 'template',
+        recommended: true,
+        required: true,
+        reason: 'Every repository needs it',
+      },
+      {
+        name: 'frontend-react',
+        kind: 'generated',
+        recommended: true,
+        required: false,
+        reason: 'Found `react` in package.json',
+      },
+      {
+        name: 'persistence',
+        kind: 'fixed',
+        recommended: false,
+        required: false,
+        reason: 'No signal found',
+      },
+    ],
+    ...overrides,
+  };
+}
+
+const ROLE_SETTING: RoleSetting = {
+  agent: 'claude_code',
+  model: null,
+  runsOn: 'local_runner',
+  signIn: 'engineer_login',
+};
+
+export function repositoryFixture(overrides: Partial<RepositoryDetail> = {}): RepositoryDetail {
+  return {
+    id: REPOSITORY_ID,
+    githubRepositoryId: 42,
+    owner: 'acme',
+    name: 'web-app',
+    description: 'The customer web app.',
+    roleSettings: {
+      pre_planning: ROLE_SETTING,
+      planning: ROLE_SETTING,
+      plan_review: ROLE_SETTING,
+      implementation: ROLE_SETTING,
+      implementation_review: ROLE_SETTING,
+      verification: ROLE_SETTING,
+    },
+    workflowSettings: DEFAULT_WORKFLOW_SETTINGS,
+    setup: null,
+    createdAt: '2026-10-08T08:00:00.000Z',
+    ...overrides,
+  };
+}
+
+type Setup = NonNullable<RepositoryDetail['setup']>;
+
+export function setupFixture(overrides: Partial<Setup> = {}): Setup {
+  return {
+    status: 'scanned',
+    scan: scanFixture(),
+    selection: null,
+    run: null,
+    pullRequest: null,
+    failureMessage: null,
+    updatedAt: '2026-10-08T09:00:00.000Z',
+    ...overrides,
+  };
+}
+
+export function repositorySummaryFixture(
+  overrides: Partial<RepositorySummary> = {},
+): RepositorySummary {
+  return {
+    id: REPOSITORY_ID,
+    owner: 'acme',
+    name: 'web-app',
+    description: 'The customer web app.',
+    setupStatus: null,
+    ...overrides,
+  };
+}
+
+export function installableFixture(
+  overrides: Partial<InstallableRepository> = {},
+): InstallableRepository {
+  return {
+    installationId: 7,
+    githubRepositoryId: 42,
+    owner: 'acme',
+    name: 'web-app',
+    private: true,
+    ...overrides,
+  };
+}
+
+export const INSTALL_URL = 'https://github.com/apps/plangineer/installations/new';
 
 /** Each event type's body, without the stored id, run id and time. */
 type EventBody = RunEvent extends infer E

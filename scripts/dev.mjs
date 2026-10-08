@@ -8,6 +8,7 @@ const options = { cwd: repoRoot, stdio: 'inherit' };
 try {
   await startPostgres();
   await execa('pnpm', ['--filter', '@plangineer/api', 'db:migrate'], options);
+  await execa('pnpm', ['--filter', '@plangineer/api', 'db:seed'], options);
   await execa(
     process.execPath,
     [binPath('turbo'), 'run', 'dev', '--filter=@plangineer/api', '--filter=@plangineer/web'],

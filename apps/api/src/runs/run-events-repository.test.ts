@@ -1,3 +1,4 @@
+import type { RunnerRunEventBody } from '@plangineer/contracts';
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createNotificationListener, RUN_EVENTS_CHANNEL } from '../realtime/notifications.ts';
@@ -43,8 +44,8 @@ describe('appendRunEvents', () => {
     const first = await appendRunnerEvents(deps(), runId, batch);
     const again = await appendRunnerEvents(deps(), runId, batch);
 
-    expect(first).toBe(3);
-    expect(again).toBe(3);
+    expect(first).toEqual({ ackedSeq: 3, ended: false });
+    expect(again).toEqual({ ackedSeq: 3, ended: false });
     const events = await storedEvents(database.db, runId);
     expect(events.map((event) => event.eventId)).toEqual([1, 2, 3, 4, 5]);
     expect(events.map((event) => event.runnerSeq)).toEqual([null, null, 1, 2, 3]);
@@ -77,6 +78,28 @@ describe('appendRunEvents', () => {
     expect((await runRow(database.db, runId)).status).toBe('failed');
   });
 
+  it('fails a test run that sends setup.pushed with protocol_error, and reports it ended', async () => {
+    const runId = await leasedRun();
+    const pushed: RunnerRunEventBody = {
+      type: 'setup.pushed',
+      branch: 'plangineer/setup',
+      commit: 'd'.repeat(40),
+      changedPaths: [],
+      changedPathCount: 0,
+    };
+
+    const appended = await appendRunnerEvents(deps(), runId, [startedEvent, pushed]);
+
+    const events = await storedEvents(database.db, runId);
+    expect(events.at(-1)?.payload).toMatchObject({
+      type: 'run.failed',
+      reason: 'protocol_error',
+      message: 'The runner sent setup.pushed for a test run.',
+    });
+    expect(appended.ended).toBe(true);
+    expect((await runRow(database.db, runId)).status).toBe('failed');
+  });
+
   it('skips runner events on a terminal run, leaves it unchanged, and still acknowledges', async () => {
     const runId = await leasedRun();
     await appendRunnerEvents(deps(), runId, [startedEvent, succeededEvent]);
@@ -84,7 +107,7 @@ describe('appendRunEvents', () => {
 
     const acked = await appendRunnerEvents(deps(), runId, [messageEvent()], 3);
 
-    expect(acked).toBe(2);
+    expect(acked).toEqual({ ackedSeq: 2, ended: false });
     expect(await storedEvents(database.db, runId)).toHaveLength(4);
     expect(await runRow(database.db, runId)).toEqual(before);
   });

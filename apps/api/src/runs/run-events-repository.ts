@@ -1,6 +1,7 @@
 import {
   RunEvent,
   type RunEventBody,
+  type RunKind,
   type RunnerRunEventBody,
   type RunStatus,
   TERMINAL_RUN_STATUSES,
@@ -28,6 +29,7 @@ export interface AppendOptions {
 }
 
 interface LockedRun {
+  kind: RunKind;
   status: RunStatus;
   attempt: number;
   lastEventId: number;
@@ -40,6 +42,7 @@ const isTerminal = (status: RunStatus) =>
 async function lockRun(tx: Transaction, runId: string): Promise<LockedRun> {
   const [row] = await tx
     .select({
+      kind: runs.kind,
       status: runs.status,
       attempt: runs.attempt,
       lastEventId: runs.lastEventId,
@@ -89,28 +92,36 @@ function statusColumns(body: RunEventBody, now: Date, leaseDurationMs: number) {
   }
 }
 
-function protocolError(type: string, status: RunStatus): RunEventBody {
-  return {
-    type: 'run.failed',
-    reason: 'protocol_error',
-    message: `The runner sent ${type} while the run was ${status}.`,
-    exitCode: null,
-    stderrTail: [],
-  };
+function protocolError(message: string): RunEventBody {
+  return { type: 'run.failed', reason: 'protocol_error', message, exitCode: null, stderrTail: [] };
+}
+
+/** Why an event cannot be appended to this run, or undefined when the status rules decide. */
+function kindMismatch(kind: RunKind, body: RunEventBody): string | undefined {
+  return body.type === 'setup.pushed' && kind !== 'setup'
+    ? `The runner sent setup.pushed for a ${kind} run.`
+    : undefined;
+}
+
+export interface AppendResult {
+  /** The highest stored runner sequence for the run's current attempt, or 0. */
+  ackedSeq: number;
+  /** Whether this append moved the run to a terminal status. */
+  ended: boolean;
 }
 
 /**
  * Appends events to one run in order under its row lock, applying each status move through
  * nextRunStatus. A repeated runner event and any event after the run ended are skipped. An
- * event the rules reject stops the batch and fails the run with protocol_error instead.
- * Returns the highest stored runner sequence for the run's current attempt.
+ * event the rules reject, or one its run's kind cannot have, stops the batch and fails the run
+ * with protocol_error instead.
  */
 export async function appendRunEvents(
   tx: Transaction,
   runId: string,
   items: RunEventItem[],
   { leaseDurationMs, logger }: AppendOptions,
-): Promise<number> {
+): Promise<AppendResult> {
   const run = await lockRun(tx, runId);
   const stored = await storedRunnerSeqs(tx, runId, items);
   let { status, attempt } = run;
@@ -147,13 +158,16 @@ export async function appendRunEvents(
       logger.info({ runId, type: item.body.type }, 'Run event after the run ended skipped');
       continue;
     }
+    const mismatch = kindMismatch(run.kind, item.body);
     const next = nextRunStatus(status, item.body);
-    if (next.ok) {
+    if (next.ok && mismatch === undefined) {
       await insert(item, next.status);
       continue;
     }
     logger.warn({ runId, type: item.body.type, status }, 'Run event rejected by the status rules');
-    const failed = protocolError(item.body.type, status);
+    const failed = protocolError(
+      mismatch ?? `The runner sent ${item.body.type} while the run was ${status}.`,
+    );
     const failedNext = nextRunStatus(status, failed);
     if (!failedNext.ok) throw new Error(`Run ${runId} cannot fail from status ${status}`);
     await insert({ body: failed }, failedNext.status);
@@ -168,7 +182,10 @@ export async function appendRunEvents(
       .where(eq(runs.id, runId));
     await tx.execute(sql`SELECT pg_notify(${RUN_EVENTS_CHANNEL}, ${runId})`);
   }
-  return highestRunnerSeq(tx, runId, attempt);
+  return {
+    ackedSeq: await highestRunnerSeq(tx, runId, attempt),
+    ended: !isTerminal(run.status) && isTerminal(status),
+  };
 }
 
 /** The highest runner sequence stored for one attempt of a run, or 0. */

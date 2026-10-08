@@ -53,7 +53,24 @@ const EVERY_KIND: RunEvent[] = [
     stderrTail: [],
   }),
   runEvent(13, { type: 'run.cancelled', reason: 'runner_revoked' }),
+  runEvent(14, {
+    type: 'setup.pushed',
+    branch: 'plangineer/setup',
+    commit: COMMIT,
+    changedPaths: ['.agents/skills/testing/SKILL.md'],
+    changedPathCount: 12,
+  }),
 ];
+
+function failedEvent(id: number, reason: 'setup_invalid_output' | 'setup_publish_failed') {
+  return runEvent(id, {
+    type: 'run.failed',
+    reason,
+    message: 'Failed.',
+    exitCode: null,
+    stderrTail: [],
+  });
+}
 
 function renderEvents(events: readonly RunEvent[]) {
   return renderPage(() => <RunEventList events={events} />);
@@ -86,6 +103,16 @@ describe('RunEventList', () => {
     expect(list.getByText('The runner lost attempt 1, so the run was queued again')).toBeTruthy();
     expect(list.getByText('Failed: The run took too long')).toBeTruthy();
     expect(list.getByText('Cancelled because its runner was revoked')).toBeTruthy();
+    expect(list.getByText('Pushed plangineer/setup at 0123456, 12 files')).toBeTruthy();
+  });
+
+  it.each([
+    ['setup_invalid_output', 'Failed: The setup output broke a skill rule'],
+    ['setup_publish_failed', 'Failed: The setup branch could not be pushed'],
+  ] as const)('labels the %s failure reason', async (reason, label) => {
+    await renderEvents([failedEvent(1, reason)]);
+
+    expect(await screen.findByText(label)).toBeTruthy();
   });
 
   it('expands a tool use input with Show input', async () => {

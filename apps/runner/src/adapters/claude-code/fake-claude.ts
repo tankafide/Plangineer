@@ -5,6 +5,8 @@
  */
 import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { appendFile, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import { text } from 'node:stream/consumers';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
@@ -59,6 +61,50 @@ async function hang(): Promise<null> {
   return null;
 }
 
+const SKILLS = path.join('.agents', 'skills');
+const SLOT_LINE = /^<!-- slot: .* -->$/;
+
+/** Every SKILL.md under .agents/skills/ in the working directory. */
+async function skillFiles(): Promise<string[]> {
+  const entries = await readdir(SKILLS, { recursive: true, withFileTypes: true });
+  return entries
+    .filter((entry) => entry.isFile() && entry.name === 'SKILL.md')
+    .map((entry) => path.join(entry.parentPath, entry.name));
+}
+
+/** Replaces every slot line, as the setup agent does, and returns the files it filled. */
+async function fillSlots(): Promise<string[]> {
+  const filled: string[] = [];
+  for (const file of await skillFiles()) {
+    const lines = (await readFile(file, 'utf8')).split('\n');
+    if (!lines.some((line) => SLOT_LINE.test(line))) continue;
+    const replaced = lines.map((line) =>
+      SLOT_LINE.test(line) ? 'Filled by the fake agent.' : line,
+    );
+    await writeFile(file, replaced.join('\n'));
+    filled.push(file);
+  }
+  return filled;
+}
+
+/** Writes the generated `backend` rule skill, under the given frontmatter name. */
+async function writeBackend(name = 'backend'): Promise<void> {
+  const folder = path.join(SKILLS, 'backend');
+  await mkdir(path.join(folder, 'agents'), { recursive: true });
+  const skill = `---\nname: ${name}\ndescription: Server rules.\ndisable-model-invocation: true\n---\n\n# Backend\n\nSee [project-stack](../project-stack/SKILL.md).\n`;
+  await writeFile(path.join(folder, 'SKILL.md'), skill);
+  await writeFile(
+    path.join(folder, 'agents', 'openai.yaml'),
+    'policy:\n  allow_implicit_invocation: false\n',
+  );
+}
+
+/** Writes like the setup agent, then reports success. */
+async function setup(change: () => Promise<void> = async () => {}): Promise<number> {
+  await change();
+  return exitAfter(fixture('success-tools.jsonl'), 0);
+}
+
 /** Each scenario resolves to its exit code, or null when it waits to be stopped. */
 const scenarios: Record<string, () => Promise<number | null>> = {
   success: () => exitAfter(fixture('success-tools.jsonl'), 0),
@@ -69,6 +115,38 @@ const scenarios: Record<string, () => Promise<number | null>> = {
   crlf: () => exitAfter(fixture('success-tools.jsonl'), 0, { ending: '\r\n' }),
   hang,
   slow: () => exitAfter(fixture('success-tools.jsonl'), 0, { gapMs: SLOW_LINE_GAP_MS }),
+  'setup-skills': () =>
+    setup(async () => {
+      await fillSlots();
+      await writeBackend();
+    }),
+  'setup-invalid-skill': () =>
+    setup(async () => {
+      await fillSlots();
+      await writeBackend('back-end');
+    }),
+  'setup-edits-fixed-text': () =>
+    setup(async () => {
+      const [filled] = await fillSlots();
+      if (filled !== undefined) {
+        const content = await readFile(filled, 'utf8');
+        await writeFile(filled, content.replace(/^# .*$/m, '# Retitled by the agent'));
+      }
+      await writeBackend();
+    }),
+  'setup-leaves-slot': () => setup(() => writeBackend()),
+  'setup-edits-existing': () =>
+    setup(async () => {
+      await fillSlots();
+      await writeBackend();
+      await appendFile(path.join(SKILLS, 'alpha', 'SKILL.md'), 'Edited.\n');
+    }),
+  'setup-outside-path': () =>
+    setup(async () => {
+      await fillSlots();
+      await writeBackend();
+      await writeFile('notes.txt', 'Notes.\n');
+    }),
 };
 
 async function main(): Promise<void> {

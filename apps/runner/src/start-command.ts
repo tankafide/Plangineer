@@ -129,7 +129,7 @@ export async function startRunner(options: RunnerOptions): Promise<Runner> {
       }),
     };
     runs.set(runId, run);
-    logger.info({ runId, attempt, repository: job.repository, ref: job.ref }, 'Run assigned');
+    logger.info({ runId, attempt, kind: job.kind, repository: job.repository }, 'Run assigned');
     if (isEnding) run.job.stop('shutdown');
     queue.add(run.job);
   }

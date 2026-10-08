@@ -1,6 +1,6 @@
 import { useRunnerList } from '@plangineer/api-client';
 import { useEffect } from 'react';
-import { type Control, Controller } from 'react-hook-form';
+import { type Control, Controller, type FieldPathByValue, type FieldValues } from 'react-hook-form';
 import { Field, FieldError, FieldTitle } from '@/components/ui/field';
 import {
   Select,
@@ -9,10 +9,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { NewRunInput, NewRunOutput } from './new-run-fields';
-
-const LABEL_ID = 'new-run-runner-label';
-const ERROR_ID = 'new-run-runner-error';
 
 /** The signed-in user's active runners from every page, as select items. */
 function useActiveRunners() {
@@ -39,16 +35,29 @@ function RunnerHint({ runners }: { runners: ReturnType<typeof useActiveRunners> 
   return null;
 }
 
-/** The Runner field of the New test run form: a select of active runners. */
-export function RunnerField({ control }: { control: Control<NewRunInput, unknown, NewRunOutput> }) {
+/**
+ * A Runner field for any form that holds a runner id as a string: a select of active runners.
+ * `idPrefix` keeps its element ids unique when two forms share a page.
+ */
+export function RunnerField<TValues extends FieldValues, TOutput>({
+  control,
+  name,
+  idPrefix,
+}: {
+  control: Control<TValues, unknown, TOutput>;
+  name: FieldPathByValue<TValues, string>;
+  idPrefix: string;
+}) {
   const runners = useActiveRunners();
+  const labelId = `${idPrefix}-runner-label`;
+  const errorId = `${idPrefix}-runner-error`;
   return (
     <Controller
       control={control}
-      name="runnerId"
+      name={name}
       render={({ field, fieldState }) => (
         <Field data-invalid={fieldState.invalid}>
-          <FieldTitle id={LABEL_ID}>Runner</FieldTitle>
+          <FieldTitle id={labelId}>Runner</FieldTitle>
           <Select
             items={runners.items}
             value={field.value === '' ? null : field.value}
@@ -58,9 +67,9 @@ export function RunnerField({ control }: { control: Control<NewRunInput, unknown
             <SelectTrigger
               ref={field.ref}
               className="w-full"
-              aria-labelledby={LABEL_ID}
+              aria-labelledby={labelId}
               aria-invalid={fieldState.invalid}
-              aria-describedby={fieldState.invalid ? ERROR_ID : undefined}
+              aria-describedby={fieldState.invalid ? errorId : undefined}
               onBlur={field.onBlur}
             >
               <SelectValue
@@ -76,7 +85,7 @@ export function RunnerField({ control }: { control: Control<NewRunInput, unknown
             </SelectContent>
           </Select>
           <RunnerHint runners={runners} />
-          <FieldError id={ERROR_ID} errors={[fieldState.error]} />
+          <FieldError id={errorId} errors={[fieldState.error]} />
         </Field>
       )}
     />

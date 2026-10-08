@@ -5,7 +5,11 @@ import {
   findActiveRunsOfRunner,
   lockRunOfRunner,
 } from '../runs/run-dispatch-repository.ts';
-import { appendRunEvents, highestRunnerSeqs } from '../runs/run-events-repository.ts';
+import {
+  type AppendResult,
+  appendRunEvents,
+  highestRunnerSeqs,
+} from '../runs/run-events-repository.ts';
 import { recordPlanLimit, recordRunnerHello, recordRunnerSeen } from './runner-repository.ts';
 
 type Message<T extends RunnerToServerMessage['type']> = Extract<RunnerToServerMessage, { type: T }>;
@@ -41,14 +45,14 @@ export async function acceptHello(
 
 /**
  * Stores a batch for this runner's run at its current attempt, under the run's lock, and
- * returns the sequence to acknowledge. Returns undefined, storing nothing, for a stale
- * attempt, a run that is not leased or running, or another runner's run.
+ * returns the sequence to acknowledge and whether the run ended. Returns undefined, storing
+ * nothing, for a stale attempt, a run that is not leased or running, or another runner's run.
  */
 export async function acceptRunEvents(
   { db, env, logger }: ServiceDeps,
   runnerId: string,
   message: Message<'run.events'>,
-): Promise<number | undefined> {
+): Promise<AppendResult | undefined> {
   return db.transaction(async (tx) => {
     const run = await lockRunOfRunner(tx, runnerId, message.runId);
     if (

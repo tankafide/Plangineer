@@ -118,6 +118,12 @@ function EventBody({ event }: { event: RunEvent }) {
             : `The runner lost attempt ${event.attempt}`}
         </EventLabel>
       );
+    case 'setup.pushed':
+      return (
+        <EventLabel>
+          {`Pushed ${event.branch} at ${event.commit.slice(0, 7)}, ${event.changedPathCount} files`}
+        </EventLabel>
+      );
     case 'run.succeeded':
       return <EventLabel>Succeeded</EventLabel>;
     case 'run.failed':

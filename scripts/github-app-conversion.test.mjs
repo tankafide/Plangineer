@@ -19,6 +19,7 @@ describe('readConversion', () => {
 
     expect(converted).toEqual({
       id: 123,
+      slug: 'plangineer-dev-abc123',
       client_id: 'Iv1.abc',
       client_secret: 'secret',
       pem: app().pem,
@@ -39,6 +40,14 @@ describe('readConversion', () => {
 
     await expect(readConversion(response)).rejects.toThrow(
       "GitHub's conversion response is missing or has invalid fields: client_secret, pem",
+    );
+  });
+
+  it('refuses a response without the slug the install link needs', async () => {
+    const response = Response.json(app({ slug: undefined }));
+
+    await expect(readConversion(response)).rejects.toThrow(
+      "GitHub's conversion response is missing or has invalid fields: slug",
     );
   });
 });

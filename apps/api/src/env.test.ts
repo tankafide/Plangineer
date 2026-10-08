@@ -1,5 +1,13 @@
+import { createPrivateKey, generateKeyPairSync } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { parseEnv } from './env.ts';
+
+/** A PKCS#1 key, the form GitHub issues. */
+const PKCS1_KEY = generateKeyPairSync('rsa', {
+  modulusLength: 2048,
+  privateKeyEncoding: { type: 'pkcs1', format: 'pem' },
+  publicKeyEncoding: { type: 'spki', format: 'pem' },
+}).privateKey;
 
 function source(overrides: Record<string, string | undefined> = {}) {
   return {
@@ -10,6 +18,9 @@ function source(overrides: Record<string, string | undefined> = {}) {
     BETTER_AUTH_URL: 'http://localhost:5173',
     GITHUB_APP_CLIENT_ID: 'client-id',
     GITHUB_APP_CLIENT_SECRET: 'client-secret',
+    GITHUB_APP_ID: '12345',
+    GITHUB_APP_SLUG: 'plangineer-dev-abc123',
+    GITHUB_APP_PRIVATE_KEY: PKCS1_KEY,
     RUNNER_HEARTBEAT_INTERVAL_MS: '10000',
     RUN_LEASE_DURATION_MS: '30000',
     RUNNER_OFFLINE_AFTER_MS: '30000',
@@ -25,6 +36,8 @@ describe('parseEnv', () => {
   it('returns typed values for a valid source', () => {
     expect(parseEnv(source())).toEqual({
       ...source(),
+      GITHUB_APP_ID: 12_345,
+      GITHUB_APP_PRIVATE_KEY: expect.stringMatching(/^-----BEGIN PRIVATE KEY-----\n/),
       API_PORT: 3000,
       RUNNER_HEARTBEAT_INTERVAL_MS: 10_000,
       RUN_LEASE_DURATION_MS: 30_000,
@@ -102,5 +115,29 @@ describe('parseEnv', () => {
 
   it('accepts a lease of exactly 3 heartbeat intervals', () => {
     expect(parseEnv(source({ RUN_LEASE_DURATION_MS: '30000' })).RUN_LEASE_DURATION_MS).toBe(30_000);
+  });
+
+  it('converts the App key to PKCS#8 without changing it', () => {
+    const { GITHUB_APP_PRIVATE_KEY } = parseEnv(source());
+    expect(createPrivateKey(GITHUB_APP_PRIVATE_KEY).export({ type: 'pkcs1', format: 'pem' })).toBe(
+      PKCS1_KEY,
+    );
+  });
+
+  it.each([
+    ['GITHUB_APP_ID', undefined],
+    ['GITHUB_APP_ID', '0'],
+    ['GITHUB_APP_ID', 'abc'],
+    ['GITHUB_APP_SLUG', 'Plangineer Dev'],
+    ['GITHUB_APP_PRIVATE_KEY', undefined],
+  ])('names %s when it is %s', (name, value) => {
+    expect(() => parseEnv(source({ [name]: value }))).toThrow(name);
+  });
+
+  it('names a private key that is not a PEM without printing its value', () => {
+    const value = 'not-a-pem-but-a-secret-value';
+    const parse = () => parseEnv(source({ GITHUB_APP_PRIVATE_KEY: value }));
+    expect(parse).toThrow('GITHUB_APP_PRIVATE_KEY: must be a PEM private key');
+    expect(parse).not.toThrow(value);
   });
 });

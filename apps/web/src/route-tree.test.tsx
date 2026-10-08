@@ -77,7 +77,7 @@ describe('routes', () => {
     expect(router.state.location.pathname).toBe('/sign-in');
   });
 
-  it('shows the header with Account, Runners and Runs above a signed-in screen', async () => {
+  it('shows the header with Account, Runners, Repositories and Runs above a signed-in screen', async () => {
     answerSignedIn();
     answerProcedure('runner/list', answerJson(page([])));
 
@@ -88,6 +88,9 @@ describe('routes', () => {
     const runners = screen.getByRole('link', { name: 'Runners' });
     expect(runners.getAttribute('aria-current')).toBe('page');
     expect(screen.getByRole('link', { name: 'Runs' }).getAttribute('href')).toBe('/runs');
+    expect(screen.getByRole('link', { name: 'Repositories' }).getAttribute('href')).toBe(
+      '/repositories',
+    );
     expect(screen.getByRole('heading', { name: 'Runners' })).toBeTruthy();
   });
 
@@ -95,6 +98,14 @@ describe('routes', () => {
     answerSignedIn();
 
     await renderRoute('/runs/not-a-run');
+
+    expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeTruthy();
+  });
+
+  it('shows Page not found for a repository id that is not a uuid', async () => {
+    answerSignedIn();
+
+    await renderRoute('/repositories/not-a-repository');
 
     expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeTruthy();
   });

@@ -70,11 +70,11 @@ Every implementation gets at least one review. When the build is done and the ch
 
 1. A review subagent follows `implementation-review-orchestrator` steps 1 to 5 against the base and head commits and the plan path, and returns candidate findings.
 2. A verification subagent runs `finding-verification` on them and returns each kept finding with its recommendation and context.
-3. This session presents the verified findings as the [finding format](../orchestrator-references/finding-format.md#presenting-findings) describes, and the engineer picks.
+3. This session presents the verified findings as the [finding format](../orchestrator-references/finding-format.md#presenting-findings) describes, and the engineer picks, unless the `implementationReview` [workflow settings](../orchestrator-references/review-loop.md#workflow-settings) fix them all.
 4. This session fixes the picks, runs the checks and commits the round, as `implementation-review-orchestrator` steps 8 to 10 describe.
-5. This session offers another round, as [review loop](../orchestrator-references/review-loop.md#offering-another-round) describes.
+5. This session runs or offers another round, as the `implementationReview` [workflow settings](../orchestrator-references/review-loop.md#workflow-settings) decide.
 
-Finish the branch once the engineer declines another round.
+Finish the branch once no further round runs.
 
 ### Finish
 

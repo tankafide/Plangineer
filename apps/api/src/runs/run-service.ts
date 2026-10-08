@@ -10,6 +10,7 @@ import { toPage } from '../lib/page.ts';
 import { fail, ok, type Result } from '../lib/result.ts';
 import type { ServiceDeps } from '../lib/service-deps.ts';
 import { lockRunnerForUser, wakeRunner } from '../runners/runner-repository.ts';
+import { advanceSetupOfRun } from '../setup/setup-advance.ts';
 import { appendRunEvents, type RunEventItem } from './run-events-repository.ts';
 import { findRunForUser, insertRun, listRunsForUser, lockRunForUser } from './run-repository.ts';
 
@@ -31,7 +32,7 @@ export async function createRun(
     const runner = await lockRunnerForUser(tx, userId, input.runnerId);
     if (runner === undefined) return fail('NOT_FOUND');
     if (runner.status === 'revoked') return fail('CONFLICT');
-    const runId = await insertRun(tx, userId, input);
+    const runId = await insertRun(tx, userId, { ...input, kind: 'test' });
     await appendRunEvents(tx, runId, [{ body: { type: 'run.queued' } }], {
       leaseDurationMs: env.RUN_LEASE_DURATION_MS,
       logger,
@@ -65,7 +66,7 @@ export async function cancelRun(
   runId: string,
 ): Promise<Result<Run, 'NOT_FOUND' | 'CONFLICT'>> {
   const { db, env, logger } = deps;
-  return db.transaction(async (tx) => {
+  const cancelled = await db.transaction(async (tx) => {
     const run = await lockRunForUser(tx, userId, runId);
     if (run === undefined) return fail('NOT_FOUND');
     if ((TERMINAL_RUN_STATUSES as readonly RunStatus[]).includes(run.status)) {
@@ -75,8 +76,14 @@ export async function cancelRun(
     if (run.status === 'queued') {
       items.push({ body: { type: 'run.cancelled', reason: 'requested' } });
     }
-    await appendRunEvents(tx, runId, items, { leaseDurationMs: env.RUN_LEASE_DURATION_MS, logger });
+    const { ended } = await appendRunEvents(tx, runId, items, {
+      leaseDurationMs: env.RUN_LEASE_DURATION_MS,
+      logger,
+    });
     await wakeRunner(tx, run.runnerId);
-    return ok(await readRun(tx, deps, userId, runId));
+    return ok({ ended, run: await readRun(tx, deps, userId, runId) });
   });
+  if (!cancelled.ok) return cancelled;
+  if (cancelled.value.ended) await advanceSetupOfRun(deps, runId);
+  return ok(cancelled.value.run);
 }

@@ -13,6 +13,8 @@ export const FAILURE_REASON_LABELS: Record<RunFailureReason, string> = {
   protocol_error: 'The runner sent an event out of order',
   event_buffer_full: 'The runner could not send its events in time',
   timeout: 'The run took too long',
+  setup_invalid_output: 'The setup output broke a skill rule',
+  setup_publish_failed: 'The setup branch could not be pushed',
 };
 
 export const CANCEL_REASON_LABELS: Record<RunCancelReason, string> = {

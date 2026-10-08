@@ -53,7 +53,7 @@ Orchestrators read rule skills by path with a file read, never through a skill t
 
 ### Tests
 
-Test generated text with a script: frontmatter fields and limits, tier settings, link targets, and that `skills check` passes. Test prompts with the fake agent, which receives the prompt and asserts it holds the required inputs. Never call a real model in a test. Record any run against a real CLI as a manual check.
+Test generated text with a script: frontmatter fields and limits, tier settings, link targets, and that `skills check` passes. Generated skills are checked with `plangineer-runner skills lint`, the same lint this repository runs. Test prompts with the fake agent, which receives the prompt and asserts it holds the required inputs. Never call a real model in a test. Record any run against a real CLI as a manual check.
 
 ## Plan review mode
 

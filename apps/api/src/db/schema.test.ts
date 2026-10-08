@@ -2,8 +2,17 @@ import { randomBytes } from 'node:crypto';
 import { count, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { storeRunner, storeUser, testAuth } from '../test/fixtures.ts';
+import { storeRepository, testScan, testSelection, testSetupJob } from '../test/setup-fixtures.ts';
 import { createTestDatabase, type TestDatabase } from '../test/test-database.ts';
-import { runEvents, runnerPairingCodes, runners, runs, user } from './schema.ts';
+import {
+  repositories,
+  repositorySetups,
+  runEvents,
+  runnerPairingCodes,
+  runners,
+  runs,
+  user,
+} from './schema.ts';
 
 /** Resolves to the name of the constraint a failed write broke. */
 async function brokenConstraint(write: Promise<unknown>): Promise<string | undefined> {
@@ -26,6 +35,12 @@ const event = (runId: string, overrides: Partial<typeof runEvents.$inferInsert> 
   ...overrides,
 });
 
+const setup = (
+  repositoryId: string,
+  overrides: Partial<typeof repositorySetups.$inferInsert> = {},
+) => ({ repositoryId, status: 'scanned' as const, scan: testScan(), ...overrides });
+const started = { selection: testSelection(), job: testSetupJob() };
+
 describe('schema constraints', () => {
   let database: TestDatabase;
   let userId: string;
@@ -42,6 +57,7 @@ describe('schema constraints', () => {
   });
 
   const run = (overrides: Partial<typeof runs.$inferInsert> = {}) => ({
+    kind: 'test' as const,
     userId,
     runnerId,
     repositoryOwner: 'acme',
@@ -148,5 +164,107 @@ describe('schema constraints', () => {
       database.db.select({ n: count() }).from(runEvents).where(eq(runEvents.runId, ownRun.id)),
     ]);
     expect(counts.map(([row]) => row?.n)).toEqual([0, 0, 0, 0]);
+  });
+
+  describe('repositories and their setups', () => {
+    let githubRepositoryId = 5000;
+    const nextRepository = () => {
+      githubRepositoryId += 1;
+      return storeRepository(database.db, { createdBy: userId, githubRepositoryId });
+    };
+
+    it('rejects a second repository with the same GitHub id', async () => {
+      await storeRepository(database.db, { createdBy: userId, githubRepositoryId: 4000 });
+
+      expect(
+        await brokenConstraint(
+          storeRepository(database.db, { createdBy: userId, githubRepositoryId: 4000 }),
+        ),
+      ).toBe('repositories_github_repository_id_key');
+    });
+
+    it.each([
+      ['an empty description', ''],
+      ['a description of 201 characters', 'x'.repeat(201)],
+    ])('rejects %s', async (_name, description) => {
+      expect(
+        await brokenConstraint(
+          storeRepository(database.db, {
+            createdBy: userId,
+            githubRepositoryId: 4100,
+            description,
+          }),
+        ),
+      ).toBe('repositories_description_length_check');
+    });
+
+    it.each([
+      [
+        'a generating setup with no selection',
+        { status: 'generating' as const },
+        'repository_setups_started_check',
+      ],
+      [
+        'a pull request number with no URL',
+        { pullRequestNumber: 7 },
+        'repository_setups_pull_request_pair_check',
+      ],
+      [
+        'an open pull request status with no pull request',
+        { status: 'pr_open' as const, ...started },
+        'repository_setups_pull_request_check',
+      ],
+      [
+        'a failed setup with no failure message',
+        { status: 'failed' as const, ...started },
+        'repository_setups_failure_message_check',
+      ],
+      [
+        'a failure message on a scanned setup',
+        { failureMessage: 'Broke' },
+        'repository_setups_failure_message_check',
+      ],
+      [
+        'a failure message of 2,001 characters',
+        { status: 'failed' as const, ...started, failureMessage: 'x'.repeat(2_001) },
+        'repository_setups_failure_message_length_check',
+      ],
+    ])('rejects %s', async (_name, overrides, constraint) => {
+      const repositoryId = await nextRepository();
+
+      expect(
+        await brokenConstraint(
+          database.db.insert(repositorySetups).values(setup(repositoryId, overrides)),
+        ),
+      ).toBe(constraint);
+    });
+
+    it('rejects a second setup for one repository and a second setup for one run', async () => {
+      const first = await nextRepository();
+      const second = await nextRepository();
+      const runId = await storedRunId();
+      const withRun = { status: 'generating' as const, ...started, runId };
+      await database.db.insert(repositorySetups).values(setup(first, withRun));
+
+      expect(
+        await brokenConstraint(database.db.insert(repositorySetups).values(setup(first))),
+      ).toBe('repository_setups_repository_id_key');
+      expect(
+        await brokenConstraint(database.db.insert(repositorySetups).values(setup(second, withRun))),
+      ).toBe('repository_setups_run_id_key');
+    });
+
+    it('deletes the setup with its repository', async () => {
+      const repositoryId = await nextRepository();
+      await database.db.insert(repositorySetups).values(setup(repositoryId));
+
+      await database.db.delete(repositories).where(eq(repositories.id, repositoryId));
+
+      const [row] = await database.db
+        .select({ n: count() })
+        .from(repositorySetups)
+        .where(eq(repositorySetups.repositoryId, repositoryId));
+      expect(row?.n).toBe(0);
+    });
   });
 });

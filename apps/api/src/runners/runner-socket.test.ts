@@ -112,7 +112,7 @@ describe('runner socket', () => {
         repository: { owner: 'acme', name: 'app' },
         ref: 'main',
         prompt: 'List the files.',
-        permissionMode: 'plan',
+        kind: 'test',
       },
     });
     const [row] = await database.db.select().from(runners).where(eq(runners.id, runnerId));

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { RunnerToServerMessage, ServerToRunnerMessage } from './runner-protocol.ts';
+import { SETUP_INPUTS_MAX, SETUP_JOB_MAX_BYTES } from './repository-setup.ts';
+import {
+  jsonByteLength,
+  RunJob,
+  RunnerToServerMessage,
+  SETUP_FILE_CONTENT_MAX,
+  ServerToRunnerMessage,
+} from './runner-protocol.ts';
 
 const RUN_ID = '0199c1a2-7b3c-7d4e-8f90-a1b2c3d4e5f6';
 const MESSAGE = { type: 'agent.message', text: 'hi', truncated: false, parentToolUseId: null };
@@ -96,10 +103,10 @@ describe('RunnerToServerMessage', () => {
 
 describe('ServerToRunnerMessage', () => {
   const job = {
+    kind: 'test',
     repository: { owner: 'acme', name: 'app' },
     ref: 'main',
     prompt: 'List the files.',
-    permissionMode: 'plan',
   };
 
   it.each([
@@ -120,10 +127,71 @@ describe('ServerToRunnerMessage', () => {
 
   it.each([
     { type: 'run.assign', runId: RUN_ID, attempt: 1, job: { ...job, ref: '-x' } },
-    { type: 'run.assign', runId: RUN_ID, attempt: 1, job: { ...job, permissionMode: 'auto' } },
+    { type: 'run.assign', runId: RUN_ID, attempt: 1, job: { ...job, kind: 'plan' } },
     { type: 'run.ack', runId: RUN_ID, attempt: 1, seq: -1 },
     { type: 'run.cancel', runId: RUN_ID, attempt: 1, reason: 'x' },
   ])('rejects the invalid message %#', (message) => {
     expect(ServerToRunnerMessage.safeParse(message).success).toBe(false);
+  });
+});
+
+function setupJob(overrides: Record<string, unknown> = {}) {
+  return {
+    kind: 'setup',
+    repository: { owner: 'acme', name: 'app' },
+    commit: 'a'.repeat(40),
+    defaultBranch: 'main',
+    prompt: 'Finish the skills.',
+    inputs: '# Inputs',
+    files: [{ path: '.agents/skills/testing/SKILL.md', content: '# Testing' }],
+    moveSkills: ['legacy'],
+    templateSkills: ['testing'],
+    generateSkills: ['backend'],
+    ...overrides,
+  };
+}
+
+const file = (index: number, content = '') => ({
+  path: `.agents/skills/skill-${index}/SKILL.md`,
+  content,
+});
+
+describe('RunJob', () => {
+  const testJob = {
+    kind: 'test',
+    repository: { owner: 'acme', name: 'app' },
+    ref: 'main',
+    prompt: 'List the files.',
+  };
+
+  it('parses a test job and a setup job', () => {
+    expect(RunJob.parse(testJob)).toEqual(testJob);
+    expect(RunJob.parse(setupJob())).toEqual(setupJob());
+  });
+
+  it('rejects a setup job with 65 files', () => {
+    const files = Array.from({ length: 65 }, (_, index) => file(index));
+    expect(RunJob.safeParse(setupJob({ files })).success).toBe(false);
+  });
+
+  it('rejects a setup job whose UTF-8 JSON is over the byte cap', () => {
+    // Each é is one character and two UTF-8 bytes, so the files fit by length and not by bytes.
+    const content = 'é'.repeat(SETUP_FILE_CONTENT_MAX);
+    const files = Array.from({ length: 8 }, (_, index) => file(index, content));
+    const job = setupJob({ files });
+    expect(JSON.stringify(job).length).toBeLessThan(SETUP_JOB_MAX_BYTES);
+    expect(jsonByteLength(job)).toBeGreaterThan(SETUP_JOB_MAX_BYTES);
+    expect(RunJob.safeParse(job).success).toBe(false);
+  });
+
+  it.each([
+    ['a file outside .agents/skills', { files: [{ path: 'README.md', content: '' }] }],
+    ['a file path with ..', { files: [{ path: '.agents/skills/a/../b/SKILL.md', content: '' }] }],
+    ['a skill name with a capital', { generateSkills: ['Backend'] }],
+    ['a short commit', { commit: 'abc' }],
+    ['inputs over the cap', { inputs: 'x'.repeat(SETUP_INPUTS_MAX + 1) }],
+    ['an unknown key', { permissionMode: 'plan' }],
+  ])('rejects a setup job with %s', (_, overrides) => {
+    expect(RunJob.safeParse(setupJob(overrides)).success).toBe(false);
   });
 });

@@ -18,7 +18,7 @@ How `apps/api` talks to GitHub. One GitHub App serves the whole deployment, with
 - All GitHub code sits in the GitHub adapter module, per the one-module-per-outside-system rule in [api-server](../api-server/SKILL.md). Handlers call it and never import Octokit.
 - Store installations and repositories by numeric id, never by `owner/name`, which changes on rename or transfer.
 - List endpoints go through `octokit.paginate`. Never read only the first page.
-- Permissions: contents and pull requests write, checks and metadata read. Subscribe the App only to the events in the table below. Adding either is a plan decision.
+- Permissions: pull requests write, and contents, checks and metadata read. The runner pushes branches with the engineer's own credentials, so the App never writes code. Subscribe the App only to the events in the table below. Adding either is a plan decision.
 
 ### Installation tokens
 

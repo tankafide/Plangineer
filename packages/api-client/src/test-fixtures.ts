@@ -1,4 +1,10 @@
-import type { Run, RunEvent, Runner } from '@plangineer/contracts';
+import {
+  DEFAULT_WORKFLOW_SETTINGS,
+  type RepositoryDetail,
+  type Run,
+  type RunEvent,
+  type Runner,
+} from '@plangineer/contracts';
 
 export const RUNNER_ID = '0199c1a2-7b3c-7d4e-8f90-a1b2c3d4e5f6';
 export const RUN_ID = '0199c1a3-1111-7d4e-8f90-a1b2c3d4e5f6';
@@ -24,6 +30,7 @@ export function runnerFixture(overrides: Partial<Runner> = {}): Runner {
 export function runFixture(overrides: Partial<Run> = {}): Run {
   return {
     id: RUN_ID,
+    kind: 'test',
     status: 'queued',
     repository: { owner: 'acme', name: 'app' },
     ref: 'main',
@@ -110,5 +117,35 @@ export function droppableSseResponse(chunks: string[]) {
   return {
     response: new Response(body, { headers: { 'Content-Type': 'text/event-stream' } }),
     drop: async () => (await opened.promise).error(new TypeError('network error')),
+  };
+}
+
+export const REPOSITORY_ID = '0199c1a2-2222-7000-8000-000000000001';
+
+export function repositoryFixture(overrides: Partial<RepositoryDetail> = {}): RepositoryDetail {
+  const role = {
+    agent: 'claude_code',
+    model: null,
+    runsOn: 'local_runner',
+    signIn: 'engineer_login',
+  } as const;
+  return {
+    id: REPOSITORY_ID,
+    githubRepositoryId: 1001,
+    owner: 'acme',
+    name: 'app',
+    description: 'The web app',
+    roleSettings: {
+      pre_planning: role,
+      planning: role,
+      plan_review: role,
+      implementation: role,
+      implementation_review: role,
+      verification: role,
+    },
+    workflowSettings: DEFAULT_WORKFLOW_SETTINGS,
+    setup: null,
+    createdAt: '2026-10-08T12:00:00.000Z',
+    ...overrides,
   };
 }

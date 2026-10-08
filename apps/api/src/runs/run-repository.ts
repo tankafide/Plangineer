@@ -1,7 +1,8 @@
 import {
   type PageInput,
+  type Repository,
   Run,
-  type RunCreateInput,
+  type RunKind,
   type RunStatus,
   RunSummary,
 } from '@plangineer/contracts';
@@ -16,6 +17,7 @@ const OPEN_STATUSES: RunStatus[] = ['queued', 'leased', 'running'];
 function summaryColumns(offlineAfterMs: number) {
   return {
     id: runs.id,
+    kind: runs.kind,
     status: runs.status,
     repositoryOwner: runs.repositoryOwner,
     repositoryName: runs.repositoryName,
@@ -36,6 +38,7 @@ function summaryColumns(offlineAfterMs: number) {
 
 interface SummaryRow {
   id: string;
+  kind: RunKind;
   status: RunStatus;
   repositoryOwner: string;
   repositoryName: string;
@@ -56,6 +59,7 @@ interface SummaryRow {
 function toSummary(row: SummaryRow) {
   return {
     id: row.id,
+    kind: row.kind,
     status: row.status,
     repository: { owner: row.repositoryOwner, name: row.repositoryName },
     ref: row.ref,
@@ -75,14 +79,19 @@ function toSummary(row: SummaryRow) {
   };
 }
 
-export async function insertRun(
-  tx: Transaction,
-  userId: string,
-  input: RunCreateInput,
-): Promise<string> {
+export interface NewRun {
+  kind: RunKind;
+  runnerId: string;
+  repository: Repository;
+  ref: string;
+  prompt: string;
+}
+
+export async function insertRun(tx: Transaction, userId: string, input: NewRun): Promise<string> {
   const [row] = await tx
     .insert(runs)
     .values({
+      kind: input.kind,
       userId,
       runnerId: input.runnerId,
       repositoryOwner: input.repository.owner,

@@ -152,7 +152,7 @@ describe('startRunner', () => {
         reason: 'skills_drift',
         message: [
           'stray: .claude/skills/stray/SKILL.md',
-          'Fix: Edit the file under .agents/skills/, then run pnpm skills:sync.',
+          'Fix: Edit the file under .agents/skills/, then run `npx plangineer-runner skills sync`.',
         ].join('\n'),
         exitCode: null,
         stderrTail: [],

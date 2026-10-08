@@ -27,6 +27,7 @@ export function nextRunStatus(current: RunStatus, event: RunEventBody): NextRunS
     case 'agent.tool_result':
     case 'agent.rate_limit':
     case 'agent.other':
+    case 'setup.pushed':
       return current === 'running' ? to('running') : reject;
     case 'run.succeeded':
       return current === 'running' ? to('succeeded') : reject;

@@ -1,5 +1,6 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
+import { execa } from 'execa';
 import { compareText } from './compare-text.mjs';
 import { isEntryPoint, repoRoot } from './script-entry.mjs';
 import { parse } from 'yaml';
@@ -15,8 +16,6 @@ const ORCHESTRATORS = [
 const DELEGATION_HEADING = 'Delegation rule';
 const ROUTING_HEADING = 'Routing';
 const SKILL_PATH_PATTERN = /\.agents\/skills\/([a-z0-9-]+)\/SKILL\.md/g;
-const LINK_PATTERN = /\[[^\]]*\]\(([^)\s]+)\)/g;
-const EXTERNAL_TARGET_PATTERN = /^([a-z][a-z0-9+.-]*:|#)/i;
 const FRONTMATTER_PATTERN = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/;
 
 export function toLf(text) {
@@ -41,14 +40,6 @@ export function extractSection(markdown, heading) {
     .trim();
 }
 
-export function extractRelativeLinks(markdown) {
-  return [...markdown.matchAll(LINK_PATTERN)]
-    .map((match) => match[1])
-    .filter((target) => !EXTERNAL_TARGET_PATTERN.test(target))
-    .map((target) => target.split('#')[0])
-    .filter((target) => target !== '');
-}
-
 export function extractRoutedSkills(section) {
   return [...new Set([...section.matchAll(SKILL_PATH_PATTERN)].map((match) => match[1]))];
 }
@@ -62,58 +53,6 @@ async function isFile(file) {
 
 async function readText(file) {
   return readFile(file, 'utf8').catch(() => null);
-}
-
-async function checkTierSettings(skillDir, name, isOrchestrator) {
-  const skillText = await readText(path.join(skillDir, 'SKILL.md'));
-  if (skillText === null) return [`${name}: SKILL.md is missing`];
-  let frontmatter;
-  try {
-    frontmatter = parseFrontmatter(skillText).data;
-  } catch (error) {
-    return [`${name}: SKILL.md ${error.message}`];
-  }
-  const problems = [];
-  const hidden = frontmatter['disable-model-invocation'] === true;
-  if (isOrchestrator && hidden) {
-    problems.push(`${name}: an orchestrator must not set disable-model-invocation`);
-  }
-  if (!isOrchestrator && !hidden) {
-    problems.push(`${name}: frontmatter must set disable-model-invocation: true`);
-  }
-  problems.push(...(await checkOpenaiPolicy(skillDir, name, isOrchestrator)));
-  return problems;
-}
-
-async function checkOpenaiPolicy(skillDir, name, isOrchestrator) {
-  const yamlText = await readText(path.join(skillDir, 'agents', 'openai.yaml'));
-  if (yamlText === null) {
-    return isOrchestrator ? [] : [`${name}: agents/openai.yaml is missing`];
-  }
-  let config;
-  try {
-    config = parse(yamlText);
-  } catch (error) {
-    return [`${name}: agents/openai.yaml is not valid YAML (${error.message})`];
-  }
-  const implicit = config?.policy?.allow_implicit_invocation;
-  if (isOrchestrator && implicit === false) {
-    return [`${name}: agents/openai.yaml must not set policy.allow_implicit_invocation: false`];
-  }
-  if (!isOrchestrator && implicit !== false) {
-    return [`${name}: agents/openai.yaml must set policy.allow_implicit_invocation: false`];
-  }
-  return [];
-}
-
-async function checkLinks(skillDir, name, body) {
-  const problems = [];
-  for (const target of extractRelativeLinks(body)) {
-    if (!(await isFile(path.resolve(skillDir, target)))) {
-      problems.push(`${name}: link does not resolve to a file: ${target}`);
-    }
-  }
-  return problems;
 }
 
 async function checkRouting(skillsRoot, name, section) {
@@ -143,7 +82,6 @@ async function checkOrchestrator(skillsRoot, name) {
   const delegation = extractSection(body, DELEGATION_HEADING);
   const problems = [
     ...(delegation === null ? [`${name}: missing a "## ${DELEGATION_HEADING}" section`] : []),
-    ...(await checkLinks(skillDir, name, body)),
     ...(await checkRouting(skillsRoot, name, extractSection(body, ROUTING_HEADING))),
   ];
   return { problems, delegation };
@@ -174,6 +112,10 @@ async function listSkillNames(skillsRoot) {
     .toSorted(compareText);
 }
 
+/**
+ * Plangineer's own checks: every orchestrator exists with the same delegation rule and routes
+ * only to skills that exist. The runner's lint covers each skill's file rules and links.
+ */
 export async function lintSkills(rootDir) {
   const skillsRoot = path.join(rootDir, SKILLS_DIR);
   const names = await listSkillNames(skillsRoot);
@@ -181,10 +123,6 @@ export async function lintSkills(rootDir) {
 
   for (const name of ORCHESTRATORS.filter((orchestrator) => !names.includes(orchestrator))) {
     problems.push(`${name}: skill folder is missing`);
-  }
-  for (const name of names) {
-    const isOrchestrator = ORCHESTRATORS.includes(name);
-    problems.push(...(await checkTierSettings(path.join(skillsRoot, name), name, isOrchestrator)));
   }
   const results = [];
   for (const name of ORCHESTRATORS.filter((orchestrator) => names.includes(orchestrator))) {
@@ -196,7 +134,24 @@ export async function lintSkills(rootDir) {
   return problems;
 }
 
+/** Runs the runner's skill lint on the repository, so both lints apply the same file rules. */
+async function runnerLint(rootDir) {
+  const result = await execa(
+    process.execPath,
+    [path.join(repoRoot, 'apps/runner/src/cli.ts'), 'skills', 'lint'],
+    { cwd: rootDir, reject: false, all: true },
+  );
+  return { ok: result.exitCode === 0, output: result.all };
+}
+
 export async function main(rootDir) {
+  const runner = await runnerLint(rootDir);
+  if (!runner.ok) {
+    console.error(runner.output);
+    console.error(`
+The runner's skills lint failed. Fix the skills under ${SKILLS_DIR}/.`);
+    return 1;
+  }
   const problems = await lintSkills(rootDir);
   if (problems.length > 0) {
     console.error(problems.join('\n'));

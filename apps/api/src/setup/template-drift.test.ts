@@ -1,0 +1,148 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it } from 'vitest';
+
+const repositorySkills = new URL('../../../../.agents/skills/', import.meta.url);
+const templateSkills = new URL('templates/skills/', import.meta.url);
+
+const read = (base: URL, file: string) =>
+  readFileSync(fileURLToPath(new URL(file, base)), 'utf8').replaceAll('\r\n', '\n');
+
+const ORCHESTRATORS = [
+  'plan-orchestrator',
+  'plan-review-orchestrator',
+  'implementation-orchestrator',
+  'implementation-review-orchestrator',
+].map((name) => `${name}/SKILL.md`);
+
+const FIXED_SKILLS = [
+  'codebase-exploration',
+  'plan-format',
+  'writing-style',
+  'finding-verification',
+  'plan-conformance',
+].flatMap((name) => [`${name}/SKILL.md`, `${name}/agents/openai.yaml`]);
+
+const REFERENCES = ['execution', 'review-loop', 'git-workflow', 'finding-format'].map(
+  (name) => `orchestrator-references/${name}.md`,
+);
+
+/** The rows of a routing table, each a path to a skill under .agents/skills/. */
+const ROUTING_ROWS = /^\| `\.agents\/skills\/[^\n]*\n(?:\| `\.agents\/skills\/[^\n]*\n)*/m;
+
+/**
+ * How each template differs from this repository's file of the same name. A string must match
+ * exactly once, so an edit here that moves it fails the test until the template takes the edit.
+ */
+const REPLACEMENTS: [file: string, from: string | RegExp, to: string][] = [
+  ['plan-orchestrator/SKILL.md', ' in Plangineer', ''],
+  ['implementation-orchestrator/SKILL.md', ' in Plangineer', ''],
+  ['implementation-review-orchestrator/SKILL.md', ' in Plangineer', ''],
+  ...ORCHESTRATORS.map((file): [string, RegExp, string] => [file, ROUTING_ROWS, '{{routing}}\n']),
+  ...['plan-orchestrator/SKILL.md', 'plan-review-orchestrator/SKILL.md'].map(
+    (file): [string, string, string] => [
+      file,
+      'Read the [stack decisions](../../../docs/engineering/stack-decisions.md).',
+      'Read [project-stack](../project-stack/SKILL.md).',
+    ],
+  ),
+  [
+    'implementation-orchestrator/SKILL.md',
+    '- Read the [stack decisions](../../../docs/engineering/stack-decisions.md). With a plan, the plan already carries the stack decisions it needs.',
+    '- Read [project-stack](../project-stack/SKILL.md). With a plan, the plan already carries the stack facts it needs.',
+  ],
+  [
+    'implementation-orchestrator/SKILL.md',
+    '(`architecture-design`, `api-contract-design`, `data-model-design`, `testing`)',
+    '({{designSkills}})',
+  ],
+  [
+    'implementation-orchestrator/SKILL.md',
+    'Run `pnpm verify` before finishing. A change under `.agents/skills/` also runs `pnpm skills:sync` and `pnpm skills:lint`.',
+    'Run the `check` command in [project-stack](../project-stack/SKILL.md#commands) before finishing. A change under `.agents/skills/` also runs `npx plangineer-runner skills sync`.',
+  ],
+  [
+    'implementation-orchestrator/SKILL.md',
+    /^`pnpm verify` grows as tooling lands\.[^\n]*\n\n/m,
+    '',
+  ],
+  [
+    'implementation-review-orchestrator/SKILL.md',
+    'read the [stack decisions](../../../docs/engineering/stack-decisions.md)',
+    'read [project-stack](../project-stack/SKILL.md)',
+  ],
+  [
+    'orchestrator-references/execution.md',
+    '`packages/contracts`, the lockfile, generated files and `package.json` edits',
+    'shared contract files, the lockfile, generated files and package manifest edits',
+  ],
+  [
+    'orchestrator-references/git-workflow.md',
+    'Nothing is committed to `main` directly.',
+    'Nothing is committed to `{{defaultBranch}}` directly.',
+  ],
+  [
+    'codebase-exploration/SKILL.md',
+    '(`git rev-parse main` unless the repository names another)',
+    '(`git rev-parse {{defaultBranch}}`)',
+  ],
+  ['plan-conformance/SKILL.md', 'merge base with `main` ', 'merge base with `{{defaultBranch}}` '],
+  [
+    'plan-format/SKILL.md',
+    'such as `pnpm verify`.',
+    'such as the `check` command in `project-stack`.',
+  ],
+  [
+    'plan-conformance/SKILL.md',
+    'The plan puts a schema in `packages/contracts` and the code puts it in `apps/api`',
+    'The plan puts a schema in the shared contracts module and the code puts it in a server module',
+  ],
+  ['plan-format/agents/openai.yaml', 'The Plangineer plan template', 'The plan template'],
+  ['writing-style/agents/openai.yaml', 'How Plangineer plans,', 'How plans,'],
+];
+
+function countMatches(text: string, from: string | RegExp): number {
+  return typeof from === 'string'
+    ? text.split(from).length - 1
+    : (text.match(new RegExp(from.source, `${from.flags}g`)) ?? []).length;
+}
+
+describe('setup templates', () => {
+  it.each([...FIXED_SKILLS, ...ORCHESTRATORS, ...REFERENCES])(
+    '%s is this repository file after its replacements',
+    (file) => {
+      let expected = read(repositorySkills, file);
+      for (const [target, from, to] of REPLACEMENTS.filter(([name]) => name === file)) {
+        expect(countMatches(expected, from), `${target}: ${String(from)}`).toBe(1);
+        expected = expected.replace(from, to);
+      }
+      expect(read(templateSkills, file)).toBe(expected);
+    },
+  );
+});
+
+describe('workflow settings in this repository', () => {
+  const reviewLoop = read(repositorySkills, 'orchestrator-references/review-loop.md');
+
+  it('states each setting and how settings arrive in the review loop', () => {
+    expect(reviewLoop).toContain('## Workflow settings');
+    for (const value of [
+      '`pause`',
+      '`skip`',
+      '`ask`',
+      '`fix_all`',
+      '`fixed`, `count`',
+      '`adaptive`, `max`',
+    ]) {
+      expect(reviewLoop).toContain(value);
+    }
+    expect(reviewLoop).toContain("the prompt's first line is `Workflow settings:`");
+    expect(reviewLoop).not.toContain('There is no auto-loop and no fixed number of rounds.');
+  });
+
+  it.each(ORCHESTRATORS)('%s links to the workflow settings', (file) => {
+    expect(read(repositorySkills, file)).toContain(
+      '](../orchestrator-references/review-loop.md#workflow-settings)',
+    );
+  });
+});

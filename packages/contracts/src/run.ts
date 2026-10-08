@@ -31,15 +31,17 @@ export const RunFailureReason = z.enum([
   'protocol_error',
   'event_buffer_full',
   'timeout',
+  'setup_invalid_output',
+  'setup_publish_failed',
 ]);
 export type RunFailureReason = z.infer<typeof RunFailureReason>;
 
 export const RunCancelReason = z.enum(['requested', 'runner_revoked']);
 export type RunCancelReason = z.infer<typeof RunCancelReason>;
 
-/** Test runs only read and answer. Later stages add their own modes. */
-export const PermissionMode = z.enum(['plan']);
-export type PermissionMode = z.infer<typeof PermissionMode>;
+/** What a run does. The kind sets the job the runner gets and what its agent may change. */
+export const RunKind = z.enum(['test', 'setup']);
+export type RunKind = z.infer<typeof RunKind>;
 
 const REPOSITORY_OWNER = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
 const REPOSITORY_NAME = /^[A-Za-z0-9._-]{1,100}$/;
@@ -64,6 +66,8 @@ export const GitRef = z
   .regex(/^[^-/]/, 'must not start with - or /')
   .refine((ref) => !ref.includes('..'), 'must not contain ..');
 
+export const CommitSha = z.string().regex(/^[0-9a-f]{40}$/, 'must be a full commit hash');
+
 const RunRunner = z.object({
   id: z.uuid(),
   name: z.string(),
@@ -74,6 +78,7 @@ const RunRunner = z.object({
 
 export const RunSummary = z.object({
   id: z.uuid(),
+  kind: RunKind,
   status: RunStatus,
   repository: RepositoryOutput,
   ref: z.string(),

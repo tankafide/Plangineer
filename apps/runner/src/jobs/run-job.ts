@@ -5,6 +5,9 @@ import {
   type RunnerRunEventBody,
 } from '@plangineer/contracts';
 import type { AgentAdapter } from '../adapters/agent-adapter.ts';
+import { packageVersion } from '../package-version.ts';
+import { finishSetup, prepareSetup } from '../setup/setup-job.ts';
+import type { SkillSnapshot } from '../setup/setup-tree.ts';
 import { checkSkillsMirror } from '../skills/skills-mirror.ts';
 import { GitError } from '../worktrees/git.ts';
 import type { Worktrees } from '../worktrees/worktrees.ts';
@@ -67,7 +70,10 @@ function stopEvent(cause: StopCause, timeoutMs: number): RunnerRunEventBody | nu
   }
 }
 
-/** One assigned run: checkout, skills check, CLI check, the agent, then worktree removal. */
+/**
+ * One assigned run: checkout, the skills check or the setup files, the CLI check, the agent,
+ * the setup push for a setup job, then worktree removal.
+ */
 export function createRunJob(context: RunJobContext): RunJob {
   const { runId, attempt, job, adapter, worktrees, timeoutMs } = context;
   const controller = new AbortController();
@@ -109,11 +115,48 @@ export function createRunJob(context: RunJobContext): RunJob {
     if (!started) sendStopEvent();
   }
 
+  /**
+   * Readies the worktree for the job's kind. A setup job skips the mirror check, since setup is
+   * what repairs the mirror, and writes its files before the agent runs.
+   */
+  async function prepareKind(worktree: string): Promise<SkillSnapshot | null | 'failed'> {
+    if (job.kind === 'setup') {
+      const prepared = await prepareSetup(worktree, job);
+      if (prepared.ok) return prepared.value;
+      send(prepared.event);
+      return 'failed';
+    }
+    const drift = await checkSkillsMirror(worktree);
+    if (drift.ok) return null;
+    send(failed('skills_drift', drift.message));
+    return 'failed';
+  }
+
+  /** Runs the agent. A setup job holds back its success until the branch is pushed. */
+  async function runAgentTo(worktree: string, snapshot: SkillSnapshot | null): Promise<void> {
+    const access = job.kind === 'setup' ? 'write_skills' : 'read_only';
+    let succeeded: RunnerRunEventBody | null = null;
+    for await (const event of adapter.run(
+      { prompt: job.prompt, cwd: worktree, access },
+      controller.signal,
+    )) {
+      if (job.kind === 'setup' && event.type === 'run.succeeded') succeeded = event;
+      else send(event);
+    }
+    if (job.kind !== 'setup' || snapshot === null || succeeded === null) return;
+    if (controller.signal.aborted) return;
+    const published = await finishSetup(worktree, job, snapshot, packageVersion());
+    if (!published.ok) return send(published.event);
+    send(published.value);
+    send(succeeded);
+  }
+
   async function runAgent(): Promise<void> {
     const repository = job.repository;
+    const ref = job.kind === 'setup' ? job.commit : job.ref;
     let worktree: { path: string; commit: string };
     try {
-      worktree = await worktrees.prepareWorktree({ repository, ref: job.ref, runId, attempt });
+      worktree = await worktrees.prepareWorktree({ repository, ref, runId, attempt });
     } catch (error) {
       if (!(error instanceof GitError)) throw error;
       send(
@@ -122,8 +165,8 @@ export function createRunJob(context: RunJobContext): RunJob {
       return;
     }
     if (controller.signal.aborted) return;
-    const drift = await checkSkillsMirror(worktree.path);
-    if (!drift.ok) return send(failed('skills_drift', drift.message));
+    const snapshot = await prepareKind(worktree.path);
+    if (snapshot === 'failed') return;
     const cli = await adapter.detect();
     if (!cli.available || cli.version === null) {
       const found = cli.version === null ? 'no version' : cli.version;
@@ -140,8 +183,7 @@ export function createRunJob(context: RunJobContext): RunJob {
       commit: worktree.commit,
       cli: { name: cli.name, version: cli.version },
     });
-    const agentJob = { prompt: job.prompt, cwd: worktree.path, permissionMode: job.permissionMode };
-    for await (const event of adapter.run(agentJob, controller.signal)) send(event);
+    await runAgentTo(worktree.path, snapshot);
   }
 
   async function run(): Promise<void> {

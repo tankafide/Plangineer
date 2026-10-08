@@ -1,0 +1,6 @@
+interface:
+  display_name: 'API Contract Design'
+  short_description: 'Design shared contracts for operations, schemas, errors, pagination and event and message types'
+  default_prompt: 'Use $api-contract-design when an orchestrator or the user asks for it.'
+policy:
+  allow_implicit_invocation: false

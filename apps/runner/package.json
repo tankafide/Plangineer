@@ -1,27 +1,36 @@
 {
   "name": "plangineer-runner",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
+  "description": "The Plangineer runner: runs agent jobs on your machine and keeps agent skills in sync.",
   "bin": {
-    "plangineer-runner": "./src/cli.ts"
+    "plangineer-runner": "./dist/cli.mjs"
   },
+  "files": [
+    "dist"
+  ],
   "type": "module",
   "scripts": {
+    "build": "tsdown",
     "typecheck": "tsc"
   },
   "dependencies": {
     "@orpc/client": "1.15.5",
     "@orpc/contract": "1.15.5",
-    "@plangineer/contracts": "workspace:*",
     "env-paths": "4.0.0",
     "execa": "10.1.0",
     "pino": "10.4.0",
     "ws": "8.22.0",
+    "yaml": "2.9.1",
     "zod": "4.6.5"
   },
   "devDependencies": {
+    "@plangineer/contracts": "workspace:*",
     "@types/node": "24.19.1",
     "@types/ws": "8.18.2",
+    "tsdown": "0.23.0",
     "vitest": "5.0.3"
+  },
+  "engines": {
+    "node": ">=24 <25"
   }
 }

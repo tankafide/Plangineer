@@ -1,5 +1,6 @@
-import { relations, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import {
+  bigint,
   boolean,
   check,
   index,
@@ -14,120 +15,29 @@ import {
 } from 'drizzle-orm/pg-core';
 import {
   type CliStatus,
+  type RepositoryScan,
+  type RoleSettings,
   type RunEvent,
   RunEventType,
+  RunKind,
   RunnerPlatform,
   RunnerStatus,
   RunStatus,
-  UserRole,
+  type SetupJob,
+  type SetupSelection,
+  SetupStatus,
+  type WorkflowSettings,
 } from '@plangineer/contracts';
+import { user } from './auth-schema.ts';
 
-export const userRole = pgEnum('user_role', UserRole.enum);
-
-export const user = pgTable('user', {
-  id: uuid('id')
-    .default(sql`uuidv7()`)
-    .primaryKey(),
-  name: text('name').notNull(),
-  email: text('email').notNull().unique(),
-  emailVerified: boolean('email_verified').default(false).notNull(),
-  image: text('image'),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true })
-    .defaultNow()
-    .$onUpdate(() => /* @__PURE__ */ new Date())
-    .notNull(),
-  role: userRole('role').default('member').notNull(),
-});
-
-export const session = pgTable(
-  'session',
-  {
-    id: uuid('id')
-      .default(sql`uuidv7()`)
-      .primaryKey(),
-    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-    token: text('token').notNull().unique(),
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp('updated_at', { withTimezone: true })
-      .$onUpdate(() => /* @__PURE__ */ new Date())
-      .notNull(),
-    ipAddress: text('ip_address'),
-    userAgent: text('user_agent'),
-    userId: uuid('user_id')
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
-  },
-  (table) => [index('session_userId_idx').on(table.userId)],
-);
-
-export const account = pgTable(
-  'account',
-  {
-    id: uuid('id')
-      .default(sql`uuidv7()`)
-      .primaryKey(),
-    accountId: text('account_id').notNull(),
-    providerId: text('provider_id').notNull(),
-    userId: uuid('user_id')
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
-    accessToken: text('access_token'),
-    refreshToken: text('refresh_token'),
-    idToken: text('id_token'),
-    accessTokenExpiresAt: timestamp('access_token_expires_at', { withTimezone: true }),
-    refreshTokenExpiresAt: timestamp('refresh_token_expires_at', { withTimezone: true }),
-    scope: text('scope'),
-    password: text('password'),
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp('updated_at', { withTimezone: true })
-      .$onUpdate(() => /* @__PURE__ */ new Date())
-      .notNull(),
-  },
-  (table) => [index('account_userId_idx').on(table.userId)],
-);
-
-export const verification = pgTable(
-  'verification',
-  {
-    id: uuid('id')
-      .default(sql`uuidv7()`)
-      .primaryKey(),
-    identifier: text('identifier').notNull(),
-    value: text('value').notNull(),
-    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp('updated_at', { withTimezone: true })
-      .defaultNow()
-      .$onUpdate(() => /* @__PURE__ */ new Date())
-      .notNull(),
-  },
-  (table) => [index('verification_identifier_idx').on(table.identifier)],
-);
-
-export const userRelations = relations(user, ({ many }) => ({
-  sessions: many(session),
-  accounts: many(account),
-}));
-
-export const sessionRelations = relations(session, ({ one }) => ({
-  user: one(user, {
-    fields: [session.userId],
-    references: [user.id],
-  }),
-}));
-
-export const accountRelations = relations(account, ({ one }) => ({
-  user: one(user, {
-    fields: [account.userId],
-    references: [user.id],
-  }),
-}));
+export * from './auth-schema.ts';
 
 export const runnerStatus = pgEnum('runner_status', RunnerStatus.enum);
 export const runnerPlatform = pgEnum('runner_platform', RunnerPlatform.enum);
 export const runStatus = pgEnum('run_status', RunStatus.enum);
 export const runEventType = pgEnum('run_event_type', RunEventType.enum);
+export const runKind = pgEnum('run_kind', RunKind.enum);
+export const setupStatus = pgEnum('setup_status', SetupStatus.enum);
 
 const createdAt = () => timestamp({ withTimezone: true }).defaultNow().notNull();
 const updatedAt = () =>
@@ -205,6 +115,7 @@ export const runs = pgTable(
   'runs',
   {
     id: id(),
+    kind: runKind().notNull(),
     userId: uuid()
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
@@ -287,6 +198,82 @@ export const runEvents = pgTable(
     check(
       'run_events_runner_seq_check',
       sql`${table.runnerSeq} IS NULL OR ${table.type} NOT IN ('run.queued', 'run.leased', 'run.cancel_requested', 'run.lease_lost')`,
+    ),
+  ],
+);
+
+/** One row per configured repository: the MVP's Repository settings record. Mutable. */
+export const repositories = pgTable(
+  'repositories',
+  {
+    id: id(),
+    githubRepositoryId: bigint({ mode: 'number' }).notNull(),
+    githubInstallationId: bigint({ mode: 'number' }).notNull(),
+    owner: text().notNull(),
+    name: text().notNull(),
+    description: text().notNull(),
+    roleSettings: jsonb().$type<RoleSettings>().notNull(),
+    workflowSettings: jsonb().$type<WorkflowSettings>().notNull(),
+    createdBy: uuid()
+      .notNull()
+      .references(() => user.id, { onDelete: 'restrict' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    unique('repositories_github_repository_id_key').on(table.githubRepositoryId),
+    check(
+      'repositories_description_length_check',
+      sql`char_length(${table.description}) BETWEEN 1 AND 200`,
+    ),
+    // Serves the created_by foreign key.
+    index('repositories_created_by_idx').on(table.createdBy),
+  ],
+);
+
+/** One setup per repository, replaced by each scan and deleted with its repository. */
+export const repositorySetups = pgTable(
+  'repository_setups',
+  {
+    id: id(),
+    repositoryId: uuid()
+      .notNull()
+      .references(() => repositories.id, { onDelete: 'cascade' }),
+    status: setupStatus().notNull(),
+    scan: jsonb().$type<RepositoryScan>().notNull(),
+    selection: jsonb().$type<SetupSelection>(),
+    job: jsonb().$type<SetupJob>(),
+    runId: uuid().references(() => runs.id, { onDelete: 'set null' }),
+    pullRequestNumber: integer(),
+    pullRequestUrl: text(),
+    failureMessage: text(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    // Serves the lookup by repository and its foreign key.
+    unique('repository_setups_repository_id_key').on(table.repositoryId),
+    // Serves the lookup by run and its foreign key.
+    unique('repository_setups_run_id_key').on(table.runId),
+    check(
+      'repository_setups_started_check',
+      sql`${table.status} = 'scanned' OR (${table.selection} IS NOT NULL AND ${table.job} IS NOT NULL)`,
+    ),
+    check(
+      'repository_setups_pull_request_pair_check',
+      sql`(${table.pullRequestNumber} IS NULL) = (${table.pullRequestUrl} IS NULL)`,
+    ),
+    check(
+      'repository_setups_pull_request_check',
+      sql`${table.status} NOT IN ('pr_open', 'complete') OR ${table.pullRequestNumber} IS NOT NULL`,
+    ),
+    check(
+      'repository_setups_failure_message_check',
+      sql`(${table.failureMessage} IS NOT NULL) = (${table.status} = 'failed')`,
+    ),
+    check(
+      'repository_setups_failure_message_length_check',
+      sql`char_length(${table.failureMessage}) <= 2000`,
     ),
   ],
 );

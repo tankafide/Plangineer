@@ -7,13 +7,19 @@ const LINK_CLASS =
 export function AppHeader() {
   return (
     <header className="border-b bg-background">
-      <nav aria-label="Main" className="mx-auto flex w-full max-w-6xl items-center gap-1 px-4 py-1">
+      <nav
+        aria-label="Main"
+        className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-1 px-4 py-1"
+      >
         <span className="mr-auto hidden text-sm font-semibold md:inline">Plangineer</span>
         <Link to="/" activeOptions={{ exact: true }} className={LINK_CLASS}>
           Account
         </Link>
         <Link to="/runners" className={LINK_CLASS}>
           Runners
+        </Link>
+        <Link to="/repositories" className={LINK_CLASS}>
+          Repositories
         </Link>
         <Link to="/runs" className={LINK_CLASS}>
           Runs

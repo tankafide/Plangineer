@@ -15,7 +15,7 @@ import {
   syncSkills,
 } from './skills-mirror.ts';
 
-const FIX = 'Edit the file under .agents/skills/, then run pnpm skills:sync.';
+const FIX = 'Edit the file under .agents/skills/, then run `npx plangineer-runner skills sync`.';
 
 async function put(file: string, content: string): Promise<void> {
   await mkdir(path.dirname(file), { recursive: true });
@@ -235,7 +235,7 @@ describe('skills mirror', () => {
         ok: false,
         message: [
           'changed: .claude/skills/alpha/SKILL.md',
-          'Fix: Edit the file under .agents/skills/, then run pnpm skills:sync and stage .claude/skills/.',
+          'Fix: Edit the file under .agents/skills/, then run `npx plangineer-runner skills sync` and stage .claude/skills/.',
         ].join('\n'),
       });
     });

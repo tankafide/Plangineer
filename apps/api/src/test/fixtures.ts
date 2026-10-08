@@ -1,4 +1,5 @@
-import { randomBytes, randomUUID } from 'node:crypto';
+import { generateKeyPairSync, randomBytes, randomUUID } from 'node:crypto';
+import type { UserRole } from '@plangineer/contracts';
 import { makeSignature } from 'better-auth/crypto';
 import { pino } from 'pino';
 import { type Auth, createAuth } from '../auth/auth.ts';
@@ -6,8 +7,19 @@ import type { Database } from '../db/client.ts';
 import { runners } from '../db/schema.ts';
 import { hashSecret } from '../runners/pairing.ts';
 import type { Env } from '../env.ts';
+import { createGithub } from '../github/github.ts';
+import type { ServiceDeps } from '../lib/service-deps.ts';
 
 export const GITHUB_CLIENT_ID = 'test-github-client-id';
+const GITHUB_APP_ID = 4242;
+const GITHUB_APP_SLUG = 'plangineer-test';
+
+/** The App key, generated once per test process, in the PKCS#8 form the env schema produces. */
+export const GITHUB_APP_PRIVATE_KEY = generateKeyPairSync('rsa', {
+  modulusLength: 2048,
+  privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+  publicKeyEncoding: { type: 'spki', format: 'pem' },
+}).privateKey;
 
 export function testEnv(overrides: Partial<Env> = {}): Env {
   return {
@@ -18,6 +30,9 @@ export function testEnv(overrides: Partial<Env> = {}): Env {
     BETTER_AUTH_URL: 'http://localhost:5173',
     GITHUB_APP_CLIENT_ID: GITHUB_CLIENT_ID,
     GITHUB_APP_CLIENT_SECRET: 'test-github-client-secret',
+    GITHUB_APP_ID,
+    GITHUB_APP_SLUG,
+    GITHUB_APP_PRIVATE_KEY,
     RUNNER_HEARTBEAT_INTERVAL_MS: 10_000,
     RUN_LEASE_DURATION_MS: 30_000,
     RUNNER_OFFLINE_AFTER_MS: 30_000,
@@ -36,10 +51,16 @@ export function testAuth(db: Database): Auth {
   return createAuth({ db, env: testEnv() });
 }
 
-/** Stores a user through Better Auth's own adapter, the way an admin would provision one. */
-export async function storeUser(auth: Auth, overrides: { name?: string; email?: string } = {}) {
+/**
+ * Stores a user through Better Auth's own adapter, the way an admin would provision one. The
+ * first-admin rule sets the role unless the overrides give one.
+ */
+export async function storeUser(
+  auth: Auth,
+  overrides: { name?: string; email?: string; role?: UserRole } = {},
+) {
   const context = await auth.$context;
-  return context.internalAdapter.createUser(
+  const created = await context.internalAdapter.createUser(
     {
       name: overrides.name ?? 'Ada Lovelace',
       email: overrides.email ?? `ada-${randomUUID()}@example.com`,
@@ -47,6 +68,9 @@ export async function storeUser(auth: Auth, overrides: { name?: string; email?: 
     },
     { method: 'admin' },
   );
+  if (overrides.role === undefined) return created;
+  await context.internalAdapter.updateUser(created.id, { role: overrides.role });
+  return { ...created, role: overrides.role };
 }
 
 /** The cookie header Better Auth issues for a new session of the user, signed with its secret. */
@@ -57,9 +81,10 @@ export async function sessionCookie(auth: Auth, userId: string): Promise<string>
   return `${context.authCookies.sessionToken.name}=${session.token}.${signature}`;
 }
 
-/** The service dependencies for a test database, with a silent logger. */
-export function testDeps(db: Database, overrides: Partial<Env> = {}) {
-  return { db, env: testEnv(overrides), logger: silentLogger };
+/** The service dependencies for a test database, with a silent logger and GitHub behind MSW. */
+export function testDeps(db: Database, overrides: Partial<Env> = {}): ServiceDeps {
+  const env = testEnv(overrides);
+  return { db, env, logger: silentLogger, github: createGithub(env, silentLogger) };
 }
 
 type RunnerRow = typeof runners.$inferInsert;

@@ -8,6 +8,8 @@ import {
   RunEventType,
   RunnerRunEventBody,
   runEventsPath,
+  SETUP_PUSHED_PATHS_MAX,
+  SETUP_PUSHED_PATHS_MAX_BYTES,
   SKILL_NAME_MAX,
   SKILLS_MAX,
   STDERR_LINE_MAX,
@@ -43,6 +45,13 @@ const VALID_BODIES = [
   { type: 'run.cancel_requested' },
   { type: 'run.lease_lost', attempt: 1, requeued: true },
   {
+    type: 'setup.pushed',
+    branch: 'plangineer/setup',
+    commit: COMMIT,
+    changedPaths: ['.agents/skills/testing/SKILL.md'],
+    changedPathCount: 1,
+  },
+  {
     type: 'run.succeeded',
     resultText: 'done',
     truncated: false,
@@ -53,6 +62,15 @@ const VALID_BODIES = [
   { type: 'run.failed', reason: 'exit_code', message: 'Exited 2', exitCode: 2, stderrTail: ['x'] },
   { type: 'run.cancelled', reason: 'requested' },
 ] as const;
+
+/** As many fully escaped 300-character paths as the byte cap allows. */
+function largestPaths(): string[] {
+  const paths: string[] = [];
+  while (JSON.stringify([...paths, escaped(300)]).length <= SETUP_PUSHED_PATHS_MAX_BYTES) {
+    paths.push(escaped(300));
+  }
+  return paths;
+}
 
 /** Each runner-sent body with every string at its bound and every character escaped. */
 const LARGEST_RUNNER_BODIES = [
@@ -85,6 +103,13 @@ const LARGEST_RUNNER_BODIES = [
     truncated: true,
   },
   { type: 'agent.other', vendorType: escaped(100), json: escaped(AGENT_TEXT_MAX), truncated: true },
+  {
+    type: 'setup.pushed',
+    branch: 'plangineer/setup',
+    commit: COMMIT,
+    changedPaths: largestPaths(),
+    changedPathCount: Number.MAX_SAFE_INTEGER,
+  },
   {
     type: 'run.succeeded',
     resultText: escaped(AGENT_TEXT_MAX),
@@ -161,6 +186,30 @@ describe('RunnerRunEventBody', () => {
 
   it('accepts a runner event', () => {
     expect(RunnerRunEventBody.safeParse(VALID_BODIES[4]).success).toBe(true);
+  });
+});
+
+const pushed = (overrides: Record<string, unknown>) => ({ ...VALID_BODIES[11], ...overrides });
+
+describe('setup.pushed', () => {
+  it('accepts 1,000 paths of 300 characters', () => {
+    const changedPaths = Array.from({ length: SETUP_PUSHED_PATHS_MAX }, (_, index) =>
+      `${index}`.padEnd(300, 'x'),
+    );
+    const body = pushed({ changedPaths, changedPathCount: 1_000 });
+    expect(RunnerRunEventBody.safeParse(body).success).toBe(true);
+    const entry = JSON.stringify({ seq: Number.MAX_SAFE_INTEGER, event: body });
+    expect(Buffer.byteLength(entry)).toBeLessThan(MAX_EVENTS_MESSAGE_BYTES);
+  });
+
+  it.each([
+    ['another branch', { branch: 'main' }],
+    ['1,001 paths', { changedPaths: Array(1_001).fill('a') }],
+    ['a path of 301 characters', { changedPaths: ['a'.repeat(301)] }],
+    ['paths over the byte cap', { changedPaths: largestPaths().concat(escaped(300)) }],
+    ['a short commit', { commit: 'abc' }],
+  ])('rejects %s', (_, overrides) => {
+    expect(RunnerRunEventBody.safeParse(pushed(overrides)).success).toBe(false);
   });
 });
 

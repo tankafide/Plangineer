@@ -17,15 +17,18 @@ afterAll(() => rm(cwd, { recursive: true, force: true, maxRetries: 5 }));
 async function collect(prompt: string, signal = new AbortController().signal) {
   const adapter = createClaudeCodeAdapter(FAKE_CLAUDE_COMMAND);
   const events: RunnerRunEventBody[] = [];
-  for await (const event of adapter.run({ prompt, cwd, permissionMode: 'plan' }, signal)) {
+  for await (const event of adapter.run({ prompt, cwd, access: 'read_only' }, signal)) {
     events.push(event);
   }
   return events;
 }
 
+const SETTINGS =
+  '{"disableAllHooks":true,"apiKeyHelper":"","awsAuthRefresh":"","awsCredentialExport":"","gcpAuthRefresh":"","otelHeadersHelper":""}';
+
 describe('claudeArgs', () => {
-  it('passes exactly the plan job arguments and never --bare', () => {
-    const args = claudeArgs('plan');
+  it('passes exactly the read-only arguments and never --bare', () => {
+    const args = claudeArgs('read_only');
 
     expect(args).toEqual([
       '-p',
@@ -42,9 +45,29 @@ describe('claudeArgs', () => {
       'Read,Glob,Grep,Skill',
       '--strict-mcp-config',
       '--settings',
-      '{"disableAllHooks":true,"apiKeyHelper":"","awsAuthRefresh":"","awsCredentialExport":"","gcpAuthRefresh":"","otelHeadersHelper":""}',
+      SETTINGS,
     ]);
     expect(args).not.toContain('--bare');
+  });
+
+  it('lets a setup job write only under .agents/skills, search, fetch from GitHub and start subagents', () => {
+    expect(claudeArgs('write_skills')).toEqual([
+      '-p',
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--permission-mode',
+      'dontAsk',
+      '--permission-prompts',
+      'none',
+      '--tools',
+      'Read,Glob,Grep,Edit,Write,WebSearch,WebFetch,Agent',
+      '--allowedTools',
+      'Read Glob Grep Edit(.agents/skills/**) WebSearch WebFetch(domain:github.com) WebFetch(domain:raw.githubusercontent.com) Agent',
+      '--strict-mcp-config',
+      '--settings',
+      SETTINGS,
+    ]);
   });
 });
 
@@ -119,7 +142,7 @@ describe('run', () => {
     let pids: number[] | null = null;
 
     for await (const event of adapter.run(
-      { prompt: 'fake:hang', cwd, permissionMode: 'plan' },
+      { prompt: 'fake:hang', cwd, access: 'read_only' },
       controller.signal,
     )) {
       events.push(event);

@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { RunCancelReason, RunFailureReason } from './run.ts';
+import { SETUP_BRANCH } from './repository-setup.ts';
+import { CommitSha, RunCancelReason, RunFailureReason } from './run.ts';
 
 /** The cap on every string an agent produces. The adapter truncates longer text. */
 export const AGENT_TEXT_MAX = 65_536;
@@ -23,6 +24,7 @@ export const RunEventType = z.enum([
   'agent.other',
   'run.cancel_requested',
   'run.lease_lost',
+  'setup.pushed',
   'run.succeeded',
   'run.failed',
   'run.cancelled',
@@ -44,7 +46,7 @@ function eventType<T extends RunEventType, S extends z.ZodRawShape>(type: T, sha
 const RunQueued = eventType('run.queued', {});
 const RunLeased = eventType('run.leased', { runnerId: z.uuid(), attempt: Attempt });
 const RunStarted = eventType('run.started', {
-  commit: z.string().regex(/^[0-9a-f]{40}$/, 'must be a full commit hash'),
+  commit: CommitSha,
   cli: z.strictObject({ name: z.literal('claude-code'), version: z.string().min(1).max(50) }),
 });
 const AgentSession = eventType('agent.session', {
@@ -82,6 +84,22 @@ const AgentOther = eventType('agent.other', {
 });
 const RunCancelRequested = eventType('run.cancel_requested', {});
 const RunLeaseLost = eventType('run.lease_lost', { attempt: Attempt, requeued: z.boolean() });
+/** The caps on the changed paths one setup.pushed event lists. The count covers the rest. */
+export const SETUP_PUSHED_PATHS_MAX = 1_000;
+export const SETUP_PUSHED_PATHS_MAX_BYTES = 320 * 1024;
+const SetupPushed = eventType('setup.pushed', {
+  branch: z.literal(SETUP_BRANCH),
+  commit: CommitSha,
+  changedPaths: z
+    .array(z.string().min(1).max(300))
+    .max(SETUP_PUSHED_PATHS_MAX)
+    .refine(
+      (paths) =>
+        new TextEncoder().encode(JSON.stringify(paths)).byteLength <= SETUP_PUSHED_PATHS_MAX_BYTES,
+      `must serialize to at most ${SETUP_PUSHED_PATHS_MAX_BYTES} bytes`,
+    ),
+  changedPathCount: z.int().min(0),
+});
 const RunSucceeded = eventType('run.succeeded', {
   resultText: AgentText,
   truncated: z.boolean(),
@@ -109,6 +127,7 @@ export const RunEventBody = z.discriminatedUnion('type', [
   AgentOther.body,
   RunCancelRequested.body,
   RunLeaseLost.body,
+  SetupPushed.body,
   RunSucceeded.body,
   RunFailed.body,
   RunCancelled.body,
@@ -124,6 +143,7 @@ export const RunnerRunEventBody = z.discriminatedUnion('type', [
   AgentToolResult.body,
   AgentRateLimit.body,
   AgentOther.body,
+  SetupPushed.body,
   RunSucceeded.body,
   RunFailed.body,
   RunCancelled.body,
@@ -142,6 +162,7 @@ export const RunEvent = z.discriminatedUnion('type', [
   AgentOther.event,
   RunCancelRequested.event,
   RunLeaseLost.event,
+  SetupPushed.event,
   RunSucceeded.event,
   RunFailed.event,
   RunCancelled.event,

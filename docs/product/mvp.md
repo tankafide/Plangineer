@@ -28,7 +28,7 @@ The goal is a workflow where the plan is the unit of engineering review, and cod
 - Run implementation and implementation review automatically once a plan is approved.
 - Apply the repo's skills at planning, implementation and review.
 - Support review by a different model, which is the recommended setup, and have the authoring model confirm each finding.
-- Let triage rules decide what to act on, starting with engineer sign-off and moving to automatic fixes as trust grows.
+- Let triage rules decide what to act on, starting with engineer sign-off and moving to `fix_all` as trust grows.
 - Test the deployed result against the plan's acceptance criteria, through API calls and the web app.
 - Keep the whole product point-and-click: checkboxes, buttons and choices over typed commands.
 - Design every screen to work at phone width, so a mobile app can follow without a redesign.
@@ -266,8 +266,8 @@ Setup never rewrites an existing skill. The orchestrators reference existing ski
 
 **Two specifications this depends on,** both written in Phase 0:
 
-- **Skill specification:** what each kind of skill must contain and how it is structured.
-- **Baseline catalog:** the skills setup recommends for any codebase, and the signal in a repo that triggers each one.
+- **[Skill specification](skill-specification.md):** what each kind of skill must contain and how it is structured.
+- **[Baseline catalog](baseline-catalog.md):** the skills setup recommends for any codebase, and the signal in a repo that triggers each one.
 
 ## Review and triage
 
@@ -278,27 +278,30 @@ Every review passes three filters before anything is fixed: a reviewing agent ra
 1. **Review.** A reviewing agent reads the plan or the diff and writes findings. Running it on a different model from the author is recommended, and is the default the app suggests, but it is not required: each repository chooses the CLI and model for every role.
 2. **Confirm.** Each finding goes back to the model that wrote the work, which marks it confirmed or disputed and gives its reason.
 3. **Apply rules.** Triage rules sort the confirmed findings into act, ask or skip.
-4. **Fix.** The authoring agent fixes what is marked act, plus whatever the engineer approves from ask.
-5. **Assess.** An agent judges how significant that round was and recommends whether another review is needed. The engineer decides.
+4. **Fix.** The authoring agent fixes the findings the `findings` setting selects.
+5. **Assess.** An agent judges how significant that round was and recommends whether another review is needed. The `rounds` setting decides whether one runs.
 
 **Triage rules** are guidance kept in the repo beside the review orchestrators. For example: always act when an acceptance criterion is broken, skip style points the linter allows, ask when a fix changes a public interface.
 
-**Automation levels,** set per repository:
+**Workflow settings** decide who picks the fixes and how many rounds run. An admin sets them per repository on the repository's settings card in the app. Plan review and implementation review each have their own `findings` and `rounds`, so a team can fix every plan finding automatically and still pick code fixes by hand.
 
-| Level | What the engineer handles | When to use it |
-| --- | --- | --- |
-| Manual | Every confirmed finding, with the rule's choice already selected | The starting point |
-| Assisted | Only findings the rules mark ask. Act items are fixed and listed | Once the team trusts its rules |
-| Automatic | A summary afterwards, plus any finding a rule says needs a person | Once assisted fixes are rarely reverted |
+| Setting | Applies to | Value | What happens |
+| --- | --- | --- | --- |
+| `planCheckIn` | Planning | `pause` | After drafting, planning stops and the engineer chooses between running plan review and changing the plan. The default |
+| | | `skip` | The engineer sees the plan summary, and plan review starts without a question |
+| `findings` | Each review | `ask` | The engineer picks which confirmed findings to fix, with each triage rule's outcome already selected. The default |
+| | | `fix_all` | The authoring agent applies the recommended action to every confirmed finding, including Accept or Revert for each deviation and extra, and asks nothing |
+| `rounds` | Each review | `ask`, `fixed` or `adaptive` | See Deciding on another review |
 
-Every automatic fix lands as its own commit, so it can be reverted with one click. Disputed findings are kept and shown collapsed, and an engineer can overrule a dispute.
+Every fix under `fix_all` lands as its own commit, so it can be reverted with one click. Disputed findings are kept and shown collapsed, and an engineer can overrule a dispute.
 
-**Deciding on another review.** Reviews are not limited to a set number of rounds. After the fixes from a round are in, an agent assesses that round: how many findings were confirmed, how serious they were, and how much the fixes changed. It rates the round significant or minor and recommends whether another review is worth running, with a one-line reason.
+**Deciding on another review.** After the fixes from a round are in, an agent assesses that round: how many findings were confirmed, how serious they were, and how much the fixes changed. It rates the round significant or minor and recommends whether another review is worth running, with a one-line reason. The `rounds` setting then decides what happens. Its round count N is 1 to 5.
 
-| Re-review setting | What happens | Availability |
-| --- | --- | --- |
-| Ask | The engineer sees the agent's recommendation and chooses to review again or move on, as many times as they want | First version, and the default |
-| Auto-loop | Another review starts on its own whenever the agent rates a round significant, up to a maximum of 3 rounds | Later, for teams that trust the assessment |
+| `rounds` value | What happens |
+| --- | --- |
+| `ask` | The engineer sees the agent's recommendation and chooses to review again or move on, as many times as they want. The default |
+| `fixed`, N | N rounds run in all without asking. Review stops early after a round with no confirmed findings |
+| `adaptive`, maximum N | Another round starts without asking whenever the agent recommends one, up to N rounds in all |
 
 **Deviations from the plan.** Implementation review checks conformance as well as quality. It matches every step and decision in the plan to the diff, and every change in the diff back to a step. Anything that does not match is raised as a finding of one of two kinds.
 
@@ -311,7 +314,7 @@ Two sources feed the check. The implementation orchestrator has the implementer 
 
 For a multi-repository feature, this check runs per repository against that repository's part of the plan, then once more across repositories for the contracts between them. Each finding records its repository.
 
-Deviations and extras always go to the engineer. Triage rules cannot skip or accept them at any automation level. Each one gets one of three decisions:
+Deviations and extras go to the engineer whenever implementation review's `findings` setting is `ask`. Triage rules cannot skip or accept them. The one exception is an engineer-set `fix_all`: the authoring agent then applies the confirm step's recommended Accept or Revert to each one. Each one gets one of three decisions:
 
 - **Accept.** The code stays, and the choice is recorded as an amendment at the level the change calls for, usually decision only, so the plan matches what was built.
 - **Revert.** The implementer changes the code back to what the plan says, or removes the extra.
@@ -333,7 +336,7 @@ Deviations and extras always go to the engineer. Triage rules cannot skip or acc
 | Rule outcome | Act, ask or skip, and which triage rule decided |
 | Decision | What happened in the end: fixed, rejected or deferred, and by whom |
 
-Recording the verdict, rule outcome and decision for every finding is what lets a team move up a level with evidence instead of a guess.
+Recording the verdict, rule outcome and decision for every finding is what lets a team move to `fix_all` with evidence instead of a guess.
 
 ## Verification
 
@@ -406,7 +409,7 @@ The app keeps fifteen kinds of record, and the plan revision is the one everythi
 
 | Record | Holds | Notes |
 | --- | --- | --- |
-| User | Name, email, GitHub identity, role (admin or member), notification preferences | One deployment serves one team, so there is no organization record and the role is the membership. Admins configure repositories, orchestrators and automation levels |
+| User | Name, email, GitHub identity, role (admin or member), notification preferences | One deployment serves one team, so there is no organization record and the role is the membership. Admins configure repositories, orchestrators and workflow settings |
 | Runner | Owner, kind (local or hosted), name, hashed pairing token, installed CLI versions, concurrency limit, last heartbeat, status | A local runner belongs to one engineer, is paired once and can be revoked. Each run records the runner that served it |
 | Feature | Title, description, ticket link, repositories, author, current state such as plan ready | One per change, shown as a tab |
 | Pre-planning task | Type, repository for exploration, agent CLI used, goal, the commit it ran against, transcript, status | Produces one context file |
@@ -417,7 +420,7 @@ The app keeps fifteen kinds of record, and the plan revision is the one everythi
 | Finding | The fields listed under Review and triage | Belongs to a review run and points at a plan revision or a diff |
 | Approval | Reviewer, plan revision, verdict | The peer approval |
 | Verification result | Criterion, verdict, links to evidence | One per acceptance criterion in each verification run |
-| Repository settings | Name, description, agent and model per role, where each role runs and how it signs in, automation level | One per repository. Planning and plan review of a multi-repository feature use the roles set for the cross-repository orchestrators |
+| Repository settings | Name, description, agent and model per role, where each role runs and how it signs in, workflow settings: `planCheckIn`, and `findings` and `rounds` for each review | One per repository. Planning and plan review of a multi-repository feature use the roles set for the cross-repository orchestrators |
 | Cross-repository orchestrator | Stage, content, revision number, author of each revision, agent and model per role | One per stage for the set of configured repositories. Regenerated from the repository descriptions at setup, edited by engineers, and versioned like a plan so each run records which revision it used |
 | Staleness dismissal | Plan revision, repository, the main commit it was dismissed at, the overlapping files, who dismissed it | Silences the warning for overlaps up to that commit. A later commit that touches a plan file raises it again |
 | Notification | Recipient, kind such as decision needed, approval requested or run failed, the record it points at, read state | Feeds the in-app inbox now and push notifications later. Created by the control plane from the same events the timeline shows |
@@ -436,11 +439,11 @@ Engineers work in eight views, and the plan workspace is where most of the time 
 
 | Screen | What the engineer does there |
 | --- | --- |
-| Repository setup | Adds and describes repositories, then for each one ticks which detected and recommended skills to use and opens its setup pull request |
+| Repository setup | Adds and describes repositories, then for each one ticks which detected and recommended skills to use, opens its setup pull request and sets its workflow settings |
 | Feature tab | Submits the intake for a new feature and picks its repositories, watches its tasks run, manages the context files, and starts planning once it is plan ready |
 | Plan workspace | Builds and revises the plan with section actions, inline findings, revision history and the plan thread |
 | Review queue | Sees plans waiting for their approval and findings waiting for their decision |
-| Triage | Works through the findings that need a person, and sets the repository's automation level |
+| Triage | Works through the findings that need a person |
 | Plan audit | Compares what was built with the approved plan step by step, and accepts, reverts or replans each deviation and extra |
 | Run timeline | Watches a feature move through the stages live: current stage, round number, skills loaded, cost so far |
 | Verification report | Reads each acceptance criterion with its verdict and opens the screenshots or request logs behind it |
@@ -480,10 +483,10 @@ Each diamond is an exit gate: the next phase starts only when its condition is m
 | Phase | Scope | Exit gate | Rough size |
 | --- | --- | --- | --- |
 | 0. Prove the loop | Hand-write the four orchestrators and the triage rules in one repo. Run the full loop from the command line, including the confirm step and the deviation check. Write the skill specification and the baseline catalog | Engineers judge the reviews useful on 3 to 5 real features, and the finding format and skill specification are settled | 2 to 3 weeks |
-| 1. Setup and plan | Repository configuration and per-repository setup, the four cross-repository orchestrators, the feature intake with repository selection and the Jira connection flow, feature tabs with parallel pre-planning tasks and context files on Claude Code, the local runner on the engineer's Claude Code login, GitHub sign-in, the plan workspace with staleness warnings, the plan review pipeline at the manual level, the plan thread, peer approval and amendments, all responsive and built on the same API a mobile app will use | Plans for real features are approved through the app, with the local runner working on Windows, macOS and Linux | 7 to 10 weeks |
-| 2. Automated runs | The Codex adapter, so review can run on a different model, run dispatch and hosted runners, isolated workspaces, pull request creation, the implementation review pipeline at the manual level with deviation detection, the plan audit, and the run timeline | An approved plan becomes a reviewed pull request with nobody driving the agent | 5 to 7 weeks |
+| 1. Setup and plan | Repository configuration and per-repository setup, the four cross-repository orchestrators, the feature intake with repository selection and the Jira connection flow, feature tabs with parallel pre-planning tasks and context files on Claude Code, the local runner on the engineer's Claude Code login, GitHub sign-in, the plan workspace with staleness warnings, the plan review pipeline with the workflow settings, the plan thread, peer approval and amendments, all responsive and built on the same API a mobile app will use | Plans for real features are approved through the app, with the local runner working on Windows, macOS and Linux | 7 to 10 weeks |
+| 2. Automated runs | The Codex adapter, so review can run on a different model, run dispatch and hosted runners, isolated workspaces, pull request creation, the implementation review pipeline with deviation detection, the plan audit, and the run timeline | An approved plan becomes a reviewed pull request with nobody driving the agent | 5 to 7 weeks |
 | 3. Verification | Deploy webhook, API checks, Playwright CLI web checks, evidence storage and the report | Every feature gets an evidence report | 2 to 3 weeks |
-| 4. Auto-fix and rollout | Assisted and automatic triage levels, auto-loop re-review, revertible fix commits, roles and permissions, push notifications, cost and cycle-time metrics | A team runs at the assisted level and rarely reverts a fix | 3 to 4 weeks |
+| 4. Auto-fix and rollout | Revertible fix commits, roles and permissions, push notifications, cost and cycle-time metrics | A team runs implementation review with `findings` at `fix_all` and rarely reverts a fix | 3 to 4 weeks |
 
 Sizes are rough estimates for one or two engineers, 19 to 27 weeks in total, and should be re-cut after Phase 0.
 
@@ -496,18 +499,18 @@ The two risks most likely to sink adoption are noisy reviews and slow plan appro
 | Risk | Why it matters | Mitigation |
 | --- | --- | --- |
 | Review noise | If most findings are wrong or trivial, engineers stop reading them | The confirm step removes findings the author can rebut; triage rules skip the rest; accept rate shown per repository |
-| An automatic fix is wrong | A bad fix applied without review erodes trust in the whole system | Start at the manual level; every automatic fix is its own revertible commit; rules name what always needs a person |
+| An automatic fix is wrong | A bad fix applied without review erodes trust in the whole system | Start from the `ask` findings setting; every fix under `fix_all` is its own revertible commit; each review has its own `findings` setting, so a team can keep picking code fixes by hand |
 | Plan approval becomes the bottleneck | Review effort moves rather than shrinks. One [study of about 22,000 developers](https://briefhq.ai/blog/why-spec-driven-development-isnt-enough/) found 98% more merged pull requests and 91% more review time | Trivial changes skip peer approval; the plan thread answers questions without a meeting; the queue shows how long each plan has waited |
 | Generated skills are generic | Setup that writes bland skills adds noise instead of standards | Skills are drafted from the repo's own code to the skill specification, and arrive as a pull request the team edits |
 | Platform differences break the runner | Engineers run Windows, macOS and Linux, and paths, shells, line endings, process control and CLI install shapes differ between them. Plangineer is developed on Windows, so Windows-only assumptions are the likeliest to slip in | No shell scripts; platform-neutral paths and line endings; every check runs in CI on all three systems |
 | Two agent CLIs behave differently | Output formats, permissions and skill folders differ between Claude Code and Codex | One adapter per CLI; one canonical skills folder mirrored to the other; start with Claude Code and add Codex once the workflow runs end to end |
 | Verification has nothing to test against | Without test accounts and safe seed data, every check comes back blocked | Environment checklist completed before Phase 3; start with one project |
 | Runners hold real access | An agent that runs code has repository and environment credentials | Isolated workspace per run, short-lived scoped credentials, no production secrets |
-| Cost per feature | Each feature uses several model runs across four roles, and the confirm step adds more | Cost recorded per run and shown on the timeline; the engineer approves each extra review, and auto-loop stops at 3 rounds |
+| Cost per feature | Each feature uses several model runs across four roles, and the confirm step adds more | Cost recorded per run and shown on the timeline; under the `ask` rounds setting the engineer approves each extra review, and `adaptive` stops at its maximum of at most 5 rounds |
 | The runner outgrows the product | Companies such as Stripe and Ramp [built whole platforms](https://newsletter.pragmaticengineer.com/p/why-ramp-built-inspect) for background agents | Start on CI runners and defer dedicated infrastructure until usage demands it |
 | Multi-repository work drifts apart | Changes in separate repositories can each pass review and still not fit together, such as an API and its client | One plan with cross-repository phases and contracts recorded under Decisions; verification waits until every repository's change is live |
 | Planning feels like an interrogation | A long run of questions wears engineers down, and they start clicking through without thinking | The agent acts as a senior engineer and decides wherever a best practice is clear, asking only about real trade-offs and business context; a fuller intake means fewer questions; each question comes with a recommended option |
-| The agent guesses instead of stopping | An unplanned choice ships under a plan that was approved without it | The implementer logs each departure; the reviewer checks the diff against the plan on its own; every deviation and extra needs an engineer's decision and appears in the plan audit and on the pull request |
+| The agent guesses instead of stopping | An unplanned choice ships under a plan that was approved without it | The implementer logs each departure; the reviewer checks the diff against the plan on its own; every deviation and extra needs an engineer's decision unless `fix_all` is set, and appears in the plan audit and on the pull request |
 | Amendments reopen the approval bottleneck | If every change after approval needs a full review, engineers stop amending and let deviations stand | Three amendment levels set by which sections changed; review covers the diff only; only a scope change needs an approver |
 | Subscription terms change | Vendors decide how a plan login may be used for headless and hosted runs. Anthropic announced a change for June 2026 and then paused it, and its plan limits assume ordinary individual use | The local runner under the engineer's own login is the default; sign-in mode is a setting per role; every run records the sign-in it used; API keys remain a fallback |
 
@@ -521,20 +524,20 @@ These choices are still open, and the first one shapes the architecture more tha
 - [ ] **Verification environment.** Recommended: a preview environment before merge where one exists, otherwise staging after merge.
 - [ ] **What counts as trivial.** Recommended: the author proposes it, and named paths such as migrations always need peer approval.
 - [ ] **Runner base.** Recommended: CI runners first. The alternative is an open-source background agent framework such as [Open-Inspect](https://github.com/ColeMurray/background-agents/wiki) or [Open SWE](https://github.com/langchain-ai/open-swe).
-- [ ] **Auto-loop limit.** Proposed at 3 rounds, and only when auto-loop is on. At the default setting the engineer decides each time.
+- [x] **Review round limit.** Decided: the `adaptive` rounds setting stops at a maximum the engineer sets from 1 to 5. At the default `ask` setting the engineer decides each time.
 - [x] **Internal tool or product.** Decided: an open-source project that each team self-hosts, one deployment per team. There is no tenancy, the runner ships through npm, and the app never holds a vendor login.
 - [ ] **Licence.** Recommended: Apache-2.0, which adds an explicit patent grant over MIT.
 - [ ] **Plan review pipeline.** This proposal assumes plan review uses the same confirm step and triage rules as implementation review.
 - [ ] **Verification orchestrator.** Recommended: add a fifth orchestrator for verification, so testing conventions live in the repo too.
 - [x] **Canonical skills folder.** Decided: `.agents/skills/`, mirrored one way to `.claude/skills/` by the runner's `skills sync`, with `skills check` in each repository's CI.
-- [ ] **Baseline catalog.** Which skills setup recommends for every codebase.
+- [x] **Baseline catalog.** Decided: the 21 skills in the [baseline catalog](baseline-catalog.md), 10 of them required whenever an orchestrator is chosen, each recommended by its signal in the repository.
 - [ ] **Mobile app approach.** Recommended: responsive web first, then choose between a native and a cross-platform app once usage shows which screens matter on a phone.
 - [ ] **One plan per feature tab.** This proposal assumes a tab yields one plan, and one pull request per repository involved. Epics that group several features come later.
 - [ ] **Cross-repository orchestrators' home.** Proposed: the app keeps them, since they belong to no single repository. The alternative is a dedicated workspace repository.
 - [ ] **Roles for multi-repository work.** Proposed: the cross-repository orchestrators use roles set once for them, and each repository's own orchestrator runs with that repository's settings.
 - [ ] **Merge and deploy order across repositories.** Proposed: the plan's phases set the order, and the app shows it. Whether the app should enforce it is open.
 - [ ] **Ticket tracker integration.** Jira through its MCP server comes first. Which trackers follow is open, as is support for self-hosted Jira. Pasting the ticket text remains the fallback.
-- [ ] **Deviation handling.** Proposed: every deviation and extra needs an engineer's decision at every automation level. The alternative lets triage rules accept named kinds of extra, such as added tests.
+- [x] **Deviation handling.** Decided: every deviation and extra needs an engineer's decision unless the engineer sets implementation review's `findings` to `fix_all`. The authoring agent then applies the recommended Accept or Revert to each one. Triage rules never accept or skip them.
 - [ ] **Amendment levels.** Proposed: three levels set by which sections changed. Whether a decision-only amendment should need an approver is open.
 - [ ] **Hosted runs on a subscription.** Each vendor allows this on different terms. Hosted Claude Code under an engineer's own plan needs confirming with Anthropic, and the fallback is a team API key for hosted roles.
 

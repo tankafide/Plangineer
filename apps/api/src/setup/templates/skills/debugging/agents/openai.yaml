@@ -1,0 +1,6 @@
+interface:
+  display_name: 'Debugging'
+  short_description: 'Fix a bug at its root cause, reproduce it with a failing test at the lowest layer, fix it, keep the test, and never fix a symptom.'
+  default_prompt: 'Use $debugging when an orchestrator or the user asks for it.'
+policy:
+  allow_implicit_invocation: false

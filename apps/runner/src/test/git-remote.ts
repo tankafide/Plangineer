@@ -12,6 +12,12 @@ export interface GitRemote {
   baseUrl: string;
   /** Commits `files` on `branch`, from `main`, and pushes it, returning the commit. */
   commit(files: Record<string, string>, branch?: string): Promise<string>;
+  /** The commit a branch points at in the bare repository, or null when it has none. */
+  branchCommit(branch: string): Promise<string | null>;
+  /** The files on a branch of the bare repository, with their text. */
+  files(branch: string): Promise<Record<string, string>>;
+  /** Sets a config value on the bare repository, such as one that makes it refuse a push. */
+  config(key: string, value: string): Promise<void>;
   cleanup(): Promise<void>;
 }
 
@@ -46,6 +52,33 @@ export async function createGitRemote(repository: Repository): Promise<GitRemote
       await git(work, ['checkout', '--quiet', 'main']);
       return commit;
     },
+    async branchCommit(branch) {
+      const result = await execa(
+        'git',
+        ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`],
+        {
+          cwd: bare,
+          reject: false,
+        },
+      );
+      return result.exitCode === 0 ? result.stdout.trim() : null;
+    },
+    async files(branch) {
+      const paths = (await git(bare, ['ls-tree', '-r', '--name-only', branch])).split('\n');
+      const entries = await Promise.all(
+        paths.map(async (file) => {
+          const shown = await execa('git', ['show', `${branch}:${file}`], {
+            cwd: bare,
+            stripFinalNewline: false,
+          });
+          return [file, shown.stdout] as const;
+        }),
+      );
+      return Object.fromEntries(entries);
+    },
+    async config(key, value) {
+      await git(bare, ['config', key, value]);
+    },
     cleanup: () => rm(root, { recursive: true, force: true, maxRetries: 5 }),
   };
 }
@@ -54,4 +87,10 @@ export async function createGitRemote(repository: Repository): Promise<GitRemote
 export const SYNCED_SKILLS = {
   '.agents/skills/alpha/SKILL.md': 'alpha\n',
   '.claude/skills/alpha/SKILL.md': 'alpha\n',
+};
+
+/** A skill only under .claude/skills/, which a setup job moves to .agents/skills/. */
+export const CLAUDE_ONLY_SKILLS = {
+  '.claude/skills/legacy/SKILL.md': '---\nname: legacy\ndescription: Old rules.\n---\n\n# Legacy\n',
+  '.claude/skills/legacy/notes.md': 'Notes that move with it.\n',
 };

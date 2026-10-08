@@ -1,7 +1,7 @@
-import type { RunJob, RunStatus } from '@plangineer/contracts';
+import { type RunJob, type RunStatus, SetupJob } from '@plangineer/contracts';
 import { and, asc, count, eq, inArray, lt, sql } from 'drizzle-orm';
 import type { Executor, Transaction } from '../db/client.ts';
-import { runs } from '../db/schema.ts';
+import { repositorySetups, runs } from '../db/schema.ts';
 
 /** Queries for dispatch, the sweeper and the runner socket, which act on a runner's runs. */
 
@@ -21,7 +21,31 @@ export interface ClaimableRun {
   job: RunJob;
 }
 
-/** Locks up to limit of the runner's queued runs that no one asked to cancel, oldest first. */
+interface ClaimableRow {
+  id: string;
+  kind: 'test' | 'setup';
+  repositoryOwner: string;
+  repositoryName: string;
+  ref: string;
+  prompt: string;
+  setupJob: unknown;
+}
+
+/** A test run's job from its row, or the setup job that start rendered and stored. */
+function jobOf(row: ClaimableRow): RunJob {
+  if (row.kind === 'setup') return SetupJob.parse(row.setupJob);
+  return {
+    kind: 'test',
+    repository: { owner: row.repositoryOwner, name: row.repositoryName },
+    ref: row.ref,
+    prompt: row.prompt,
+  };
+}
+
+/**
+ * Locks up to limit of the runner's queued runs that no one asked to cancel, oldest first. Only
+ * runs is locked, since Postgres refuses FOR UPDATE on the nullable side of an outer join.
+ */
 export async function lockClaimableRuns(
   tx: Transaction,
   runnerId: string,
@@ -30,29 +54,23 @@ export async function lockClaimableRuns(
   const rows = await tx
     .select({
       id: runs.id,
+      kind: runs.kind,
       attempt: runs.attempt,
       repositoryOwner: runs.repositoryOwner,
       repositoryName: runs.repositoryName,
       ref: runs.ref,
       prompt: runs.prompt,
+      setupJob: repositorySetups.job,
     })
     .from(runs)
+    .leftJoin(repositorySetups, eq(repositorySetups.runId, runs.id))
     .where(
       and(eq(runs.runnerId, runnerId), eq(runs.status, 'queued'), eq(runs.cancelRequested, false)),
     )
     .orderBy(asc(runs.id))
     .limit(limit)
-    .for('update', { skipLocked: true });
-  return rows.map((row) => ({
-    id: row.id,
-    attempt: row.attempt,
-    job: {
-      repository: { owner: row.repositoryOwner, name: row.repositoryName },
-      ref: row.ref,
-      prompt: row.prompt,
-      permissionMode: 'plan',
-    },
-  }));
+    .for('update', { of: runs, skipLocked: true });
+  return rows.map((row) => ({ id: row.id, attempt: row.attempt, job: jobOf(row) }));
 }
 
 /** The runner's leased and running runs that someone asked to cancel. */

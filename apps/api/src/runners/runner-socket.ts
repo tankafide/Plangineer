@@ -8,6 +8,7 @@ import {
 import type { Context, Next } from 'hono';
 import { type RawData, WebSocket, WebSocketServer } from 'ws';
 import type { ServiceDeps } from '../lib/service-deps.ts';
+import { advanceSetupOfRun } from '../setup/setup-advance.ts';
 import type { Logger } from '../logger.ts';
 import type { HeldSocket, RunnerConnections } from './runner-connections.ts';
 import { findRunnerByToken } from './runner-service.ts';
@@ -96,15 +97,21 @@ function runnerSession(
         await connections.dispatch(runnerId);
         return;
       case 'run.events': {
-        const seq = await acceptRunEvents(deps, runnerId, message);
-        if (seq === undefined) {
+        const accepted = await acceptRunEvents(deps, runnerId, message);
+        if (accepted === undefined) {
           logger.info(
             { runId: message.runId, attempt: message.attempt },
             'Stale run events ignored',
           );
           return;
         }
-        send({ type: 'run.ack', runId: message.runId, attempt: message.attempt, seq });
+        send({
+          type: 'run.ack',
+          runId: message.runId,
+          attempt: message.attempt,
+          seq: accepted.ackedSeq,
+        });
+        if (accepted.ended) await advanceSetupOfRun(deps, message.runId);
         return;
       }
       case 'run.heartbeat':

@@ -16,7 +16,7 @@ function createApiUtils(url: string) {
   return createTanstackQueryUtils(client);
 }
 
-type ApiUtils = ReturnType<typeof createApiUtils>;
+export type ApiUtils = ReturnType<typeof createApiUtils>;
 
 interface Api {
   utils: ApiUtils;

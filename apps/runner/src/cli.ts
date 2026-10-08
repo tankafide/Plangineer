@@ -1,9 +1,11 @@
+#!/usr/bin/env node
 import os from 'node:os';
 import { parseArgs } from 'node:util';
 import type { CommandResult } from './command-result.ts';
 import { parseRunnerEnv, type RunnerEnv } from './config/runner-env.ts';
 import { packageVersion } from './package-version.ts';
 import { pairCommand } from './pair-command.ts';
+import { lintSkills } from './skills/skill-lint.ts';
 import { checkSkills, syncSkills } from './skills/skills-mirror.ts';
 import { startCommand } from './start-command.ts';
 
@@ -13,6 +15,7 @@ const USAGE = [
   '  start',
   '  skills sync',
   '  skills check [--staged]',
+  '  skills lint',
   '  --version',
 ].join('\n');
 
@@ -57,6 +60,7 @@ async function runCommand(args: string[]): Promise<CommandResult> {
     rest.length === expected.length && expected.every((arg, index) => rest[index] === arg);
   if (command === '--version' && restIs()) return { ok: true, message: packageVersion() };
   if (command === 'skills' && restIs('sync')) return syncSkills(cwd);
+  if (command === 'skills' && restIs('lint')) return lintSkills(cwd);
   if (command === 'skills' && restIs('check')) return checkSkills(cwd, { staged: false });
   if (command === 'skills' && restIs('check', '--staged')) {
     return checkSkills(cwd, { staged: true });

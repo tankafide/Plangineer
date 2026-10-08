@@ -13,6 +13,8 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppRunnersRouteImport } from './routes/_app/runners'
+import { Route as AppRepositoriesIndexRouteImport } from './routes/_app/repositories/index'
+import { Route as AppRepositoriesRepositoryIdRouteImport } from './routes/_app/repositories/$repositoryId'
 import { Route as AppRunsIndexRouteImport } from './routes/_app/runs/index'
 import { Route as AppRunsRunIdRouteImport } from './routes/_app/runs/$runId'
 
@@ -35,6 +37,17 @@ const AppRunnersRoute = AppRunnersRouteImport.update({
   path: '/runners',
   getParentRoute: () => AppRoute,
 } as any)
+const AppRepositoriesIndexRoute = AppRepositoriesIndexRouteImport.update({
+  id: '/repositories/',
+  path: '/repositories/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppRepositoriesRepositoryIdRoute =
+  AppRepositoriesRepositoryIdRouteImport.update({
+    id: '/repositories/$repositoryId',
+    path: '/repositories/$repositoryId',
+    getParentRoute: () => AppRoute,
+  } as any)
 const AppRunsIndexRoute = AppRunsIndexRouteImport.update({
   id: '/runs/',
   path: '/runs/',
@@ -50,14 +63,18 @@ export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/sign-in': typeof SignInRoute
   '/runners': typeof AppRunnersRoute
+  '/repositories/$repositoryId': typeof AppRepositoriesRepositoryIdRoute
   '/runs/$runId': typeof AppRunsRunIdRoute
+  '/repositories/': typeof AppRepositoriesIndexRoute
   '/runs/': typeof AppRunsIndexRoute
 }
 export interface FileRoutesByTo {
   '/sign-in': typeof SignInRoute
   '/runners': typeof AppRunnersRoute
   '/': typeof AppIndexRoute
+  '/repositories/$repositoryId': typeof AppRepositoriesRepositoryIdRoute
   '/runs/$runId': typeof AppRunsRunIdRoute
+  '/repositories': typeof AppRepositoriesIndexRoute
   '/runs': typeof AppRunsIndexRoute
 }
 export interface FileRoutesById {
@@ -66,21 +83,39 @@ export interface FileRoutesById {
   '/sign-in': typeof SignInRoute
   '/_app/runners': typeof AppRunnersRoute
   '/_app/': typeof AppIndexRoute
+  '/_app/repositories/$repositoryId': typeof AppRepositoriesRepositoryIdRoute
   '/_app/runs/$runId': typeof AppRunsRunIdRoute
+  '/_app/repositories/': typeof AppRepositoriesIndexRoute
   '/_app/runs/': typeof AppRunsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/sign-in' | '/runners' | '/runs/$runId' | '/runs/'
+  fullPaths:
+    | '/'
+    | '/sign-in'
+    | '/runners'
+    | '/repositories/$repositoryId'
+    | '/runs/$runId'
+    | '/repositories/'
+    | '/runs/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/sign-in' | '/runners' | '/' | '/runs/$runId' | '/runs'
+  to:
+    | '/sign-in'
+    | '/runners'
+    | '/'
+    | '/repositories/$repositoryId'
+    | '/runs/$runId'
+    | '/repositories'
+    | '/runs'
   id:
     | '__root__'
     | '/_app'
     | '/sign-in'
     | '/_app/runners'
     | '/_app/'
+    | '/_app/repositories/$repositoryId'
     | '/_app/runs/$runId'
+    | '/_app/repositories/'
     | '/_app/runs/'
   fileRoutesById: FileRoutesById
 }
@@ -119,6 +154,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRunnersRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/repositories/': {
+      id: '/_app/repositories/'
+      path: '/repositories'
+      fullPath: '/repositories/'
+      preLoaderRoute: typeof AppRepositoriesIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/repositories/$repositoryId': {
+      id: '/_app/repositories/$repositoryId'
+      path: '/repositories/$repositoryId'
+      fullPath: '/repositories/$repositoryId'
+      preLoaderRoute: typeof AppRepositoriesRepositoryIdRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/runs/': {
       id: '/_app/runs/'
       path: '/runs'
@@ -139,14 +188,18 @@ declare module '@tanstack/react-router' {
 interface AppRouteChildren {
   AppRunnersRoute: typeof AppRunnersRoute
   AppIndexRoute: typeof AppIndexRoute
+  AppRepositoriesRepositoryIdRoute: typeof AppRepositoriesRepositoryIdRoute
   AppRunsRunIdRoute: typeof AppRunsRunIdRoute
+  AppRepositoriesIndexRoute: typeof AppRepositoriesIndexRoute
   AppRunsIndexRoute: typeof AppRunsIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppRunnersRoute: AppRunnersRoute,
   AppIndexRoute: AppIndexRoute,
+  AppRepositoriesRepositoryIdRoute: AppRepositoriesRepositoryIdRoute,
   AppRunsRunIdRoute: AppRunsRunIdRoute,
+  AppRepositoriesIndexRoute: AppRepositoriesIndexRoute,
   AppRunsIndexRoute: AppRunsIndexRoute,
 }
 

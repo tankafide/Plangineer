@@ -1,0 +1,6 @@
+interface:
+  display_name: 'Codebase Exploration'
+  short_description: 'Propose which repositories a feature involves (triage mode), map the code a feature touches as context for a plan (explore mode), or check a plan against the code at its base commit and return mismatches and missed areas as findings (verify mode).'
+  default_prompt: 'Use $codebase-exploration when an orchestrator or the user asks for it.'
+policy:
+  allow_implicit_invocation: false

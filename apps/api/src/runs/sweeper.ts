@@ -1,6 +1,7 @@
 import { leaseLostOutcome } from '@plangineer/domain';
 import type { ServiceDeps } from '../lib/service-deps.ts';
 import { wakeRunner } from '../runners/runner-repository.ts';
+import { advanceSetupOfRun } from '../setup/setup-advance.ts';
 import { listLapsedRunIds, lockLapsedRun } from './run-dispatch-repository.ts';
 import { appendRunEvents, type RunEventItem } from './run-events-repository.ts';
 
@@ -24,7 +25,7 @@ export async function sweepLapsedLeases(deps: ServiceDeps): Promise<number> {
   for (const runId of await listLapsedRunIds(db, SWEEP_BATCH)) {
     const swept = await db.transaction(async (tx) => {
       const run = await lockLapsedRun(tx, runId);
-      if (run === undefined) return false;
+      if (run === undefined) return undefined;
       const outcome = leaseLostOutcome({ ...run, maxAttempts: env.RUN_MAX_ATTEMPTS });
       const items: RunEventItem[] = [
         { body: { type: 'run.lease_lost', attempt: run.attempt, requeued: outcome.requeued } },
@@ -42,14 +43,16 @@ export async function sweepLapsedLeases(deps: ServiceDeps): Promise<number> {
       } else if (outcome.event === 'run.cancelled') {
         items.push({ body: { type: 'run.cancelled', reason: 'requested' } });
       }
-      await appendRunEvents(tx, runId, items, {
+      const appended = await appendRunEvents(tx, runId, items, {
         leaseDurationMs: env.RUN_LEASE_DURATION_MS,
         logger,
       });
       if (outcome.requeued) await wakeRunner(tx, run.runnerId);
-      return true;
+      return appended;
     });
-    if (swept) handled += 1;
+    if (swept === undefined) continue;
+    handled += 1;
+    if (swept.ended) await advanceSetupOfRun(deps, runId);
   }
   return handled;
 }

@@ -32,8 +32,8 @@ jobs:
           password: plangineer
           database: plangineer
           postgres-version: '18'
-      - run: node --eval "require('node:fs').copyFileSync('.env.example', '.env')"
       - run: pnpm install --frozen-lockfile
+      - run: pnpm setup:env
       - run: pnpm verify
 
   e2e:
@@ -51,8 +51,8 @@ jobs:
           password: plangineer
           database: plangineer
           postgres-version: '18'
-      - run: node --eval "require('node:fs').copyFileSync('.env.example', '.env')"
       - run: pnpm install --frozen-lockfile
+      - run: pnpm setup:env
       - run: pnpm --filter @plangineer/web exec playwright install --with-deps chromium
       - run: pnpm test:e2e
       - if: failure()

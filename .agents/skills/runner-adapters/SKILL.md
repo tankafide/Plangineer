@@ -14,7 +14,7 @@ Rules for `apps/runner`, the npm package an engineer installs to run agents on t
 
 | Part | Rule |
 | --- | --- |
-| Package | Node 24, published to npm, one `bin` entry. The plan that adds the CLI names its commands |
+| Package | Node 24, published to npm as `plangineer-runner` with `pnpm runner:publish`, one `bin` entry. It ships JavaScript built by tsdown, with `contracts` bundled in. The plan that adds the CLI names its commands |
 | Config and data | Under `env-paths`. The runner holds no state beyond its pairing token and worktrees |
 | Environment | Parsed with a Zod schema at startup. A missing or invalid variable exits with a message |
 | Logs | pino as JSON to stdout and `logs/runner.log` |
@@ -34,7 +34,7 @@ Rules for `apps/runner`, the npm package an engineer installs to run agents on t
 - A job over several repositories gets one worktree for each.
 - The runner writes the approved plan revision into the workspace, outside Git's tracked files, so it is never committed.
 - One function removes a worktree, with `git worktree remove` then `git worktree prune`, for a passed, failed and cancelled run alike. The plan decides when a feature's worktrees are removed.
-- Before every run, run `skills check` on the checkout. A drifted mirror fails the run with the file and the fix.
+- Before every run except setup, run `skills check` on the checkout. A drifted mirror fails the run with the file and the fix. A setup run skips it, since setup is what repairs the mirror.
 
 ### Job queue
 

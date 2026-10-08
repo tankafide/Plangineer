@@ -10,10 +10,12 @@ describe('buildManifest', () => {
       url: 'https://github.com/tankafide/Plangineer',
       redirect_url: REDIRECT,
       callback_urls: ['http://localhost:5173/api/auth/callback/github'],
+      setup_url: 'http://localhost:5173/repositories',
+      setup_on_update: true,
       public: false,
       hook_attributes: { url: 'https://example.com/plangineer-dev-webhook', active: false },
       default_permissions: {
-        contents: 'write',
+        contents: 'read',
         pull_requests: 'write',
         checks: 'read',
         metadata: 'read',

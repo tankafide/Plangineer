@@ -41,6 +41,7 @@ What each record owns and how it changes. A plan that adds a record not listed h
 | Approval | Immutable. Points at one plan revision and one reviewer, unique on the pair |
 | Verification result | Immutable. Belongs to a verification run, one per acceptance criterion, unique on the pair. Evidence links point at storage keys |
 | Repository settings | One row per repository, unique on the repository. Mutable, with `updated_at` |
+| Repository setup | One per repository, unique on it, mutable, deleted with its repository. Holds the scan, the selection, the rendered job, the setup run and the pull request |
 | Cross-repository orchestrator | Versioned like a plan revision: immutable rows with a revision number unique per stage. Each run records the revision it used |
 | Staleness dismissal | Immutable. Points at a plan revision and a repository, and records the main commit and the overlapping files |
 | Notification | Belongs to a recipient and points at one record. Only the read state changes. Deleted with the recipient |

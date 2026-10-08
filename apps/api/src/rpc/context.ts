@@ -1,6 +1,4 @@
-import type { Database } from '../db/client.ts';
-import type { Env } from '../env.ts';
-import type { Logger } from '../logger.ts';
+import type { ServiceDeps } from '../lib/service-deps.ts';
 
 interface SessionUser {
   id: string;
@@ -9,9 +7,6 @@ interface SessionUser {
   role: string;
 }
 
-export interface InitialContext {
-  logger: Logger;
-  db: Database;
-  env: Env;
+export interface InitialContext extends ServiceDeps {
   session: { user: SessionUser } | null;
 }

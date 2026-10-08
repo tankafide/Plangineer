@@ -19,10 +19,12 @@ Pin these majors. Versions checked against npm on 6 October 2026.
 | API | Hono 4, oRPC 1.x (not the 2.0 beta), Zod 4 |
 | Database | Postgres 18, Drizzle ORM 0.45.x at 0.45.2 or later (earlier releases have CVE-2026-39356) and Drizzle Kit (not the v1 release candidate) |
 | Auth | Better Auth 1.x with the Drizzle adapter and GitHub sign-in. No organization or SSO plugin |
-| GitHub | One GitHub App per deployment, Octokit |
+| GitHub | One GitHub App per deployment, `octokit` 5 |
 | Storage | Any S3-compatible store through the AWS S3 SDK; MinIO locally |
 | Logging | pino |
 | Lint and format | Oxlint with tsgolint (type-aware), Oxfmt. No ESLint or Prettier |
+| YAML | `yaml` 2, for skill frontmatter in the API scan and the runner lint |
+| Runner build | tsdown, which bundles `contracts` into the published `plangineer-runner` |
 | Boundaries | dependency-cruiser, Knip |
 | Tests | Vitest 5, Testing Library on jsdom for components, MSW, Playwright Test, `playwright-cli` for UI checks |
 | Git hooks | lefthook |
@@ -44,14 +46,18 @@ Nothing imports from another `apps/*` package.
 
 | Command | Does |
 | --- | --- |
-| `pnpm setup:env` | Creates `.env` from `.env.example` with a fresh `BETTER_AUTH_SECRET` |
-| `pnpm setup:github-app` | Creates the dev GitHub App through GitHub's manifest flow and writes its credentials to `.env` |
+| `pnpm setup:env` | Creates `.env` from `.env.example` with a fresh `BETTER_AUTH_SECRET` and placeholder GitHub App values |
+| `pnpm setup:github-app` | Creates the dev GitHub App through GitHub's manifest flow, writes its credentials to `.env`, then opens its install page to pick repositories |
 | `pnpm db:up` | Starts Postgres (Docker Compose) and waits for its healthcheck |
 | `pnpm db:migrate` | Applies pending migrations to the dev database |
-| `pnpm dev` | Starts Postgres, applies migrations, then runs the API and web. MinIO and seed data join it with the features that need them. For runs without a model, start `pnpm runner:fake` beside it |
+| `pnpm dev` | Starts Postgres, applies migrations, seeds, then runs the API and web. MinIO joins it with the feature that needs it. For runs without a model, start `pnpm runner:fake` beside it |
 | `pnpm runner` | Runs the runner's CLI from the checkout: `pnpm runner pair --server <url> --code <code>`, then `pnpm runner start` |
 | `pnpm runner:fake` | Starts the paired runner with the fake agent in place of `claude` |
-| `pnpm db:reset` | Drops and migrates the dev database. Seeding joins it with the first feature that has data |
+| `pnpm runner:build` | Builds the runner's published CLI to `apps/runner/dist/cli.mjs` |
+| `pnpm runner:publish` | Refuses a dirty working tree, builds, runs the runner's tests, then publishes `plangineer-runner` to npm. The engineer runs it |
+| `pnpm db:reset` | Drops, migrates and seeds the dev database |
+| `pnpm --filter @plangineer/api db:seed` | Seeds the dev database. Running it twice adds nothing |
+| `pnpm skills:lint` | Runs the runner's `skills lint` on every skill, then this repository's routing, delegation and references checks |
 | `pnpm verify` | Format check, skills mirror check, Oxlint, typecheck, dependency-cruiser, Knip, Vitest, in that order. Must pass before work is done |
 | `pnpm test:e2e` | Playwright Test journeys against the local stack, on a database reset by `pnpm db:reset`. Must pass before work that adds or changes a journey is done |
 

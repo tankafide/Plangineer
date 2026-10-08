@@ -58,7 +58,7 @@ describe('createApp', () => {
     });
 
     it('rejects a role the client sends to update-user, leaving it member', async () => {
-      const stored = await storeUser(auth);
+      const stored = await storeUser(auth, { role: 'member' });
 
       const response = await app.request('/api/auth/update-user', {
         method: 'POST',
@@ -83,7 +83,7 @@ describe('createApp', () => {
 
   describe('RPC routes', () => {
     it('returns the signed-in user for the session cookie', async () => {
-      const stored = await storeUser(auth, { name: 'Grace Hopper' });
+      const stored = await storeUser(auth, { name: 'Grace Hopper', role: 'member' });
 
       const response = await callMe({
         ...CSRF_HEADER,

@@ -4,6 +4,7 @@ import { createApp } from './app.ts';
 import { createAuth } from './auth/auth.ts';
 import { createDatabase } from './db/client.ts';
 import type { Env } from './env.ts';
+import { createGithub } from './github/github.ts';
 import type { Logger } from './logger.ts';
 import { createNotificationListener } from './realtime/notifications.ts';
 import { createRunnerConnections } from './runners/runner-connections.ts';
@@ -29,12 +30,13 @@ export async function startServer({
 }): Promise<RunningServer> {
   const { db, pool } = createDatabase(env.DATABASE_URL);
   const listener = await createNotificationListener({ databaseUrl: env.DATABASE_URL, logger });
-  const deps = { db, env, logger };
+  const github = createGithub(env, logger);
+  const deps = { db, env, logger, github };
   const realtime = {
     connections: createRunnerConnections({ deps, listener }),
     tail: createRunEventTail({ deps, listener }),
   };
-  const app = createApp({ auth: createAuth({ db, env }), logger, db, env, realtime });
+  const app = createApp({ auth: createAuth({ db, env }), deps, realtime });
 
   const listening = Promise.withResolvers<AddressInfo>();
   const server = serve(

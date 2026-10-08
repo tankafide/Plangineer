@@ -17,6 +17,7 @@ function createInput(overrides: Record<string, unknown> = {}) {
 function summary(overrides: Record<string, unknown> = {}) {
   return {
     id: ID,
+    kind: 'test',
     status: 'queued',
     repository: { owner: 'acme', name: 'app' },
     ref: 'main',

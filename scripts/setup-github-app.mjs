@@ -51,6 +51,7 @@ async function writeCredentials(app) {
   const text = await readFile(ENV_PATH, 'utf8');
   const values = {
     GITHUB_APP_ID: String(app.id),
+    GITHUB_APP_SLUG: app.slug,
     GITHUB_APP_CLIENT_ID: app.client_id,
     GITHUB_APP_CLIENT_SECRET: app.client_secret,
     GITHUB_APP_PRIVATE_KEY: app.pem,
@@ -88,8 +89,12 @@ function runManifestFlow() {
       try {
         const app = await convertManifest(result.code);
         await writeCredentials(app);
-        respond(response, 200, 'Plangineer dev app created. You can close this tab.');
-        resolve(app.html_url);
+        respond(
+          response,
+          200,
+          'Plangineer dev app created. Choose its repositories in the next tab.',
+        );
+        resolve(app);
       } catch (error) {
         respond(response, 502, error.message);
         reject(error);
@@ -111,8 +116,11 @@ async function main() {
     return 1;
   }
   try {
-    const htmlUrl = await runManifestFlow();
-    console.log(`Created ${htmlUrl}. Its credentials are in .env.`);
+    const app = await runManifestFlow();
+    console.log(`Created ${app.html_url}. Its credentials are in .env.`);
+    const installUrl = `https://github.com/apps/${app.slug}/installations/new`;
+    console.log(`Opening ${installUrl}. Pick the repositories Plangineer may read.`);
+    await open(installUrl);
     return 0;
   } catch (error) {
     console.error(error.message);

@@ -4,7 +4,6 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
-  extractRelativeLinks,
   extractRoutedSkills,
   extractSection,
   lintSkills,
@@ -85,14 +84,6 @@ describe('extractSection', () => {
   });
 });
 
-describe('extractRelativeLinks', () => {
-  it('returns relative targets without anchors', () => {
-    const markdown =
-      '[a](../x/y.md) [b](z.md#part) [c](https://example.com) [d](#top) [e](mailto:a@b.c)';
-    expect(extractRelativeLinks(markdown)).toEqual(['../x/y.md', 'z.md']);
-  });
-});
-
 describe('extractRoutedSkills', () => {
   it('returns each skill named by a SKILL.md path, once', () => {
     const section = [
@@ -122,9 +113,31 @@ describe('lintSkills on a temporary skills folder', () => {
 
   afterEach(() => rm(root, { recursive: true, force: true }));
 
-  it('exits 1 from main when there is a problem', async () => {
+  it('exits 1 from main when the runner lint finds a problem', async () => {
     await rm(skill('alpha', 'agents'), { recursive: true });
     expect(await main(root)).toBe(1);
+  });
+
+  it('exits 1 from main for a skill with a broken link', async () => {
+    await put(
+      skill('alpha', 'SKILL.md'),
+      `${ruleText('alpha')}
+[gone](../gone/SKILL.md)
+`,
+    );
+    expect(await main(root)).toBe(1);
+  });
+
+  it('exits 1 from main for an orchestrator routing a missing skill', async () => {
+    await put(
+      skill('plan-orchestrator', 'SKILL.md'),
+      orchestratorText('plan-orchestrator', { routing: '`.agents/skills/ghost/SKILL.md`' }),
+    );
+    expect(await main(root)).toBe(1);
+  });
+
+  it('exits 0 from main for a valid folder', async () => {
+    expect(await main(root)).toBe(0);
   });
 
   it('passes a valid folder', async () => {
@@ -138,86 +151,9 @@ describe('lintSkills on a temporary skills folder', () => {
     expect(await lintSkills(root)).toEqual([]);
   });
 
-  it('fails a rule skill that is not hidden from the model', async () => {
-    await put(skill('alpha', 'SKILL.md'), ruleText('alpha', false));
-    expect(await lintSkills(root)).toEqual([
-      'alpha: frontmatter must set disable-model-invocation: true',
-    ]);
-  });
-
-  it('fails a rule skill with no openai.yaml', async () => {
-    await rm(skill('alpha', 'agents'), { recursive: true });
-    expect(await lintSkills(root)).toEqual(['alpha: agents/openai.yaml is missing']);
-  });
-
-  it('fails a rule skill whose openai.yaml allows implicit invocation', async () => {
-    await put(skill('alpha', 'agents', 'openai.yaml'), policyText('true'));
-    expect(await lintSkills(root)).toEqual([
-      'alpha: agents/openai.yaml must set policy.allow_implicit_invocation: false',
-    ]);
-  });
-
-  it('fails a rule skill whose openai.yaml has no policy', async () => {
-    await put(skill('alpha', 'agents', 'openai.yaml'), 'interface:\n  display_name: "A"\n');
-    expect(await lintSkills(root)).toEqual([
-      'alpha: agents/openai.yaml must set policy.allow_implicit_invocation: false',
-    ]);
-  });
-
-  it('fails a rule skill whose openai.yaml is not valid YAML', async () => {
-    await put(skill('alpha', 'agents', 'openai.yaml'), 'policy: [unclosed\n');
-    const [problem] = await lintSkills(root);
-    expect(problem).toMatch(/^alpha: agents\/openai\.yaml is not valid YAML/);
-  });
-
-  it('fails an orchestrator that is hidden from the model', async () => {
-    await put(
-      skill('plan-orchestrator', 'SKILL.md'),
-      orchestratorText('plan-orchestrator').replace(
-        'description: d\n',
-        'description: d\ndisable-model-invocation: true\n',
-      ),
-    );
-    expect(await lintSkills(root)).toEqual([
-      'plan-orchestrator: an orchestrator must not set disable-model-invocation',
-    ]);
-  });
-
-  it('fails an orchestrator whose openai.yaml blocks implicit invocation', async () => {
-    await put(skill('plan-orchestrator', 'agents', 'openai.yaml'), policyText('false'));
-    expect(await lintSkills(root)).toEqual([
-      'plan-orchestrator: agents/openai.yaml must not set policy.allow_implicit_invocation: false',
-    ]);
-  });
-
-  it('fails a skill with no SKILL.md', async () => {
-    await put(skill('beta', 'agents', 'openai.yaml'), policyText('false'));
-    expect(await lintSkills(root)).toEqual(['beta: SKILL.md is missing']);
-  });
-
   it('fails a missing orchestrator', async () => {
     await rm(skill('plan-review-orchestrator'), { recursive: true });
     expect(await lintSkills(root)).toEqual(['plan-review-orchestrator: skill folder is missing']);
-  });
-
-  it('fails an orchestrator link that does not resolve', async () => {
-    await put(
-      skill('plan-orchestrator', 'SKILL.md'),
-      orchestratorText('plan-orchestrator', { link: '[gone](../orchestrator-references/gone.md)' }),
-    );
-    expect(await lintSkills(root)).toEqual([
-      'plan-orchestrator: link does not resolve to a file: ../orchestrator-references/gone.md',
-    ]);
-  });
-
-  it('fails an orchestrator link that points at a folder', async () => {
-    await put(
-      skill('plan-orchestrator', 'SKILL.md'),
-      orchestratorText('plan-orchestrator', { link: '[dir](../orchestrator-references)' }),
-    );
-    expect(await lintSkills(root)).toEqual([
-      'plan-orchestrator: link does not resolve to a file: ../orchestrator-references',
-    ]);
   });
 
   it('fails delegation rules that differ', async () => {

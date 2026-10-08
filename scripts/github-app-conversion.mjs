@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 const ConvertedApp = z.object({
   id: z.number().int(),
+  slug: z.string().regex(/^[a-z0-9-]+$/),
   client_id: z.string().min(1),
   client_secret: z.string().min(1),
   pem: z.string().startsWith('-----BEGIN'),

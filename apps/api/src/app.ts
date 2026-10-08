@@ -8,8 +8,7 @@ import { requestId } from 'hono/request-id';
 import { RUN_EVENTS_PATH } from '@plangineer/contracts';
 import type { Auth } from './auth/auth.ts';
 import { resolveSession } from './auth/session.ts';
-import type { Database } from './db/client.ts';
-import type { Env } from './env.ts';
+import type { ServiceDeps } from './lib/service-deps.ts';
 import type { Logger } from './logger.ts';
 import { router } from './rpc/router.ts';
 import type { RunnerConnections } from './runners/runner-connections.ts';
@@ -29,17 +28,14 @@ export interface Realtime {
 
 export function createApp({
   auth,
-  logger,
-  db,
-  env,
+  deps,
   realtime,
 }: {
   auth: Auth;
-  logger: Logger;
-  db: Database;
-  env: Env;
+  deps: ServiceDeps;
   realtime: Realtime;
 }) {
+  const { logger } = deps;
   const rpcHandler = new RPCHandler(router, {
     plugins: [new SimpleCsrfProtectionHandlerPlugin()],
     interceptors: [
@@ -68,10 +64,10 @@ export function createApp({
   app.on(['GET', 'POST'], '/api/auth/*', (c) => auth.handler(c.req.raw));
 
   app.get(RUNNER_SOCKET_PATH, (c, next) =>
-    runnerSocketRoute({ db, env, logger: c.get('logger') }, realtime.connections)(c, next),
+    runnerSocketRoute({ ...deps, logger: c.get('logger') }, realtime.connections)(c, next),
   );
   app.get(RUN_EVENTS_PATH, (c) =>
-    runEventStreamRoute({ deps: { db, env, logger: c.get('logger') }, auth, tail: realtime.tail })(
+    runEventStreamRoute({ deps: { ...deps, logger: c.get('logger') }, auth, tail: realtime.tail })(
       c,
     ),
   );
@@ -80,9 +76,8 @@ export function createApp({
     const { matched, response } = await rpcHandler.handle(c.req.raw, {
       prefix: '/rpc',
       context: {
+        ...deps,
         logger: c.get('logger'),
-        db,
-        env,
         session: await resolveSession(auth, c.req.raw.headers),
       },
     });

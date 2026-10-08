@@ -26,6 +26,7 @@ Rules for the workspace, scripts, hooks, CI and check configuration. The stack a
 - Run a package's CLI by resolving its JavaScript bin with `binPath` from `scripts/bin-path.mjs` and spawning it with `process.execPath`, as `scripts/verify.mjs` does. Use `execa` for anything else. Never spawn a `.cmd` shim or use `shell: true`.
 - A script exits non-zero on any failure and prints what failed and the fix. Mutating commands (`format`, `skills:sync`) are separate scripts from read-only checks (`format:check`, `skills:check`).
 - A script that holds logic has a Vitest test beside it, as `scripts/lint-skills.test.mjs` does.
+- `skills:lint` runs the runner's `skills lint` first, which checks each skill's file rules and links, then `scripts/lint-skills.mjs`'s own routing, delegation and references checks.
 
 ### Local stack
 

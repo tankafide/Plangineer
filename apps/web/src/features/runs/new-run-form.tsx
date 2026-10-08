@@ -109,7 +109,7 @@ export function NewRunForm() {
       <CardContent>
         <form noValidate className="flex flex-col gap-4" onSubmit={(event) => void submit(event)}>
           <FieldGroup className="gap-4">
-            <RunnerField control={form.control} />
+            <RunnerField control={form.control} name="runnerId" idPrefix="new-run" />
             <TextField
               control={form.control}
               name="repository"

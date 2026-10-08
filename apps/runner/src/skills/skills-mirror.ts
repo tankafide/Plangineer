@@ -11,8 +11,9 @@ import {
 
 const SOURCE_DIR = '.agents/skills';
 const MIRROR_DIR = '.claude/skills';
-const FIX = `Edit the file under ${SOURCE_DIR}/, then run pnpm skills:sync.`;
-const STAGED_FIX = `Edit the file under ${SOURCE_DIR}/, then run pnpm skills:sync and stage ${MIRROR_DIR}/.`;
+const SYNC_COMMAND = '`npx plangineer-runner skills sync`';
+const FIX = `Edit the file under ${SOURCE_DIR}/, then run ${SYNC_COMMAND}.`;
+const STAGED_FIX = `Edit the file under ${SOURCE_DIR}/, then run ${SYNC_COMMAND} and stage ${MIRROR_DIR}/.`;
 /** The most files a drift message names, so it fits a run's failure message. */
 const MAX_NAMED_FILES = 20;
 

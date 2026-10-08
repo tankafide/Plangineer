@@ -20,6 +20,8 @@
     "test:e2e": "node scripts/test-e2e.mjs",
     "runner": "node apps/runner/src/cli.ts",
     "runner:fake": "node scripts/runner-fake.mjs",
+    "runner:build": "pnpm --filter plangineer-runner build",
+    "runner:publish": "node scripts/publish-runner.mjs",
     "skills:sync": "node apps/runner/src/cli.ts skills sync",
     "skills:lint": "node scripts/lint-skills.mjs",
     "skills:check": "node apps/runner/src/cli.ts skills check",

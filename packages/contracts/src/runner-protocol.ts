@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { GitRef, PermissionMode, Repository, RUN_PROMPT_MAX } from './run.ts';
+import {
+  SETUP_INPUTS_MAX,
+  SETUP_JOB_MAX_BYTES,
+  SkillFilePath,
+  SkillName,
+} from './repository-setup.ts';
+import { CommitSha, GitRef, Repository, RUN_PROMPT_MAX } from './run.ts';
 import { RunnerRunEventBody } from './run-event.ts';
 import { CliStatus, RunnerPlatform } from './runner.ts';
 
@@ -70,12 +76,51 @@ const Welcome = z.strictObject({
     .max(MAX_ACTIVE_RUNS),
 });
 
-export const RunJob = z.strictObject({
+const Prompt = z.string().min(1).max(RUN_PROMPT_MAX);
+
+export const TestJob = z.strictObject({
+  kind: z.literal('test'),
   repository: Repository,
   ref: GitRef,
-  prompt: z.string().min(1).max(RUN_PROMPT_MAX),
-  permissionMode: PermissionMode,
+  prompt: Prompt,
 });
+export type TestJob = z.infer<typeof TestJob>;
+
+export const SETUP_FILES_MAX = 64;
+export const SETUP_FILE_CONTENT_MAX = 65_536;
+
+export const SetupFile = z.strictObject({
+  path: SkillFilePath,
+  content: z.string().max(SETUP_FILE_CONTENT_MAX),
+});
+export type SetupFile = z.infer<typeof SetupFile>;
+
+/** The UTF-8 byte length of a value serialized as JSON. */
+export function jsonByteLength(value: unknown): number {
+  return new TextEncoder().encode(JSON.stringify(value)).byteLength;
+}
+
+/** Everything a setup run needs, rendered and checked by the API when the setup starts. */
+export const SetupJob = z
+  .strictObject({
+    kind: z.literal('setup'),
+    repository: Repository,
+    commit: CommitSha,
+    defaultBranch: GitRef,
+    prompt: Prompt,
+    inputs: z.string().max(SETUP_INPUTS_MAX),
+    files: z.array(SetupFile).max(SETUP_FILES_MAX),
+    moveSkills: z.array(SkillName).max(200),
+    templateSkills: z.array(SkillName).max(32),
+    generateSkills: z.array(SkillName).max(32),
+  })
+  .refine(
+    (job) => jsonByteLength(job) <= SETUP_JOB_MAX_BYTES,
+    `must serialize to at most ${SETUP_JOB_MAX_BYTES} bytes`,
+  );
+export type SetupJob = z.infer<typeof SetupJob>;
+
+export const RunJob = z.discriminatedUnion('kind', [TestJob, SetupJob]);
 export type RunJob = z.infer<typeof RunJob>;
 
 const RunAssign = z.strictObject({ type: z.literal('run.assign'), ...RunAttempt, job: RunJob });

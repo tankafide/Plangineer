@@ -1,6 +1,6 @@
 import { call, ORPCError } from '@orpc/server';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { silentLogger, storeUser, testAuth, testEnv } from '../test/fixtures.ts';
+import { storeUser, testAuth, testDeps } from '../test/fixtures.ts';
 import { createTestDatabase, type TestDatabase } from '../test/test-database.ts';
 import type { InitialContext } from './context.ts';
 import { router } from './router.ts';
@@ -10,9 +10,7 @@ const ID = '0199c1a2-7b3c-7d4e-8f90-a1b2c3d4e5f6';
 describe('router', () => {
   let database: TestDatabase;
   const context = (session: InitialContext['session']): InitialContext => ({
-    logger: silentLogger,
-    db: database.db,
-    env: testEnv(),
+    ...testDeps(database.db),
     session,
   });
 

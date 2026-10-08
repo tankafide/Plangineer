@@ -1,3 +1,4 @@
+import { createPrivateKey } from 'node:crypto';
 import { z } from 'zod';
 
 function integer(min: number, max: number) {
@@ -12,6 +13,19 @@ const port = integer(1, 65535);
 const intervalMs = integer(1_000, 60_000);
 const durationMs = integer(1, 86_400_000);
 
+/**
+ * A PEM private key, converted to the PKCS#8 form Octokit signs with. GitHub issues PKCS#1.
+ * The issue message never holds the key.
+ */
+const privateKeyPem = z.string().transform((pem, context) => {
+  try {
+    return createPrivateKey(pem).export({ type: 'pkcs8', format: 'pem' }).toString();
+  } catch {
+    context.addIssue({ code: 'custom', message: 'must be a PEM private key' });
+    return z.NEVER;
+  }
+});
+
 const EnvSchema = z
   .object({
     DATABASE_URL: z.url(),
@@ -21,6 +35,9 @@ const EnvSchema = z
     BETTER_AUTH_URL: z.url(),
     GITHUB_APP_CLIENT_ID: z.string().min(1),
     GITHUB_APP_CLIENT_SECRET: z.string().min(1),
+    GITHUB_APP_ID: integer(1, Number.MAX_SAFE_INTEGER),
+    GITHUB_APP_SLUG: z.string().regex(/^[a-z0-9-]+$/, 'must be a GitHub App slug'),
+    GITHUB_APP_PRIVATE_KEY: privateKeyPem,
     RUNNER_HEARTBEAT_INTERVAL_MS: intervalMs,
     RUN_LEASE_DURATION_MS: durationMs,
     RUNNER_OFFLINE_AFTER_MS: durationMs,

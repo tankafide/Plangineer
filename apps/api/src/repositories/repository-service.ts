@@ -1,0 +1,158 @@
+import {
+  DEFAULT_WORKFLOW_SETTINGS,
+  INSTALLABLE_REPOSITORIES_MAX,
+  type InstallableRepository,
+  type PageInput,
+  type RepositoryAddInput,
+  type RepositoryDetail,
+  type RepositoryListInstallableOutput,
+  type RepositoryUpdateInput,
+  type RoleSetting,
+  type RoleSettings,
+} from '@plangineer/contracts';
+import { GithubError } from '../github/github.ts';
+import { toPage } from '../lib/page.ts';
+import { err, fail, ok, type Result } from '../lib/result.ts';
+import type { ServiceDeps } from '../lib/service-deps.ts';
+import { findSetupStatus } from '../setup/setup-repository.ts';
+import {
+  deleteRepository,
+  findAddedGithubIds,
+  findRepositoryDetail,
+  insertRepository,
+  listRepositorySummaries,
+  lockRepository,
+  updateRepository,
+} from './repository-repository.ts';
+
+const DEFAULT_ROLE: RoleSetting = {
+  agent: 'claude_code',
+  model: null,
+  runsOn: 'local_runner',
+  signIn: 'engineer_login',
+};
+
+const DEFAULT_ROLE_SETTINGS: RoleSettings = {
+  pre_planning: DEFAULT_ROLE,
+  planning: DEFAULT_ROLE,
+  plan_review: DEFAULT_ROLE,
+  implementation: DEFAULT_ROLE,
+  implementation_review: DEFAULT_ROLE,
+  verification: DEFAULT_ROLE,
+};
+
+export type GithubFailed = { ok: false; error: 'GITHUB_FAILED'; data: unknown };
+
+/** GitHub's status and message as the GITHUB_FAILED error data. Any other error is rethrown. */
+export function githubFailed(error: unknown): GithubFailed {
+  if (!(error instanceof GithubError)) throw error;
+  return err('GITHUB_FAILED', { status: error.status, message: error.message });
+}
+
+const byOwnerThenName = (a: InstallableRepository, b: InstallableRepository) =>
+  a.owner.localeCompare(b.owner) || a.name.localeCompare(b.name);
+
+/** The repository the viewer just changed. It exists, since the caller found or made it. */
+async function readDetail(
+  deps: ServiceDeps,
+  repositoryId: string,
+  viewerId: string,
+): Promise<RepositoryDetail> {
+  const detail = await findRepositoryDetail(deps.db, repositoryId, viewerId);
+  if (detail === undefined) throw new Error(`Repository ${repositoryId} vanished`);
+  return detail;
+}
+
+/** The repositories the App reaches that are not added yet, with the App's install page. */
+export async function listInstallableRepositories({
+  db,
+  env,
+  github,
+}: ServiceDeps): Promise<Result<RepositoryListInstallableOutput, 'GITHUB_FAILED'>> {
+  let reachable: InstallableRepository[];
+  try {
+    reachable = await github.listInstallableRepositories();
+  } catch (error) {
+    return githubFailed(error);
+  }
+  const added = await findAddedGithubIds(
+    db,
+    reachable.map((repository) => repository.githubRepositoryId),
+  );
+  const items = reachable
+    .filter((repository) => !added.has(repository.githubRepositoryId))
+    .toSorted(byOwnerThenName);
+  return ok({
+    items: items.slice(0, INSTALLABLE_REPOSITORIES_MAX),
+    truncated: items.length > INSTALLABLE_REPOSITORIES_MAX,
+    installUrl: `https://github.com/apps/${env.GITHUB_APP_SLUG}/installations/new`,
+  });
+}
+
+/** Adds a repository the App reaches, with every role on today's only option. */
+export async function addRepository(
+  deps: ServiceDeps,
+  userId: string,
+  input: RepositoryAddInput,
+): Promise<Result<RepositoryDetail, 'NOT_FOUND' | 'CONFLICT' | 'GITHUB_FAILED'>> {
+  let reachable: InstallableRepository[];
+  try {
+    reachable = await deps.github.listInstallableRepositories();
+  } catch (error) {
+    return githubFailed(error);
+  }
+  const found = reachable.find(
+    (repository) => repository.githubRepositoryId === input.githubRepositoryId,
+  );
+  if (found === undefined) return fail('NOT_FOUND');
+  const repositoryId = await deps.db.transaction((tx) =>
+    insertRepository(tx, {
+      githubRepositoryId: found.githubRepositoryId,
+      githubInstallationId: found.installationId,
+      owner: found.owner,
+      name: found.name,
+      description: input.description,
+      roleSettings: DEFAULT_ROLE_SETTINGS,
+      workflowSettings: DEFAULT_WORKFLOW_SETTINGS,
+      createdBy: userId,
+    }),
+  );
+  if (repositoryId === undefined) return fail('CONFLICT');
+  return ok(await readDetail(deps, repositoryId, userId));
+}
+
+export async function listRepositories({ db }: ServiceDeps, page: PageInput) {
+  return toPage(await listRepositorySummaries(db, page), page.limit);
+}
+
+export async function getRepository(
+  { db }: ServiceDeps,
+  userId: string,
+  repositoryId: string,
+): Promise<Result<RepositoryDetail, 'NOT_FOUND'>> {
+  const detail = await findRepositoryDetail(db, repositoryId, userId);
+  return detail === undefined ? fail('NOT_FOUND') : ok(detail);
+}
+
+/** Replaces only the fields the input gives. */
+export async function changeRepository(
+  deps: ServiceDeps,
+  userId: string,
+  { repositoryId, ...changes }: RepositoryUpdateInput,
+): Promise<Result<RepositoryDetail, 'NOT_FOUND'>> {
+  if (!(await updateRepository(deps.db, repositoryId, changes))) return fail('NOT_FOUND');
+  return ok(await readDetail(deps, repositoryId, userId));
+}
+
+/** Deletes a repository and its setup, unless its setup is generating. */
+export async function removeRepository(
+  { db }: ServiceDeps,
+  repositoryId: string,
+): Promise<Result<{ repositoryId: string }, 'NOT_FOUND' | 'CONFLICT'>> {
+  return db.transaction(async (tx) => {
+    if ((await lockRepository(tx, repositoryId)) === undefined) return fail('NOT_FOUND');
+    if ((await findSetupStatus(tx, repositoryId)) === 'generating') return fail('CONFLICT');
+    await deleteRepository(tx, repositoryId);
+    return ok({ repositoryId });
+  });
+}

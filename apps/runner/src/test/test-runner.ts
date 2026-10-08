@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import type { RunJob, RunnerRunEventBody, RunnerToServerMessage } from '@plangineer/contracts';
+import type { RunnerRunEventBody, RunnerToServerMessage, TestJob } from '@plangineer/contracts';
 import { pino } from 'pino';
 import type { AgentAdapter } from '../adapters/agent-adapter.ts';
 import { createClaudeCodeAdapter } from '../adapters/claude-code/claude-code-adapter.ts';
@@ -15,8 +15,8 @@ import type { FakeControlPlane } from './fake-control-plane.ts';
 
 export const TEST_REPOSITORY = { owner: 'acme', name: 'app' };
 
-export function testJob(prompt: string): RunJob {
-  return { repository: TEST_REPOSITORY, ref: 'main', prompt, permissionMode: 'plan' };
+export function testJob(prompt: string): TestJob {
+  return { kind: 'test', repository: TEST_REPOSITORY, ref: 'main', prompt };
 }
 
 export interface TestRunnerOptions {
