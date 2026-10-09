@@ -41,6 +41,6 @@ Edit skills only under `.agents/skills/`, then run `pnpm skills:sync` and `pnpm 
 
 ## Working rules
 
-- Work in a Git worktree under `../Plangineer.worktrees/<slug>`, on its own branch. Never run `git switch` or `git checkout` in the main checkout. `.agents/skills/orchestrator-references/git-workflow.md` has the details.
+- Work in a Git worktree, created with `pnpm worktree:new <type>/<slug>`, on its own branch. Never run `git switch` or `git checkout` in the main checkout. `.agents/skills/orchestrator-references/git-workflow.md` has the details.
 - Add tests for new behavior.
 - Ask only when blocked on a decision the code and spec can't answer; otherwise choose the best-practice option and note it.

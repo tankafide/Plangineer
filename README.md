@@ -15,4 +15,4 @@ The desktop app is planned in the [desktop app plan](docs/plans/2026-10-08-deskt
 5. Start Postgres, the API and the web UI on http://localhost:5173: `pnpm dev`.
 6. Check your work: `pnpm verify`, then `pnpm test:e2e` with `pnpm dev` stopped.
 
-Work in a Git worktree beside the checkout, never by switching branches in it, as the [git workflow](.agents/skills/orchestrator-references/git-workflow.md) describes. The stack, commands and conventions are in [stack decisions](docs/engineering/stack-decisions.md).
+Work in a Git worktree beside the checkout, created with `pnpm worktree:new <type>/<slug>`, never by switching branches in it, as the [git workflow](.agents/skills/orchestrator-references/git-workflow.md) describes. The stack, commands and conventions are in [stack decisions](docs/engineering/stack-decisions.md).

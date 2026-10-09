@@ -61,6 +61,7 @@ Nothing imports from another `apps/*` package.
 | `pnpm runner:publish` | Refuses a dirty working tree, builds, runs the runner's tests, then publishes `plangineer-runner` to npm. The engineer runs it |
 | `pnpm db:reset` | Drops, migrates and seeds the dev database |
 | `pnpm --filter @plangineer/api db:seed` | Seeds the dev database. Running it twice adds nothing |
+| `pnpm worktree:new <branch>` | Creates a worktree for a new or existing branch beside the main checkout, copies `.env` into it and installs dependencies |
 | `pnpm auto:run` | Runs the plan and implementation sessions for `auto-orchestrator` from a linked worktree, then prints whether the work is ready to land, as JSON |
 | `pnpm skills:lint` | Runs the runner's `skills lint` on every skill, then this repository's routing, delegation and references checks |
 | `pnpm verify` | Format check, skills mirror check, Oxlint, typecheck, dependency-cruiser, Knip, Vitest, in that order. Must pass before work is done |

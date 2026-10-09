@@ -26,6 +26,7 @@
     "skills:lint": "node scripts/lint-skills.mjs",
     "skills:check": "node apps/runner/src/cli.ts skills check",
     "verify": "node scripts/verify.mjs",
+    "worktree:new": "node scripts/worktree-new.mjs",
     "auto:run": "node scripts/auto-run.mjs"
   },
   "devDependencies": {
