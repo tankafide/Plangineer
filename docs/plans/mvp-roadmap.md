@@ -18,7 +18,7 @@ Chunks 1 to 9 cover MVP Phases 1 to 3. Chunk 10 is Phase 4, which is rollout and
 | Repository setup | Chunk 2 built it on Oct 8, 2026, as the [repository setup plan](2026-10-08-repository-setup.md) describes: adding a repository, the scan, the three checklists, and one setup pull request with the four orchestrators and the chosen rule skills. Each repository's workflow settings are on its settings card |
 | Runner on npm | The runner is prepared for publishing to npm as `plangineer-runner`. The engineer publishes it with `pnpm runner:publish` |
 | Browser pairing | Replaced the copied code with `plangineer-runner login --server <url>`, which opens an approval page in the browser, as the [runner browser pairing plan](2026-10-08-runner-browser-pairing.md) describes. The engineer publishes runner 0.2.0 with `pnpm runner:publish` |
-| Desktop app | Planned on Oct 8, 2026 as the [desktop app plan](2026-10-08-desktop-app.md), and next to build. An Electron app that runs the whole stack on one machine with no Node, Docker or terminal, built so it can grow into a team server |
+| Desktop app | Built on Oct 9, 2026 from the [desktop app plan](2026-10-08-desktop-app.md): an Electron app that runs the whole stack on one machine with no Node, Docker or terminal, built so it can grow into a team server. The [desktop app guide](../engineering/desktop-app.md) covers installing and running it. After the merge, the engineer publishes runner 0.3.0 with `pnpm runner:publish` and the first draft release |
 | Cross-repository orchestrators | Not built. They get their own plan |
 
 ## Chunks
@@ -149,7 +149,7 @@ The finding pipeline is built once here, on plans, and chunk 9 reuses it for dif
 
 ## Desktop app
 
-Plangineer ships as an Electron desktop app, and the [desktop app plan](2026-10-08-desktop-app.md) holds the design. Installing Plangineer is a developer checkout today: Node 24, Docker Desktop, `pnpm install`, `pnpm setup:env`, `pnpm setup:github-app` and `pnpm dev`, then a runner paired with `npx plangineer-runner login`. The desktop app replaces that with one installer on one machine. It grows into a team-hosted server later, from the same server code.
+Plangineer ships as an Electron desktop app, and the [desktop app plan](2026-10-08-desktop-app.md) holds the design. Before it, installing Plangineer meant a developer checkout with Node 24 and Docker Desktop, then a runner paired with `npx plangineer-runner login`. The desktop app replaces that with one installer on one machine. It grows into a team-hosted server later, from the same server code.
 
 **Gate.** A person downloads the app, opens it, clicks through GitHub twice and signs in, and reaches a paired, online runner without a terminal, on Windows, macOS and Linux.
 

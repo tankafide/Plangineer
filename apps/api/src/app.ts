@@ -6,7 +6,7 @@ import { bodyLimit } from 'hono/body-limit';
 import { HTTPException } from 'hono/http-exception';
 import { requestId } from 'hono/request-id';
 import { RUN_EVENTS_PATH } from '@plangineer/contracts';
-import type { Auth } from './auth/auth.ts';
+import type { AuthProvider } from './auth/auth-provider.ts';
 import { resolveSession } from './auth/session.ts';
 import type { ServiceDeps } from './lib/service-deps.ts';
 import type { Logger } from './logger.ts';
@@ -15,6 +15,7 @@ import type { RunnerConnections } from './runners/runner-connections.ts';
 import { RUNNER_SOCKET_PATH, runnerSocketRoute } from './runners/runner-socket.ts';
 import { runEventStreamRoute } from './runs/run-event-stream.ts';
 import type { RunEventTail } from './runs/run-event-tail.ts';
+import { registerWebAssets } from './web-assets.ts';
 
 const MAX_BODY_BYTES = 1024 * 1024;
 
@@ -27,11 +28,11 @@ export interface Realtime {
 }
 
 export function createApp({
-  auth,
+  authProvider,
   deps,
   realtime,
 }: {
-  auth: Auth;
+  authProvider: AuthProvider;
   deps: ServiceDeps;
   realtime: Realtime;
 }) {
@@ -61,15 +62,19 @@ export function createApp({
     app.use(path, bodyLimit({ maxSize: MAX_BODY_BYTES }));
   }
 
-  app.on(['GET', 'POST'], '/api/auth/*', (c) => auth.handler(c.req.raw));
+  app.on(['GET', 'POST'], '/api/auth/*', async (c) =>
+    (await authProvider.get()).handler(c.req.raw),
+  );
 
   app.get(RUNNER_SOCKET_PATH, (c, next) =>
     runnerSocketRoute({ ...deps, logger: c.get('logger') }, realtime.connections)(c, next),
   );
   app.get(RUN_EVENTS_PATH, (c) =>
-    runEventStreamRoute({ deps: { ...deps, logger: c.get('logger') }, auth, tail: realtime.tail })(
-      c,
-    ),
+    runEventStreamRoute({
+      deps: { ...deps, logger: c.get('logger') },
+      authProvider,
+      tail: realtime.tail,
+    })(c),
   );
 
   app.use('/rpc/*', async (c, next) => {
@@ -78,12 +83,14 @@ export function createApp({
       context: {
         ...deps,
         logger: c.get('logger'),
-        session: await resolveSession(auth, c.req.raw.headers),
+        session: await resolveSession(authProvider, c.req.raw.headers),
       },
     });
     if (matched) return c.newResponse(response.body, response);
     return next();
   });
+
+  if (deps.env.WEB_DIST_DIR !== undefined) registerWebAssets(app, deps.env.WEB_DIST_DIR);
 
   app.onError((error, c) => {
     if (error instanceof HTTPException) return error.getResponse();

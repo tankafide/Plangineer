@@ -26,6 +26,8 @@ async function main() {
   }
   const options = { cwd: repoRoot, stdio: 'inherit' };
   await execa('pnpm', ['db:reset'], options);
+  // The App must exist before Playwright starts the API.
+  await execa('pnpm', ['--filter', '@plangineer/api', 'e2e:github-app'], options);
   const playwright = binPath(
     '@playwright/test',
     'playwright',

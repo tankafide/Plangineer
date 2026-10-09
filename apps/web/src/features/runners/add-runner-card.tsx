@@ -1,9 +1,10 @@
 import { CopyButton } from '@/components/copy-button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { runnerLoginCommand } from './runner-login-command';
 
 /** The command that pairs a machine with this deployment. It makes no API call. */
 export function AddRunnerCard() {
-  const command = `npx plangineer-runner login --server ${window.location.origin}`;
+  const command = runnerLoginCommand();
   return (
     <Card>
       <CardHeader>

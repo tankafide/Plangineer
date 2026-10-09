@@ -116,24 +116,24 @@ export async function checkSkills(
 ): Promise<CommandResult> {
   const plan = await planSync(options.staged ? gitIndex(repoRoot) : workingTree(repoRoot));
   if (hasDrift(plan)) {
-    return { ok: false, message: describeDrift(plan, options.staged ? STAGED_FIX : FIX) };
+    return { exitCode: 1, message: describeDrift(plan, options.staged ? STAGED_FIX : FIX) };
   }
   return {
-    ok: true,
+    exitCode: 0,
     message: options.staged ? 'Staged skills mirror is in sync.' : 'Skills mirror is in sync.',
   };
 }
 
-/** `skills sync`: writes the mirror from the source. */
-export async function syncSkills(repoRoot: string): Promise<CommandResult> {
+/** `skills sync`: writes the mirror from the source, and always says what it did. */
+export async function syncSkills(repoRoot: string): Promise<CommandResult & { message: string }> {
   const plan = await planSync(workingTree(repoRoot));
   if (plan.contents.size === 0) {
-    return { ok: false, message: `No skill files found under ${SOURCE_DIR}.` };
+    return { exitCode: 1, message: `No skill files found under ${SOURCE_DIR}.` };
   }
   await applySync(repoRoot, plan);
   const written = plan.missing.length + plan.changed.length;
   return {
-    ok: true,
+    exitCode: 0,
     message: `Skills mirror synced: ${written} written, ${plan.stray.length} removed.`,
   };
 }

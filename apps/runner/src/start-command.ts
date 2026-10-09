@@ -1,4 +1,5 @@
 import { setTimeout as delay } from 'node:timers/promises';
+import { isDeepStrictEqual } from 'node:util';
 import {
   isTerminalRunEvent,
   type RunnerRunEventBody,
@@ -18,20 +19,14 @@ import { createEventBuffer, type EventBuffer } from './jobs/event-buffer.ts';
 import { createJobQueue } from './jobs/job-queue.ts';
 import { createRunJob, type RunJob, type StopCause } from './jobs/run-job.ts';
 import { packageVersion } from './package-version.ts';
+import { FATAL_RESULTS, NOT_PAIRED, otherServer, STOPPED } from './start-results.ts';
 import { createWorktrees } from './worktrees/worktrees.ts';
 
 const FLUSH_INTERVAL_MS = 100;
 /** How long shutdown waits for the server to acknowledge the stopped runs' last events. */
 const SHUTDOWN_ACK_WAIT_MS = 5_000;
-const NOT_PAIRED_MESSAGE =
-  'This runner is not paired. Run plangineer-runner login --server <url> first.';
-const FATAL_MESSAGES: Record<SocketFatal['kind'], string> = {
-  revoked:
-    'This runner was revoked or its token is invalid. Pair it again with plangineer-runner login.',
-  replaced:
-    'Another runner process using this pairing took over. Stop that process, or pair this machine as a second runner.',
-  protocol: 'The runner and the control plane disagree on the protocol, so the runner stopped.',
-};
+/** How often the runner detects its CLI again, so installing or updating it later shows. */
+const CLI_DETECT_INTERVAL_MS = 30_000;
 
 type Message<T extends ServerToRunnerMessage['type']> = Extract<ServerToRunnerMessage, { type: T }>;
 
@@ -56,7 +51,7 @@ export interface Runner {
 /** Connects to the control plane and runs the jobs it assigns until shutdown or a fatal close. */
 export async function startRunner(options: RunnerOptions): Promise<Runner> {
   const { env, credentials, adapter, logger } = options;
-  const cli = await adapter.detect();
+  let cli = await adapter.detect();
   const runs = new Map<string, ActiveRun>();
   const worktrees = createWorktrees({
     paths: runnerPaths(env.PLANGINEER_RUNNER_DATA_DIR),
@@ -191,6 +186,14 @@ export async function startRunner(options: RunnerOptions): Promise<Runner> {
     }
   }
 
+  /** Sends the CLI's status when it changed. A hello carries it after a reconnect. */
+  async function detectCli(): Promise<void> {
+    const detected = await adapter.detect();
+    if (isDeepStrictEqual(detected, cli)) return;
+    cli = detected;
+    send({ type: 'runner.clis', clis: [cli] });
+  }
+
   function sendHello(): void {
     isWelcomed = false;
     clearInterval(heartbeatTimer);
@@ -212,6 +215,7 @@ export async function startRunner(options: RunnerOptions): Promise<Runner> {
 
   function end(result: CommandResult): void {
     clearInterval(flushTimer);
+    clearInterval(detectTimer);
     clearInterval(heartbeatTimer);
     queue.close();
     socket.close();
@@ -222,7 +226,7 @@ export async function startRunner(options: RunnerOptions): Promise<Runner> {
     logger.error({ fatal }, 'The runner is stopping');
     isEnding = true;
     await stopJobs('shutdown');
-    end({ ok: false, message: FATAL_MESSAGES[fatal.kind] });
+    end(FATAL_RESULTS[fatal.kind]);
   }
 
   async function shutdown(): Promise<void> {
@@ -240,7 +244,7 @@ export async function startRunner(options: RunnerOptions): Promise<Runner> {
       ]);
       waitOver.abort();
     }
-    end({ ok: true, message: 'Runner stopped.' });
+    end(STOPPED);
   }
 
   const socket = connectControlPlane({
@@ -252,6 +256,7 @@ export async function startRunner(options: RunnerOptions): Promise<Runner> {
     onFatal: (fatal) => void failFatally(fatal),
   });
   const flushTimer = setInterval(flushAll, FLUSH_INTERVAL_MS);
+  const detectTimer = setInterval(() => void detectCli(), CLI_DETECT_INTERVAL_MS);
 
   return {
     shutdown() {
@@ -261,11 +266,21 @@ export async function startRunner(options: RunnerOptions): Promise<Runner> {
   };
 }
 
-/** `start`: runs the paired runner until SIGINT, SIGTERM or a close it cannot recover from. */
-export async function startCommand(env: RunnerEnv): Promise<CommandResult> {
+export interface StartOptions {
+  /** The server the runner must be paired with, from `--server`, or null to take any. */
+  serverUrl: string | null;
+}
+
+/**
+ * `start`: runs the paired runner until SIGINT, SIGTERM or a close it cannot recover from. It
+ * exits 3 when the runner needs pairing, so a program that runs it can tell that from a failure.
+ */
+export async function startCommand(env: RunnerEnv, options: StartOptions): Promise<CommandResult> {
   const paths = runnerPaths(env.PLANGINEER_RUNNER_DATA_DIR);
   const credentials = await readCredentials(paths.credentials);
-  if (credentials === null) return { ok: false, message: NOT_PAIRED_MESSAGE };
+  if (credentials === null) return NOT_PAIRED;
+  const mismatch = otherServer(credentials.serverUrl, options.serverUrl);
+  if (mismatch !== null) return mismatch;
   const logger = createRunnerLogger(env.LOG_LEVEL, paths.logFile);
   const adapter = createClaudeCodeAdapter(env.PLANGINEER_CLAUDE_COMMAND);
   const runner = await startRunner({ env, credentials, adapter, logger });

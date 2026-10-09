@@ -4,12 +4,6 @@ export type { Logger };
 
 /** The runner's logger: JSON to stdout and to `logFile`, with tokens, login secrets and auth redacted. */
 export function createRunnerLogger(level: Level, logFile: string): Logger {
-  const transport = pino.transport({
-    targets: [
-      { target: 'pino/file', level, options: { destination: 1 } },
-      { target: 'pino/file', level, options: { destination: logFile, mkdir: true } },
-    ],
-  });
   return pino(
     {
       level,
@@ -26,6 +20,9 @@ export function createRunnerLogger(level: Level, logFile: string): Logger {
         ],
       },
     },
-    transport,
+    pino.multistream([
+      { level, stream: process.stdout },
+      { level, stream: pino.destination({ dest: logFile, mkdir: true, sync: false }) },
+    ]),
   );
 }

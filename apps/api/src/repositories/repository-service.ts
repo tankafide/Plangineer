@@ -66,8 +66,8 @@ async function readDetail(
 /** The repositories the App reaches that are not added yet, with the App's install page. */
 export async function listInstallableRepositories({
   db,
-  env,
   github,
+  appStore,
 }: ServiceDeps): Promise<Result<RepositoryListInstallableOutput, 'GITHUB_FAILED'>> {
   let reachable: InstallableRepository[];
   try {
@@ -75,6 +75,8 @@ export async function listInstallableRepositories({
   } catch (error) {
     return githubFailed(error);
   }
+  const app = await appStore.get();
+  if (app === null) throw new Error('GitHub App is not configured');
   const added = await findAddedGithubIds(
     db,
     reachable.map((repository) => repository.githubRepositoryId),
@@ -85,7 +87,7 @@ export async function listInstallableRepositories({
   return ok({
     items: items.slice(0, INSTALLABLE_REPOSITORIES_MAX),
     truncated: items.length > INSTALLABLE_REPOSITORIES_MAX,
-    installUrl: `https://github.com/apps/${env.GITHUB_APP_SLUG}/installations/new`,
+    installUrl: `https://github.com/apps/${app.slug}/installations/new`,
   });
 }
 

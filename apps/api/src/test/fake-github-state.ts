@@ -29,6 +29,8 @@ export interface FakePullRequest {
 
 /** A token request GitHub received, without the token GitHub returned. */
 interface TokenRequest {
+  /** The App JWT the request was signed with. */
+  appJwt: string;
   installationId: number;
   repositoryIds: number[];
   permissions: Record<string, string>;
@@ -70,8 +72,21 @@ export function fakeRepository(overrides: Partial<FakeRepository> = {}): FakeRep
   };
 }
 
+/** An App GitHub creates from a manifest, as the manifest conversion answers it. */
+interface FakeManifestConversion {
+  id: number;
+  slug: string;
+  clientId: string;
+  clientSecret: string;
+  /** GitHub issues the key in PKCS#1 form. */
+  pem: string;
+  ownerLogin: string;
+}
+
 /** The in-memory GitHub the handlers serve, which a test sets and reads. */
 export interface GithubState {
+  /** Manifest flow codes to the App each converts into. */
+  manifestConversions: Map<string, FakeManifestConversion>;
   repositories: FakeRepository[];
   pullRequests: FakePullRequest[];
   tokenRequests: TokenRequest[];

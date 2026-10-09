@@ -37,8 +37,20 @@ describe('RunnerToServerMessage', () => {
     { type: 'run.heartbeat', runId: RUN_ID, attempt: 1 },
     { type: 'runner.status', planLimitResetsAt: null },
     { type: 'runner.status', planLimitResetsAt: '2026-10-07T12:00:00.000Z' },
+    { type: 'runner.clis', clis: hello().clis },
   ])('accepts a valid $type', (message) => {
     expect(RunnerToServerMessage.safeParse(message).success).toBe(true);
+  });
+
+  it('rejects runner.clis with more than 4 CLIs or an unknown key', () => {
+    const clis = hello().clis;
+    expect(
+      RunnerToServerMessage.safeParse({ type: 'runner.clis', clis: Array(5).fill(clis[0]) })
+        .success,
+    ).toBe(false);
+    expect(RunnerToServerMessage.safeParse({ type: 'runner.clis', clis, extra: 1 }).success).toBe(
+      false,
+    );
   });
 
   it('rejects run.events carrying an API-only event type', () => {

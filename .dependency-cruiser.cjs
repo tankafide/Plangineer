@@ -6,6 +6,7 @@ const layout = [
   { path: 'apps/api', mayImport: ['packages/contracts', 'packages/domain'] },
   { path: 'apps/web', mayImport: ['packages/contracts', 'packages/domain', 'packages/api-client'] },
   { path: 'apps/runner', mayImport: ['packages/contracts', 'packages/domain'] },
+  { path: 'apps/desktop', mayImport: ['packages/contracts'] },
 ];
 
 function packageName(dir) {
@@ -52,7 +53,14 @@ module.exports = {
     parser: 'swc',
     doNotFollow: { path: 'node_modules' },
     exclude: {
-      path: ['apps/web/src/routeTree[.]gen[.]ts$', 'apps/api/drizzle/', 'apps/web/dist/'],
+      path: [
+        'apps/web/src/routeTree[.]gen[.]ts$',
+        'apps/api/drizzle/',
+        'apps/web/dist/',
+        'apps/desktop/dist/',
+        'apps/desktop/stage/',
+        'apps/desktop/release/',
+      ],
     },
     enhancedResolveOptions: {
       exportsFields: ['exports'],

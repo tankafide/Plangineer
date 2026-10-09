@@ -30,8 +30,10 @@ import {
   type WorkflowSettings,
 } from '@plangineer/contracts';
 import { user } from './auth-schema.ts';
+import { createdAt, id, updatedAt } from './columns.ts';
 
 export * from './auth-schema.ts';
+export * from './github-apps-schema.ts';
 
 export const runnerStatus = pgEnum('runner_status', RunnerStatus.enum);
 export const runnerPlatform = pgEnum('runner_platform', RunnerPlatform.enum);
@@ -40,17 +42,6 @@ export const runStatus = pgEnum('run_status', RunStatus.enum);
 export const runEventType = pgEnum('run_event_type', RunEventType.enum);
 export const runKind = pgEnum('run_kind', RunKind.enum);
 export const setupStatus = pgEnum('setup_status', SetupStatus.enum);
-
-const createdAt = () => timestamp({ withTimezone: true }).defaultNow().notNull();
-const updatedAt = () =>
-  timestamp({ withTimezone: true })
-    .defaultNow()
-    .$onUpdate(() => new Date())
-    .notNull();
-const id = () =>
-  uuid()
-    .default(sql`uuidv7()`)
-    .primaryKey();
 
 /** A revoked runner keeps its row, because runs point at it. */
 export const runners = pgTable(

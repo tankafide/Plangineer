@@ -1,34 +1,38 @@
-import { fileURLToPath } from 'node:url';
 import { pino, type Level, type Logger } from 'pino';
-
-const LOG_FILE = fileURLToPath(new URL('../../../logs/api.log', import.meta.url));
 
 export type { Logger };
 
-/** The API's root logger: JSON to stdout and to logs/api.log, with credentials redacted. */
-export function createLogger(level: Level): Logger {
-  const transport = pino.transport({
-    targets: [
-      { target: 'pino/file', level, options: { destination: 1 } },
-      { target: 'pino/file', level, options: { destination: LOG_FILE, mkdir: true } },
-    ],
-  });
-  return pino(
-    {
-      level,
-      redact: {
-        paths: [
-          'req.headers.authorization',
-          'req.headers.cookie',
-          'res.headers["set-cookie"]',
-          '*.token',
-          '*.secret',
-          '*.clientSecret',
-          '*.deviceSecret',
-          '*.userCode',
-        ],
-      },
-    },
-    transport,
-  );
+const REDACT_PATHS = [
+  'req.headers.authorization',
+  'req.headers.cookie',
+  'res.headers["set-cookie"]',
+  '*.token',
+  '*.secret',
+  '*.deviceSecret',
+  '*.userCode',
+  // GitHub App setup: the setup token, the manifest code and the App's secrets.
+  'setupToken',
+  '*.setupToken',
+  'input.code',
+  '*.input.code',
+  'clientSecret',
+  '*.clientSecret',
+  'client_secret',
+  '*.client_secret',
+  'pem',
+  '*.pem',
+  'privateKey',
+  '*.privateKey',
+];
+
+/**
+ * The API's root logger: JSON to stdout, and to `logFile` when one is given, with credentials
+ * redacted. Each stream carries the level, since a multistream entry with none defaults to info.
+ */
+export function createLogger(level: Level, logFile?: string): Logger {
+  const streams: pino.StreamEntry[] = [{ level, stream: process.stdout }];
+  if (logFile !== undefined) {
+    streams.push({ level, stream: pino.destination({ dest: logFile, mkdir: true, sync: false }) });
+  }
+  return pino({ level, redact: { paths: REDACT_PATHS } }, pino.multistream(streams));
 }

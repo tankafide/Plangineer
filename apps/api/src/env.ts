@@ -1,5 +1,7 @@
-import { createPrivateKey } from 'node:crypto';
+import path from 'node:path';
+import { SetupToken } from '@plangineer/contracts';
 import { z } from 'zod';
+import { PACKAGE_ROOT } from './package-root.ts';
 
 function integer(min: number, max: number) {
   return z
@@ -13,31 +15,19 @@ const port = integer(1, 65535);
 const intervalMs = integer(1_000, 60_000);
 const durationMs = integer(1, 86_400_000);
 
-/**
- * A PEM private key, converted to the PKCS#8 form Octokit signs with. GitHub issues PKCS#1.
- * The issue message never holds the key.
- */
-const privateKeyPem = z.string().transform((pem, context) => {
-  try {
-    return createPrivateKey(pem).export({ type: 'pkcs8', format: 'pem' }).toString();
-  } catch {
-    context.addIssue({ code: 'custom', message: 'must be a PEM private key' });
-    return z.NEVER;
-  }
-});
-
 const EnvSchema = z
   .object({
     DATABASE_URL: z.url(),
+    API_HOST: z.string().min(1),
     API_PORT: port,
+    API_LOG_FILE: z
+      .string()
+      .min(1)
+      .transform((value) => path.resolve(PACKAGE_ROOT, value)),
     LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']),
     BETTER_AUTH_SECRET: z.string().min(32),
     BETTER_AUTH_URL: z.url(),
-    GITHUB_APP_CLIENT_ID: z.string().min(1),
-    GITHUB_APP_CLIENT_SECRET: z.string().min(1),
-    GITHUB_APP_ID: integer(1, Number.MAX_SAFE_INTEGER),
-    GITHUB_APP_SLUG: z.string().regex(/^[a-z0-9-]+$/, 'must be a GitHub App slug'),
-    GITHUB_APP_PRIVATE_KEY: privateKeyPem,
+    SETUP_TOKEN: SetupToken,
     RUNNER_HEARTBEAT_INTERVAL_MS: intervalMs,
     RUN_LEASE_DURATION_MS: durationMs,
     RUNNER_OFFLINE_AFTER_MS: durationMs,
@@ -45,6 +35,11 @@ const EnvSchema = z
     RUN_MAX_ATTEMPTS: integer(1, 10),
     SSE_KEEPALIVE_INTERVAL_MS: intervalMs,
     RUNNER_LOGIN_TTL_MS: integer(60_000, 3_600_000),
+    // Set where the API serves the built web app. Unset in dev, where Vite serves it.
+    WEB_DIST_DIR: z
+      .string()
+      .refine((value) => path.isAbsolute(value), 'must be an absolute path')
+      .optional(),
   })
   .superRefine((env, context) => {
     // A lease and the online window must each survive two missed heartbeats.

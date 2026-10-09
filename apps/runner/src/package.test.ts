@@ -11,8 +11,8 @@ const RUNNER_DIR = fileURLToPath(new URL('..', import.meta.url));
 const PackResult = z.array(z.object({ files: z.array(z.object({ path: z.string() })) }));
 
 /**
- * The package as npm would publish it: the built CLI beside a copy of package.json. It sits in
- * the runner's folder so the CLI resolves its npm dependencies as an install would.
+ * The package as npm would publish it: the built CLI beside a copy of package.json and the
+ * README. It sits in the temp folder, so no node_modules can resolve a dependency it lacks.
  */
 describe('the published package', () => {
   let packageDir: string;
@@ -20,7 +20,7 @@ describe('the published package', () => {
   const cli = () => path.join(packageDir, 'dist', 'cli.mjs');
 
   beforeAll(async () => {
-    packageDir = await mkdtemp(path.join(RUNNER_DIR, '.package-test-'));
+    packageDir = await mkdtemp(path.join(os.tmpdir(), 'runner-package-'));
     await build({ cwd: RUNNER_DIR, outDir: path.join(packageDir, 'dist'), logLevel: 'silent' });
     await copyFile(path.join(RUNNER_DIR, 'package.json'), path.join(packageDir, 'package.json'));
     await copyFile(path.join(RUNNER_DIR, 'README.md'), path.join(packageDir, 'README.md'));
@@ -36,11 +36,19 @@ describe('the published package', () => {
     await rm(fixture, { recursive: true, force: true, maxRetries: 5 });
   });
 
-  it('starts the built CLI with a node shebang and bundles the contracts', async () => {
+  it('starts the built CLI with a node shebang and imports only Node built-ins', async () => {
     const text = await readFile(cli(), 'utf8');
 
+    const imports = [...text.matchAll(/^import .* from "([^"]+)";$/gm)].map((match) => match[1]);
     expect(text.split('\n')[0]).toBe('#!/usr/bin/env node');
-    expect(text).not.toContain('@plangineer/contracts');
+    expect(imports.length).toBeGreaterThan(0);
+    expect(imports.filter((source) => !source?.startsWith('node:'))).toEqual([]);
+  });
+
+  it('declares no runtime dependencies', async () => {
+    const manifest = JSON.parse(await readFile(path.join(packageDir, 'package.json'), 'utf8'));
+
+    expect(manifest).not.toHaveProperty('dependencies');
   });
 
   it('prints the version from the package.json beside dist/', async () => {

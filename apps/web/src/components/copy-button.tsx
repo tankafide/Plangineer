@@ -9,7 +9,15 @@ const LABELS: Record<Exclude<CopyState, 'idle'>, string> = {
 };
 
 /** Copies a value to the clipboard and says whether it worked. */
-export function CopyButton({ value, label }: { value: string; label: string }) {
+export function CopyButton({
+  value,
+  label,
+  primary = false,
+}: {
+  value: string;
+  label: string;
+  primary?: boolean;
+}) {
   const [state, setState] = useState<CopyState>('idle');
 
   async function copy() {
@@ -22,7 +30,7 @@ export function CopyButton({ value, label }: { value: string; label: string }) {
   }
 
   return (
-    <Button variant="outline" size="sm" onClick={() => void copy()}>
+    <Button variant={primary ? 'default' : 'outline'} size="sm" onClick={() => void copy()}>
       {state === 'idle' ? label : LABELS[state]}
     </Button>
   );

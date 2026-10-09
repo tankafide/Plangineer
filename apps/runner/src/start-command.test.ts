@@ -187,7 +187,7 @@ describe('startRunner', () => {
 
     active.shutdown();
 
-    expect(await active.exited).toEqual({ ok: true, message: 'Runner stopped.' });
+    expect(await active.exited).toEqual({ exitCode: 0, message: 'Runner stopped.' });
     expect(plane.events(runId).at(-1)?.event).toMatchObject({
       type: 'run.failed',
       reason: 'runner_stopped',

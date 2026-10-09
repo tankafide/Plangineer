@@ -1,5 +1,10 @@
 import { contract, UserRole } from '@plangineer/contracts';
 import { implement } from '@orpc/server';
+import {
+  completeGithubApp,
+  createGithubAppManifest,
+  getInstanceStatus,
+} from '../instance/instance-service.ts';
 import type { Result } from '../lib/result.ts';
 import {
   addRepository,
@@ -51,6 +56,16 @@ function unwrap<T, E extends string>(result: Result<T, E>, errors: Record<E, unk
 }
 
 export const router = os.router({
+  // Public: the setup token guards the two writes, and nobody can sign in before the App exists.
+  instance: {
+    getStatus: os.instance.getStatus.handler(({ context }) => getInstanceStatus(context)),
+    githubAppManifest: os.instance.githubAppManifest.handler(async ({ context, input, errors }) =>
+      unwrap(await createGithubAppManifest(context, input.setupToken), errors),
+    ),
+    completeGithubApp: os.instance.completeGithubApp.handler(async ({ context, input, errors }) =>
+      unwrap(await completeGithubApp(context, input), errors),
+    ),
+  },
   me: {
     get: authed.me.get.handler(({ context: { user } }) => ({
       id: user.id,

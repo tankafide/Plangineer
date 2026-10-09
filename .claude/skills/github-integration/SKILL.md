@@ -12,8 +12,8 @@ How `apps/api` talks to GitHub. One GitHub App serves the whole deployment, with
 
 ### The App and Octokit
 
-- The App id, private key and webhook secret come from the Zod-parsed environment and are listed in `.env.example`. The private key never appears in a log, an error or a response.
-- GitHub issues PKCS#1 keys and Octokit's JWT signing needs PKCS#8. Convert once in the env schema with `node:crypto` `createPrivateKey(...).export({ type: 'pkcs8', format: 'pem' })`.
+- The App lives in the one-row `github_apps` table, created through GitHub's manifest flow by `instance.githubAppManifest` and `instance.completeGithubApp`, and read through `github-app-store.ts`. Never from the environment. Its client secret and private key are encrypted with Better Auth's `symmetricEncrypt` and `BETTER_AUTH_SECRET`, and never appear in a log, an error or a response.
+- GitHub issues PKCS#1 keys and Octokit's JWT signing needs PKCS#8. Convert once, before storing, with `node:crypto` `createPrivateKey(...).export({ type: 'pkcs8', format: 'pem' })`.
 - Use the `octokit` package (`App`, with its built-in throttling and retry) and `@octokit/webhooks`. No hand-rolled REST, JWT or HMAC code, and no custom retry loops.
 - All GitHub code sits in the GitHub adapter module, per the one-module-per-outside-system rule in [api-server](../api-server/SKILL.md). Handlers call it and never import Octokit.
 - Store installations and repositories by numeric id, never by `owner/name`, which changes on rename or transfer.
@@ -59,7 +59,7 @@ Raise findings with Source skill `github-integration`, in the [finding format](.
 | Rule | Severity if broken |
 | --- | --- |
 | A webhook processed before its signature is verified, or verified against re-serialized JSON | blocker |
-| The App key, webhook secret or an installation token is logged, stored or returned | blocker |
+| The App key, client secret, webhook secret or an installation token is logged, returned or stored unencrypted | blocker |
 | A token wider than the repositories or permissions the action needs, or a credential given to a runner that outlives its run | blocker |
 | Webhook fields used without Zod parsing, or branch and commit text used unescaped in a command or markup | blocker |
 | Octokit imported outside the GitHub adapter module, or hand-rolled REST, JWT, HMAC or retry code | should fix |

@@ -5,6 +5,7 @@ import { githubHandlers } from './github-handlers.ts';
 /** An MSW server over a fake GitHub, refusing any request it does not handle. */
 export function startFakeGithub() {
   const state: GithubState = {
+    manifestConversions: new Map(),
     repositories: [],
     pullRequests: [],
     tokenRequests: [],
@@ -36,6 +37,7 @@ export function startFakeGithub() {
     },
     /** Clears the test's state. Issued tokens stay valid, since the App caches them. */
     reset() {
+      state.manifestConversions.clear();
       state.repositories.length = 0;
       state.pullRequests.length = 0;
       state.tokenRequests.length = 0;

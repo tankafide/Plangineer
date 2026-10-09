@@ -1,26 +1,21 @@
-import { createPrivateKey, generateKeyPairSync } from 'node:crypto';
-import { describe, expect, it } from 'vitest';
+import os from 'node:os';
+import path from 'node:path';
+import { describe, expect, it, vi } from 'vitest';
 import { parseEnv } from './env.ts';
+import { PACKAGE_ROOT } from './package-root.ts';
 
-/** A PKCS#1 key, the form GitHub issues. */
-const PKCS1_KEY = generateKeyPairSync('rsa', {
-  modulusLength: 2048,
-  privateKeyEncoding: { type: 'pkcs1', format: 'pem' },
-  publicKeyEncoding: { type: 'spki', format: 'pem' },
-}).privateKey;
+const LOG_FILE = path.join(os.tmpdir(), 'plangineer', 'api.log');
 
 function source(overrides: Record<string, string | undefined> = {}) {
   return {
     DATABASE_URL: 'postgres://plangineer:plangineer@localhost:5432/plangineer',
+    API_HOST: '127.0.0.1',
     API_PORT: '3000',
+    API_LOG_FILE: LOG_FILE,
     LOG_LEVEL: 'info',
     BETTER_AUTH_SECRET: 'a'.repeat(32),
     BETTER_AUTH_URL: 'http://localhost:5173',
-    GITHUB_APP_CLIENT_ID: 'client-id',
-    GITHUB_APP_CLIENT_SECRET: 'client-secret',
-    GITHUB_APP_ID: '12345',
-    GITHUB_APP_SLUG: 'plangineer-dev-abc123',
-    GITHUB_APP_PRIVATE_KEY: PKCS1_KEY,
+    SETUP_TOKEN: 's'.repeat(43),
     RUNNER_HEARTBEAT_INTERVAL_MS: '10000',
     RUN_LEASE_DURATION_MS: '30000',
     RUNNER_OFFLINE_AFTER_MS: '30000',
@@ -36,8 +31,6 @@ describe('parseEnv', () => {
   it('returns typed values for a valid source', () => {
     expect(parseEnv(source())).toEqual({
       ...source(),
-      GITHUB_APP_ID: 12_345,
-      GITHUB_APP_PRIVATE_KEY: expect.stringMatching(/^-----BEGIN PRIVATE KEY-----\n/),
       API_PORT: 3000,
       RUNNER_HEARTBEAT_INTERVAL_MS: 10_000,
       RUN_LEASE_DURATION_MS: 30_000,
@@ -117,27 +110,38 @@ describe('parseEnv', () => {
     expect(parseEnv(source({ RUN_LEASE_DURATION_MS: '30000' })).RUN_LEASE_DURATION_MS).toBe(30_000);
   });
 
-  it('converts the App key to PKCS#8 without changing it', () => {
-    const { GITHUB_APP_PRIVATE_KEY } = parseEnv(source());
-    expect(createPrivateKey(GITHUB_APP_PRIVATE_KEY).export({ type: 'pkcs1', format: 'pem' })).toBe(
-      PKCS1_KEY,
+  it.each(['API_LOG_FILE', 'API_HOST'])('names %s when it is missing or empty', (name) => {
+    expect(() => parseEnv(source({ [name]: undefined }))).toThrow(name);
+    expect(() => parseEnv(source({ [name]: '' }))).toThrow(name);
+  });
+
+  it('accepts an absolute WEB_DIST_DIR and leaves it unset when missing', () => {
+    expect(parseEnv(source({ WEB_DIST_DIR: os.tmpdir() })).WEB_DIST_DIR).toBe(os.tmpdir());
+    expect(parseEnv(source()).WEB_DIST_DIR).toBeUndefined();
+  });
+
+  it('names a relative WEB_DIST_DIR', () => {
+    expect(() => parseEnv(source({ WEB_DIST_DIR: 'apps/web/dist' }))).toThrow(
+      'WEB_DIST_DIR: must be an absolute path',
     );
   });
 
-  it.each([
-    ['GITHUB_APP_ID', undefined],
-    ['GITHUB_APP_ID', '0'],
-    ['GITHUB_APP_ID', 'abc'],
-    ['GITHUB_APP_SLUG', 'Plangineer Dev'],
-    ['GITHUB_APP_PRIVATE_KEY', undefined],
-  ])('names %s when it is %s', (name, value) => {
-    expect(() => parseEnv(source({ [name]: value }))).toThrow(name);
+  it('resolves a relative API_LOG_FILE against the package root, whatever the working folder', () => {
+    const cwd = vi.spyOn(process, 'cwd').mockReturnValue(os.tmpdir());
+    try {
+      expect(parseEnv(source({ API_LOG_FILE: '../../logs/api.log' })).API_LOG_FILE).toBe(
+        path.resolve(PACKAGE_ROOT, '..', '..', 'logs', 'api.log'),
+      );
+    } finally {
+      cwd.mockRestore();
+    }
   });
 
-  it('names a private key that is not a PEM without printing its value', () => {
-    const value = 'not-a-pem-but-a-secret-value';
-    const parse = () => parseEnv(source({ GITHUB_APP_PRIVATE_KEY: value }));
-    expect(parse).toThrow('GITHUB_APP_PRIVATE_KEY: must be a PEM private key');
-    expect(parse).not.toThrow(value);
+  it.each([
+    ['missing', undefined],
+    ['31 characters', 's'.repeat(31)],
+    ['201 characters', 's'.repeat(201)],
+  ])('names SETUP_TOKEN when it is %s', (_, value) => {
+    expect(() => parseEnv(source({ SETUP_TOKEN: value }))).toThrow('SETUP_TOKEN');
   });
 });

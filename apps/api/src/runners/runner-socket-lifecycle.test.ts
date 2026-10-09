@@ -1,8 +1,11 @@
+import { call } from '@orpc/server';
 import { eq, sql } from 'drizzle-orm';
 import { pino } from 'pino';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { runners } from '../db/schema.ts';
+import type { InitialContext } from '../rpc/context.ts';
+import { router } from '../rpc/router.ts';
 import { claimRuns } from '../runs/dispatch.ts';
 import {
   sessionCookie,
@@ -176,6 +179,37 @@ describe('runner socket liveness and shutdown', () => {
     await vi.waitFor(async () => expect(await planLimit()).toBeNull());
     client.close();
     await server.close();
+  });
+
+  it('stores the clis of a runner.clis message, which runner.list returns', async () => {
+    const server = await startTestServer(database);
+    try {
+      const user = await storeUser(testAuth(database.db));
+      const { runnerId, token } = await storeRunnerWithToken(database.db, { userId: user.id });
+      const client = await TestRunnerClient.connect(server.port, token);
+      client.send(hello());
+      await client.next('welcome');
+      const clis = [
+        { name: 'claude-code', version: '2.1.284', available: true, minimumVersion: '2.1.284' },
+      ];
+      const context: InitialContext = {
+        ...testDeps(database.db),
+        session: { user: { id: user.id, name: user.name, email: user.email, role: 'member' } },
+      };
+      const listed = async () =>
+        (await call(router.runner.list, {}, { context })).items.find(
+          (runner) => runner.id === runnerId,
+        )?.clis;
+
+      client.send({ type: 'runner.clis', clis });
+
+      await vi.waitFor(async () => expect(await listed()).toEqual(clis));
+      const [row] = await database.db.select().from(runners).where(eq(runners.id, runnerId));
+      expect(row?.clis).toEqual(clis);
+      client.close();
+    } finally {
+      await server.close();
+    }
   });
 
   it('pushes run.cancel through a socket held by another API instance', async () => {

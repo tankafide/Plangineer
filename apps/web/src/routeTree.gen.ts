@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
+import { Route as GetStartedRouteImport } from './routes/get-started'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppRepositoriesIndexRouteImport } from './routes/_app/repositories/index'
@@ -21,6 +22,11 @@ import { Route as AppRunsRunIdRouteImport } from './routes/_app/runs/$runId'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GetStartedRoute = GetStartedRouteImport.update({
+  id: '/get-started',
+  path: '/get-started',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SignInRoute = SignInRouteImport.update({
@@ -67,6 +73,7 @@ const AppRunsRunIdRoute = AppRunsRunIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
+  '/get-started': typeof GetStartedRoute
   '/sign-in': typeof SignInRoute
   '/repositories/$repositoryId': typeof AppRepositoriesRepositoryIdRoute
   '/runners/approve': typeof AppRunnersApproveRoute
@@ -76,6 +83,7 @@ export interface FileRoutesByFullPath {
   '/runs/': typeof AppRunsIndexRoute
 }
 export interface FileRoutesByTo {
+  '/get-started': typeof GetStartedRoute
   '/sign-in': typeof SignInRoute
   '/': typeof AppIndexRoute
   '/repositories/$repositoryId': typeof AppRepositoriesRepositoryIdRoute
@@ -88,6 +96,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
+  '/get-started': typeof GetStartedRoute
   '/sign-in': typeof SignInRoute
   '/_app/': typeof AppIndexRoute
   '/_app/repositories/$repositoryId': typeof AppRepositoriesRepositoryIdRoute
@@ -101,6 +110,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/get-started'
     | '/sign-in'
     | '/repositories/$repositoryId'
     | '/runners/approve'
@@ -110,6 +120,7 @@ export interface FileRouteTypes {
     | '/runs/'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/get-started'
     | '/sign-in'
     | '/'
     | '/repositories/$repositoryId'
@@ -121,6 +132,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/_app'
+    | '/get-started'
     | '/sign-in'
     | '/_app/'
     | '/_app/repositories/$repositoryId'
@@ -133,6 +145,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
+  GetStartedRoute: typeof GetStartedRoute
   SignInRoute: typeof SignInRoute
 }
 
@@ -143,6 +156,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/get-started': {
+      id: '/get-started'
+      path: '/get-started'
+      fullPath: '/get-started'
+      preLoaderRoute: typeof GetStartedRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sign-in': {
@@ -228,6 +248,7 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
+  GetStartedRoute: GetStartedRoute,
   SignInRoute: SignInRoute,
 }
 export const routeTree = rootRouteImport

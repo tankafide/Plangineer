@@ -5,7 +5,7 @@ import { isLocalDatabaseUrl } from './local-host.ts';
 import { seedDatabase } from './seed.ts';
 
 const env = parseEnv(process.env);
-const logger = createLogger(env.LOG_LEVEL);
+const logger = createLogger(env.LOG_LEVEL, env.API_LOG_FILE);
 
 if (isLocalDatabaseUrl(env.DATABASE_URL)) {
   const { db, pool } = createDatabase(env.DATABASE_URL);

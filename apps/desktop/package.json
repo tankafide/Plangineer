@@ -1,0 +1,30 @@
+{
+  "name": "@plangineer/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Plangineer for your desktop: the API, web app, Postgres and runner on your own computer.",
+  "author": "Shane Stewart",
+  "type": "module",
+  "main": "dist/main.mjs",
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc",
+    "test:stack": "vitest run --config vitest.stack.config.ts",
+    "start": "electron .",
+    "test:packaged": "playwright test"
+  },
+  "devDependencies": {
+    "@orpc/client": "1.15.5",
+    "@orpc/contract": "1.15.5",
+    "@plangineer/contracts": "workspace:*",
+    "@playwright/test": "1.63.0",
+    "@types/node": "24.19.1",
+    "electron": "44.7.0",
+    "electron-updater": "6.8.9",
+    "env-paths": "4.0.0",
+    "execa": "10.1.0",
+    "shell-env": "4.0.3",
+    "tsdown": "0.23.0",
+    "vitest": "5.0.3"
+  }
+}

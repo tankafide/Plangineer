@@ -155,6 +155,6 @@ export async function lintSkills(repoRoot: string): Promise<CommandResult> {
     }
   }
   return problems.length === 0
-    ? { ok: true, message: `Skills lint passed: ${names.length} skills.` }
-    : { ok: false, message: problems.join('\n') };
+    ? { exitCode: 0, message: `Skills lint passed: ${names.length} skills.` }
+    : { exitCode: 1, message: problems.join('\n') };
 }

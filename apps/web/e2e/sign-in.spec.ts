@@ -1,12 +1,12 @@
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { parseEnv } from 'node:util';
 import { expect, test } from '@playwright/test';
+import { z } from 'zod';
+import { E2E_APP_STATE } from './session-state.ts';
 
 const GITHUB_AUTHORIZE = 'https://github.com/login/oauth/authorize**';
-const { GITHUB_APP_CLIENT_ID } = parseEnv(
-  readFileSync(fileURLToPath(new URL('../../../.env', import.meta.url)), 'utf8'),
-);
+const { clientId } = z
+  .object({ clientId: z.string() })
+  .parse(JSON.parse(readFileSync(E2E_APP_STATE, 'utf8')));
 
 test('a signed-out visit lands on sign-in, and the button starts GitHub sign-in', async ({
   page,
@@ -24,5 +24,5 @@ test('a signed-out visit lands on sign-in, and the button starts GitHub sign-in'
   await button.click();
 
   const authorizeUrl = new URL((await authorizeRequest).url());
-  expect(authorizeUrl.searchParams.get('client_id')).toBe(GITHUB_APP_CLIENT_ID);
+  expect(authorizeUrl.searchParams.get('client_id')).toBe(clientId);
 });

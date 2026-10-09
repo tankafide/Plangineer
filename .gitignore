@@ -5,10 +5,15 @@ logs/
 docs/plans/context/
 .env
 .turbo/
+apps/api/dist/
 apps/web/dist/
 apps/web/test-results/
 apps/web/playwright-report/
 apps/web/blob-report/
 apps/web/e2e/.auth/
 apps/runner/dist/
-apps/runner/.package-test-*/
+apps/desktop/dist/
+apps/desktop/stage/
+apps/desktop/release/
+apps/desktop/test-results/
+apps/desktop/playwright-report/

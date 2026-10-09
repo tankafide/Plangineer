@@ -132,8 +132,17 @@ describe('lintSkill', () => {
     await put('orchestrator-references/review-loop.md', '# Loop');
 
     expect(await lintSkills(root)).toEqual({
-      ok: false,
+      exitCode: 1,
       message: '.agents/skills/alpha: agents/openai.yaml is missing',
+    });
+  });
+
+  it('passes with exit code 0 when every skill is valid', async () => {
+    await put('orchestrator-references/review-loop.md', '# Loop');
+
+    expect(await lintSkills(root)).toEqual({
+      exitCode: 0,
+      message: 'Skills lint passed: 1 skills.',
     });
   });
 });

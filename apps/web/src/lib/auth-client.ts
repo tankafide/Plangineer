@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query';
 import { createAuthClient } from 'better-auth/react';
 
 const authClient = createAuthClient();
@@ -33,6 +34,15 @@ export async function signInWithGitHub(redirect: string): Promise<void> {
     errorCallbackURL: `/sign-in?redirect=${encodeURIComponent(redirect)}`,
   });
   throwIfFailed('GitHub sign-in', error);
+}
+
+/**
+ * The current session as a query, with the same loading, failed and retry states as a screen's
+ * other reads. It lives in the query cache that sign-out clears, unlike Better Auth's page-wide
+ * session store.
+ */
+export function useSession() {
+  return useQuery({ queryKey: ['auth', 'session'], queryFn: readSession });
 }
 
 export async function signOut(): Promise<void> {

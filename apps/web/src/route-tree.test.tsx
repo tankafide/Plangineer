@@ -15,8 +15,8 @@ describe('routes', () => {
 
     await renderRoute('/sign-in?error=access_denied');
 
-    const alert = await screen.findByRole('alert');
-    const button = screen.getByRole('button', { name: 'Sign in with GitHub' });
+    const button = await screen.findByRole('button', { name: 'Sign in with GitHub' });
+    const alert = screen.getByRole('alert');
     expect(alert.textContent).toContain('GitHub sign-in did not complete. Try again.');
     expect(alert.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });

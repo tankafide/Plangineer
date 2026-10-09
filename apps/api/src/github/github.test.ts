@@ -3,7 +3,11 @@ import { pino } from 'pino';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { blobSha, fakeRepository } from '../test/fake-github-state.ts';
 import { type FakeGithub, startFakeGithub } from '../test/fake-github.ts';
-import { GITHUB_APP_PRIVATE_KEY, silentLogger, testEnv } from '../test/fixtures.ts';
+import { TEST_APP_PRIVATE_KEY, silentLogger, testEnv } from '../test/fixtures.ts';
+import { createTestDatabase, type TestDatabase } from '../test/test-database.ts';
+import { githubApps } from '../db/schema.ts';
+import type { Logger } from '../logger.ts';
+import { createGithubAppStore } from './github-app-store.ts';
 import { createGithub, GithubError, type GithubRepository } from './github.ts';
 
 const REPOSITORY: GithubRepository = {
@@ -15,18 +19,31 @@ const REPOSITORY: GithubRepository = {
 
 describe('createGithub', () => {
   let fake: FakeGithub;
-  const github = createGithub(testEnv(), silentLogger);
+  let database: TestDatabase;
+  let github: ReturnType<typeof createGithub>;
 
-  beforeAll(() => {
+  /** GitHub over the App stored in the test database. */
+  function githubWith(logger: Logger) {
+    const appStore = createGithubAppStore({
+      db: database.db,
+      secret: testEnv().BETTER_AUTH_SECRET,
+    });
+    return createGithub({ appStore, logger });
+  }
+
+  beforeAll(async () => {
     fake = startFakeGithub();
+    database = await createTestDatabase();
+    github = githubWith(silentLogger);
   });
 
   afterEach(() => {
     fake.reset();
   });
 
-  afterAll(() => {
+  afterAll(async () => {
     fake.close();
+    await database.drop();
   });
 
   it('lists every repository of every installation, across pages', async () => {
@@ -61,7 +78,12 @@ describe('createGithub', () => {
       defaultBranch: 'trunk',
     });
     expect(fake.tokenRequests).toEqual([
-      { installationId: 1, repositoryIds: [1001], permissions: { contents: 'read' } },
+      {
+        appJwt: expect.any(String),
+        installationId: 1,
+        repositoryIds: [1001],
+        permissions: { contents: 'read' },
+      },
     ]);
   });
 
@@ -159,7 +181,7 @@ describe('createGithub', () => {
         },
       }),
     );
-    const logged = createGithub(testEnv(), logger);
+    const logged = githubWith(logger);
     fake.repositories.push(fakeRepository());
     fake.fail(/\/repos\//, 500, 'Server Error');
 
@@ -167,6 +189,22 @@ describe('createGithub', () => {
 
     const output = [...lines, String(error), JSON.stringify(error)].join('\n');
     expect(output).not.toContain('ghs_fake_');
-    expect(output).not.toContain(GITHUB_APP_PRIVATE_KEY.split('\n')[1]);
+    expect(output).not.toContain(TEST_APP_PRIVATE_KEY.split('\n')[1]);
   });
+
+  it('fails with no stored App, without calling GitHub', async () => {
+    const empty = await createTestDatabase();
+    try {
+      await empty.db.delete(githubApps);
+      const appStore = createGithubAppStore({ db: empty.db, secret: testEnv().BETTER_AUTH_SECRET });
+      const unconfigured = createGithub({ appStore, logger: silentLogger });
+
+      await expect(unconfigured.getRepository(1, 1001)).rejects.toThrow(
+        'GitHub App is not configured',
+      );
+      expect(fake.tokenRequests).toEqual([]);
+    } finally {
+      await empty.drop();
+    }
+  }, 30_000);
 });

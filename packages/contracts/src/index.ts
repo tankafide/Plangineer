@@ -1,3 +1,8 @@
+import {
+  instanceCompleteGithubApp,
+  instanceGetStatus,
+  instanceGithubAppManifest,
+} from './instance.ts';
 import { meGet } from './me.ts';
 import {
   repositoryAdd,
@@ -21,12 +26,20 @@ import {
   runnerStartLogin,
 } from './runner.ts';
 
+export { GITHUB_FAILED_MESSAGE_MAX } from './github-failed.ts';
+export {
+  GithubAppState,
+  InstanceCompleteGithubAppInput,
+  InstanceGithubAppManifestInput,
+  InstanceGithubAppManifestOutput,
+  InstanceStatus,
+  SetupToken,
+} from './instance.ts';
 export { MeGetOutput, UserRole } from './me.ts';
 export { PageInput } from './pagination.ts';
 export {
   AgentRole,
   DEFAULT_WORKFLOW_SETTINGS,
-  GITHUB_FAILED_MESSAGE_MAX,
   GithubRepositoryId,
   INSTALLABLE_REPOSITORIES_MAX,
   InstallableRepository,
@@ -113,6 +126,7 @@ export {
   RunnerStatus,
   RunnerUserCode,
 } from './runner.ts';
+export { RUNNER_LOGIN_MESSAGE_MAX, RunnerLoginEvent } from './runner-cli.ts';
 export {
   MAX_ACTIVE_RUNS,
   MAX_EVENTS_MESSAGE_BYTES,
@@ -130,6 +144,11 @@ export {
 } from './runner-protocol.ts';
 
 export const contract = {
+  instance: {
+    getStatus: instanceGetStatus,
+    githubAppManifest: instanceGithubAppManifest,
+    completeGithubApp: instanceCompleteGithubApp,
+  },
   me: { get: meGet },
   runner: {
     startLogin: runnerStartLogin,

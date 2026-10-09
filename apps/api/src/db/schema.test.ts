@@ -6,6 +6,7 @@ import { storeRunner, storeUser, testAuth } from '../test/fixtures.ts';
 import { storeRepository, testScan, testSelection, testSetupJob } from '../test/setup-fixtures.ts';
 import { createTestDatabase, type TestDatabase } from '../test/test-database.ts';
 import {
+  githubApps,
   repositories,
   repositorySetups,
   runEvents,
@@ -61,6 +62,24 @@ describe('schema constraints', () => {
     if (row === undefined) throw new Error('Run insert returned no row');
     return row.id;
   }
+
+  it('rejects a second GitHub App, beside the one the template holds', async () => {
+    const app = {
+      appId: 1,
+      slug: 'second',
+      clientId: 'second-client',
+      clientSecretEncrypted: 'x',
+      privateKeyEncrypted: 'y',
+      ownerLogin: 'ada',
+    };
+
+    expect(await brokenConstraint(database.db.insert(githubApps).values(app))).toBe(
+      'github_apps_singleton_key',
+    );
+    expect(
+      await brokenConstraint(database.db.insert(githubApps).values({ ...app, singleton: false })),
+    ).toBe('github_apps_singleton_check');
+  });
 
   it('rejects a second runner with the same token hash', async () => {
     const tokenHash = randomBytes(32).toString('hex');

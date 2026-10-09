@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { isTerminalRunEvent, RunnerSocketClose } from '@plangineer/contracts';
+import { type CliStatus, isTerminalRunEvent, RunnerSocketClose } from '@plangineer/contracts';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { packageVersion } from './package-version.ts';
 import { parseRunnerEnv, type RunnerEnv } from './config/runner-env.ts';
@@ -12,6 +12,7 @@ import { createGitRemote, type GitRemote, SYNCED_SKILLS } from './test/git-remot
 import {
   isMessage,
   removeDataDir,
+  scriptedAdapter,
   startTestRunner,
   TEST_REPOSITORY,
   testJob,
@@ -19,6 +20,8 @@ import {
   waitForFakePids,
 } from './test/test-runner.ts';
 
+/** How often the runner detects Claude Code again while it runs. */
+const DETECT_INTERVAL_MS = 30_000;
 const REVOKED =
   'This runner was revoked or its token is invalid. Pair it again with plangineer-runner login.';
 
@@ -68,8 +71,8 @@ const eventsOn = (runId: string, connection: number) =>
   );
 
 /** Runs the start command until the fake control plane closes its socket with `code`. */
-async function startAndClose(code: number) {
-  const exited = startCommand(env);
+async function startAndClose(code: number, serverUrl: string | null = null) {
+  const exited = startCommand(env, { serverUrl });
   await plane.waitFor(isMessage('hello'));
   plane.closeSocket(code, 'closed by the test');
   return exited;
@@ -155,20 +158,64 @@ describe('the control plane socket', () => {
   });
 });
 
-describe('startCommand', () => {
-  it('exits 1 with the revoked message on a 4001 close', async () => {
-    expect(await startAndClose(RunnerSocketClose.revoked)).toEqual({ ok: false, message: REVOKED });
+const cliStatus = (available: boolean): CliStatus => ({
+  name: 'claude-code',
+  version: available ? '2.1.284' : null,
+  available,
+  minimumVersion: '2.1.284',
+});
+
+const reportedClis = () =>
+  plane.received.flatMap(({ message }) => (message.type === 'runner.clis' ? [message.clis] : []));
+
+describe('Claude Code status', () => {
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
-  it('exits 1 with the revoked message when the handshake gets 401', async () => {
+  it('sends runner.clis within one interval of a change, and nothing while it is unchanged', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    let current = cliStatus(false);
+    runner = await startTestRunner(env, plane, {
+      ...scriptedAdapter([]),
+      detect: () => Promise.resolve(current),
+    });
+    const hello = await plane.waitFor(isMessage('hello'));
+
+    await vi.advanceTimersByTimeAsync(DETECT_INTERVAL_MS);
+    current = cliStatus(true);
+    await vi.advanceTimersByTimeAsync(DETECT_INTERVAL_MS);
+    await plane.waitFor(isMessage('runner.clis'));
+    await vi.advanceTimersByTimeAsync(DETECT_INTERVAL_MS);
+    current = cliStatus(false);
+    await vi.advanceTimersByTimeAsync(DETECT_INTERVAL_MS);
+    await vi.waitUntil(() => reportedClis().length === 2);
+
+    expect(hello.clis).toEqual([cliStatus(false)]);
+    expect(reportedClis()).toEqual([[cliStatus(true)], [cliStatus(false)]]);
+  });
+});
+
+describe('startCommand', () => {
+  it('exits 3 with the revoked message on a 4001 close', async () => {
+    expect(await startAndClose(RunnerSocketClose.revoked)).toEqual({
+      exitCode: 3,
+      message: REVOKED,
+    });
+  });
+
+  it('exits 3 with the revoked message when the handshake gets 401', async () => {
     plane.token = 'another-token';
 
-    expect(await startCommand(env)).toEqual({ ok: false, message: REVOKED });
+    expect(await startCommand(env, { serverUrl: null })).toEqual({
+      exitCode: 3,
+      message: REVOKED,
+    });
   });
 
   it('exits 1 with the takeover message on a 4002 close', async () => {
     expect(await startAndClose(RunnerSocketClose.replaced)).toEqual({
-      ok: false,
+      exitCode: 1,
       message:
         'Another runner process using this pairing took over. Stop that process, or pair this machine as a second runner.',
     });
@@ -179,21 +226,37 @@ describe('startCommand', () => {
     async (code) => {
       const result = await startAndClose(code);
 
-      expect(result.ok).toBe(false);
+      expect(result.exitCode).toBe(1);
       expect(result.message).toContain('protocol');
       expect(plane.connections).toBe(1);
     },
   );
 
-  it('exits 1 with a message when the runner is not paired', async () => {
+  it('exits 3 with a message when the runner is not paired', async () => {
     const dataDir = await mkdtemp(path.join(os.tmpdir(), 'runner-unpaired-'));
     const parsed = parseRunnerEnv({ PLANGINEER_RUNNER_DATA_DIR: dataDir });
     if (!parsed.ok) throw new Error(parsed.message);
 
-    expect(await startCommand(parsed.env)).toEqual({
-      ok: false,
+    expect(await startCommand(parsed.env, { serverUrl: null })).toEqual({
+      exitCode: 3,
       message: 'This runner is not paired. Run plangineer-runner login --server <url> first.',
     });
     await rm(dataDir, { recursive: true, force: true, maxRetries: 5 });
+  });
+
+  it('exits 3 without connecting when --server names another server', async () => {
+    const other = 'http://127.0.0.1:1';
+
+    expect(await startCommand(env, { serverUrl: other })).toEqual({
+      exitCode: 3,
+      message: `This runner is paired with ${plane.serverUrl}, not ${other}. Pair it again with plangineer-runner login --server ${other}.`,
+    });
+    expect(plane.connections).toBe(0);
+  });
+
+  it('connects when --server names the paired server', async () => {
+    await startAndClose(RunnerSocketClose.revoked, `${plane.serverUrl}/`);
+
+    expect(plane.connections).toBe(1);
   });
 });

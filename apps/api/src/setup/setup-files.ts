@@ -1,6 +1,5 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import {
   Orchestrator,
   type RepositoryScan,
@@ -9,14 +8,15 @@ import {
   SKILLS_ROOT,
 } from '@plangineer/contracts';
 import { type CatalogEntry, catalogEntry } from '@plangineer/domain';
+import { PACKAGE_ROOT } from '../package-root.ts';
 
-const TEMPLATES = new URL('templates/', import.meta.url);
+const TEMPLATES = path.join(PACKAGE_ROOT, 'src', 'setup', 'templates');
 const REFERENCES_FOLDER = 'orchestrator-references';
 const ROUTED_DESCRIPTION_MAX = 200;
 
 /** Every template file under templates/skills/, by its path relative to that folder. */
 function loadSkillTemplates(): Map<string, string> {
-  const root = fileURLToPath(new URL('skills/', TEMPLATES));
+  const root = path.join(TEMPLATES, 'skills');
   const files = readdirSync(root, { recursive: true, withFileTypes: true }).filter((entry) =>
     entry.isFile(),
   );
@@ -214,9 +214,9 @@ let setupPrompt: string | undefined;
 
 /** The setup agent's prompt, which takes no variables. */
 export function renderSetupPrompt(): string {
-  setupPrompt ??= readFileSync(
-    fileURLToPath(new URL('setup-prompt.md', TEMPLATES)),
-    'utf8',
-  ).replaceAll('\r\n', '\n');
+  setupPrompt ??= readFileSync(path.join(TEMPLATES, 'setup-prompt.md'), 'utf8').replaceAll(
+    '\r\n',
+    '\n',
+  );
   return setupPrompt;
 }

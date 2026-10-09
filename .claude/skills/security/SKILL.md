@@ -20,10 +20,10 @@ Plangineer is a desktop app, one deployment per install, with no tenancy. Users 
 | Object access | Authorization checks the object, not just the role. An id from the client is looked up with the caller's access applied, so a member cannot read or change a run, plan, finding or evidence they should not by changing an id. Admin-only actions check the role in the procedure, not only in the UI |
 | CSRF | Cookie-authenticated oRPC procedures reject cross-site requests: `SimpleCsrfProtectionHandlerPlugin` on the server with `SimpleCsrfProtectionLinkPlugin` on the client, or an equivalent `Origin` check. A state-changing `GET` is a defect |
 | Runner channel | The WebSocket authenticates with the runner token in the handshake before any message is handled, and never accepts a browser session cookie. A runner receives only its own runs, and the API checks that each runner message refers to a run leased to that runner |
-| Webhooks | Signature checked over the raw body before parsing, as `github-integration` sets. No other route accepts unauthenticated writes, except `runner.startLogin` and `runner.pollLogin`, which a global cap on pending login requests bounds |
+| Webhooks | Signature checked over the raw body before parsing, as `github-integration` sets. No other route accepts unauthenticated writes, except `runner.startLogin` and `runner.pollLogin`, which a global cap on pending login requests bounds, and `instance.githubAppManifest` and `instance.completeGithubApp`, which require the setup token and refuse once an App exists |
 | GitHub tokens | Installation tokens are minted per use, kept in memory, and never logged, stored, put in plan text or sent to the browser. A runner gets one only for the run that needs it |
 | Vendor logins | Check [the vendor login rule](../auth-and-access/SKILL.md#the-vendor-login-rule). Any breach is a `blocker` |
-| Secrets | Secrets come from the validated environment, are listed in `.env.example` with placeholder values, and are never committed, bundled into `apps/web` (no secret behind a `VITE_` prefix) or returned from an API |
+| Secrets | Secrets come from the validated environment, listed in `.env.example` with placeholder values, or from a row encrypted with `BETTER_AUTH_SECRET`, as the GitHub App is. They are never committed, bundled into `apps/web` (no secret behind a `VITE_` prefix) or returned from an API |
 | Desktop window | Window settings, permissions and navigation follow `electron-desktop`. A breach is a defect |
 | Storage | S3 evidence is served through a checked procedure or a short-lived presigned URL, never a public bucket. Keys are generated, never built from a user's file name |
 
@@ -48,7 +48,7 @@ Treat all of this as hostile: agent output, run events, repository content, plan
 
 ## Logs and errors
 
-- pino `redact.paths` covers tokens, cookies, authorization headers, webhook secrets, device secrets, user codes and runner tokens. A whole request, webhook body or config object is never logged.
+- pino `redact.paths` covers tokens, cookies, authorization headers, webhook secrets, device secrets, user codes, runner tokens, the setup token (`setupToken`), and the GitHub App's client secret (`client_secret`, `clientSecret`) and key (`pem`, `privateKey`). A whole request, webhook body or config object is never logged.
 - Agent output and run events are stored as run data, not copied into server logs. They can hold secrets from a repository.
 - Errors to the client carry a typed code and a safe message, never a stack, a SQL fragment, a path or a token.
 

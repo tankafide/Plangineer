@@ -153,7 +153,7 @@ describe('skills mirror', () => {
     it('passes the check when there is no mirror either', async () => {
       expect(await checkSkillsMirror(root)).toEqual({ ok: true });
       expect(await checkSkills(root, { staged: false })).toEqual({
-        ok: true,
+        exitCode: 0,
         message: 'Skills mirror is in sync.',
       });
     });
@@ -173,7 +173,7 @@ describe('skills mirror', () => {
 
     it('refuses to sync', async () => {
       expect(await syncSkills(root)).toEqual({
-        ok: false,
+        exitCode: 1,
         message: 'No skill files found under .agents/skills.',
       });
     });
@@ -182,7 +182,7 @@ describe('skills mirror', () => {
   it('passes the check and refuses to sync when the source folder is empty', async () => {
     await rm(source('alpha'), { recursive: true });
     expect(await checkSkillsMirror(root)).toEqual({ ok: true });
-    expect((await syncSkills(root)).ok).toBe(false);
+    expect((await syncSkills(root)).exitCode).toBe(1);
   });
 
   it('names at most 20 drifting files, then how many more', async () => {
@@ -198,16 +198,16 @@ describe('skills mirror', () => {
 
   describe('commands', () => {
     it('check fails on drift without writing', async () => {
-      expect((await checkSkills(root, { staged: false })).ok).toBe(false);
+      expect((await checkSkills(root, { staged: false })).exitCode).toBe(1);
       expect(await exists(mirror('alpha', 'SKILL.md'))).toBe(false);
     });
 
     it('sync then check passes', async () => {
       expect(await syncSkills(root)).toEqual({
-        ok: true,
+        exitCode: 0,
         message: 'Skills mirror synced: 2 written, 0 removed.',
       });
-      expect((await checkSkills(root, { staged: false })).ok).toBe(true);
+      expect((await checkSkills(root, { staged: false })).exitCode).toBe(0);
     });
   });
 
@@ -221,7 +221,7 @@ describe('skills mirror', () => {
     it('passes when the index is in sync', async () => {
       expect(hasDrift(await stagedPlan())).toBe(false);
       expect(await checkSkills(root, { staged: true })).toEqual({
-        ok: true,
+        exitCode: 0,
         message: 'Staged skills mirror is in sync.',
       });
     });
@@ -232,7 +232,7 @@ describe('skills mirror', () => {
       await git('add', source('alpha', 'SKILL.md'));
       expect((await stagedPlan()).changed).toEqual(['alpha/SKILL.md']);
       expect(await checkSkills(root, { staged: true })).toEqual({
-        ok: false,
+        exitCode: 1,
         message: [
           'changed: .claude/skills/alpha/SKILL.md',
           'Fix: Edit the file under .agents/skills/, then run `npx plangineer-runner skills sync` and stage .claude/skills/.',

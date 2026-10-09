@@ -5,12 +5,19 @@ import { createNotificationListener } from '../realtime/notifications.ts';
 import { createRunnerConnections } from '../runners/runner-connections.ts';
 import { createRunEventTail } from '../runs/run-event-tail.ts';
 import { startServer } from '../server.ts';
-import { silentLogger, testAuth, testDeps, testEnv } from './fixtures.ts';
+import { silentLogger, testAuth, testAuthProvider, testDeps, testEnv } from './fixtures.ts';
 import type { TestDatabase } from './test-database.ts';
 
-/** The Hono app on a test database, with its real listener, runner connections and tail. */
-export async function createTestApp(database: TestDatabase, overrides: Partial<Env> = {}) {
-  const deps = testDeps(database.db, { DATABASE_URL: database.url, ...overrides });
+/**
+ * The Hono app on a test database, with its real listener, runner connections and tail, logging
+ * to `logger`.
+ */
+export async function createTestApp(
+  database: TestDatabase,
+  overrides: Partial<Env> = {},
+  logger: Logger = silentLogger,
+) {
+  const deps = { ...testDeps(database.db, { DATABASE_URL: database.url, ...overrides }), logger };
   const listener = await createNotificationListener({
     databaseUrl: database.url,
     logger: silentLogger,
@@ -21,7 +28,7 @@ export async function createTestApp(database: TestDatabase, overrides: Partial<E
   };
   const auth = testAuth(database.db);
   return {
-    app: createApp({ auth, deps, realtime }),
+    app: createApp({ authProvider: testAuthProvider(database.db), deps, realtime }),
     auth,
     close: async () => {
       await realtime.connections.close();

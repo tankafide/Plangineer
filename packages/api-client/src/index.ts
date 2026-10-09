@@ -1,5 +1,13 @@
 export { invalidSelectionData, isApiError } from './api-error.ts';
 export { ApiProvider } from './api-provider.tsx';
+export {
+  githubAppSetupFailure,
+  useCompleteGithubApp,
+  useGithubAppManifest,
+  useInstanceStatus,
+  useSetupRepositories,
+  useSetupRunners,
+} from './instance.ts';
 export { useMe } from './me.ts';
 export {
   useAddRepository,

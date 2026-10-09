@@ -7,7 +7,7 @@ import {
 import type { Context } from 'hono';
 import { streamSSE, type SSEStreamingApi } from 'hono/streaming';
 import { z } from 'zod';
-import type { Auth } from '../auth/auth.ts';
+import type { AuthProvider } from '../auth/auth-provider.ts';
 import { resolveSession } from '../auth/session.ts';
 import type { ServiceDeps } from '../lib/service-deps.ts';
 import { type RunEventTail, RUN_EVENTS_PAGE_SIZE } from './run-event-tail.ts';
@@ -100,15 +100,15 @@ async function streamRunEvents(
 /** GET RUN_EVENTS_PATH: 401 without a session, 404 for a run the caller does not own. */
 export function runEventStreamRoute({
   deps,
-  auth,
+  authProvider,
   tail,
 }: {
   deps: ServiceDeps;
-  auth: Auth;
+  authProvider: AuthProvider;
   tail: RunEventTail;
 }) {
   return async (c: Context) => {
-    const session = await resolveSession(auth, c.req.raw.headers);
+    const session = await resolveSession(authProvider, c.req.raw.headers);
     if (session === null) return c.text('Unauthorized', 401);
     const lastEventId = c.req.header('last-event-id');
     if (lastEventId !== undefined && !/^\d+$/.test(lastEventId)) {

@@ -5,7 +5,7 @@ import { parseEnv } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { parseEnv as parseApiEnv } from '../apps/api/src/env.ts';
 import { repoRoot } from './script-entry.mjs';
-import { setupEnv } from './setup-env.mjs';
+import { envValues, setupEnv } from './setup-env.mjs';
 
 describe('setupEnv', () => {
   let root;
@@ -19,23 +19,17 @@ describe('setupEnv', () => {
     await rm(root, { recursive: true, force: true, maxRetries: 5 });
   });
 
-  it('creates .env from the example with a 43-character BETTER_AUTH_SECRET', async () => {
+  it('creates .env from the example with a 43-character BETTER_AUTH_SECRET and SETUP_TOKEN', async () => {
     expect(await setupEnv(root)).toBe(0);
 
     const env = parseEnv(await readFile(path.join(root, '.env'), 'utf8'));
     const example = parseEnv(await readFile(path.join(root, '.env.example'), 'utf8'));
-    const placeholders = [
-      'BETTER_AUTH_SECRET',
-      'GITHUB_APP_ID',
-      'GITHUB_APP_SLUG',
-      'GITHUB_APP_PRIVATE_KEY',
-    ];
+    const generated = ['BETTER_AUTH_SECRET', 'SETUP_TOKEN'];
     const without = (values) =>
-      Object.fromEntries(Object.entries(values).filter(([key]) => !placeholders.includes(key)));
+      Object.fromEntries(Object.entries(values).filter(([key]) => !generated.includes(key)));
     expect(env.BETTER_AUTH_SECRET).toMatch(/^[\w-]{43}$/);
-    expect(env.GITHUB_APP_ID).toBe('1');
-    expect(env.GITHUB_APP_SLUG).toBe('plangineer-dev');
-    expect(env.GITHUB_APP_PRIVATE_KEY).toMatch(/^-----BEGIN RSA PRIVATE KEY-----\n/);
+    expect(env.SETUP_TOKEN).toMatch(/^[\w-]{43}$/);
+    expect(env.SETUP_TOKEN).not.toBe(env.BETTER_AUTH_SECRET);
     expect(without(env)).toEqual(without(example));
   });
 
@@ -51,5 +45,21 @@ describe('setupEnv', () => {
 
     expect(await setupEnv(root)).toBe(1);
     expect(await readFile(path.join(root, '.env'), 'utf8')).toBe('KEEP=1\n');
+  });
+});
+
+describe('envValues', () => {
+  it('returns the example values with a fresh secret and setup token', async () => {
+    const example = await readFile(path.join(repoRoot, '.env.example'), 'utf8');
+
+    const values = envValues(example);
+
+    expect(values).toEqual({
+      ...parseEnv(example),
+      BETTER_AUTH_SECRET: expect.stringMatching(/^[\w-]{43}$/),
+      SETUP_TOKEN: expect.any(String),
+    });
+    expect(values.SETUP_TOKEN).toMatch(/^[\w-]{43}$/);
+    expect(() => parseApiEnv(values)).not.toThrow();
   });
 });

@@ -46,7 +46,7 @@ A router never imports a repository. Import rules are in `architecture-design`.
 
 ### Logging
 
-- One root pino logger with `pino.transport({ targets })`: stdout and `pino/file` at `logs/api.log` with `mkdir: true`. Build the path with `node:path`.
+- One root pino logger over `pino.multistream`, never `pino.transport`, whose worker thread breaks the bundle: stdout and `pino.destination({ dest: env.API_LOG_FILE, mkdir: true, sync: false })`. Give each stream the logger's level, since a stream with none defaults to `info`. `API_LOG_FILE` resolves against `PACKAGE_ROOT`, as must any file the bundle reads.
 - Each request gets `logger.child({ requestId })`. Log a stable message with structured fields, `log.info({ runId }, 'run claimed')`, never an interpolated string.
 - Redact with pino's `redact.paths`: the `authorization` and `cookie` headers, `set-cookie`, tokens, secrets and S3 credentials. Paths match exact keys, not every depth, so log picked fields, never a whole request, webhook body or config object.
 - On `SIGINT` and `SIGTERM`, stop accepting requests, close the server, then the database pool, then exit.

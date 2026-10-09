@@ -1,11 +1,22 @@
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { describe, expect, it } from 'vitest';
-import { AUTH_URL, server } from '@/test/app-harness';
+import { AUTH_URL, renderPage, server } from '@/test/app-harness';
+import { answerJson, answerProcedure, neverAnswers, rpcError } from '@/test/fixtures';
 import { SignInCard } from './sign-in-card';
 
 const ERROR_TEXT = 'GitHub sign-in did not complete. Try again.';
+const MISSING = { githubApp: 'missing', githubAppSlug: null };
+const CONFIGURED = { githubApp: 'configured', githubAppSlug: 'plangineer-test' };
+
+function renderCard({ failed = false, redirect = '/' } = {}) {
+  return renderPage(() => <SignInCard failed={failed} redirect={redirect} />);
+}
+
+function gitHubButton() {
+  return screen.findByRole('button', { name: 'Sign in with GitHub' });
+}
 
 describe('SignInCard', () => {
   it('starts GitHub sign-in that returns to the app on success and on error', async () => {
@@ -19,9 +30,9 @@ describe('SignInCard', () => {
         });
       }),
     );
-    render(<SignInCard failed={false} redirect="/" />);
+    await renderCard();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Sign in with GitHub' }));
+    await userEvent.click(await gitHubButton());
 
     expect(requests).toEqual([
       expect.objectContaining({
@@ -43,9 +54,9 @@ describe('SignInCard', () => {
         });
       }),
     );
-    render(<SignInCard failed={false} redirect="/runners/approve?code=ABCD-EFGH-JKMN" />);
+    await renderCard({ redirect: '/runners/approve?code=ABCD-EFGH-JKMN' });
 
-    await userEvent.click(screen.getByRole('button', { name: 'Sign in with GitHub' }));
+    await userEvent.click(await gitHubButton());
 
     expect(requests).toEqual([
       expect.objectContaining({
@@ -61,9 +72,9 @@ describe('SignInCard', () => {
         HttpResponse.json({ message: 'Provider not configured' }, { status: 500 }),
       ),
     );
-    render(<SignInCard failed={false} redirect="/" />);
+    await renderCard();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Sign in with GitHub' }));
+    await userEvent.click(await gitHubButton());
 
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain(ERROR_TEXT);
@@ -71,18 +82,58 @@ describe('SignInCard', () => {
     expect(button.hasAttribute('disabled')).toBe(false);
   });
 
-  it('shows no alert before a failed attempt', () => {
-    render(<SignInCard failed={false} redirect="/" />);
+  it('shows no alert before a failed attempt', async () => {
+    await renderCard();
 
+    await gitHubButton();
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
-  it('shows the error alert above the GitHub button after a failed attempt', () => {
-    render(<SignInCard failed redirect="/" />);
+  it('shows the error alert above the GitHub button after a failed attempt', async () => {
+    await renderCard({ failed: true });
 
+    const button = await gitHubButton();
     const alert = screen.getByRole('alert');
-    const button = screen.getByRole('button', { name: 'Sign in with GitHub' });
     expect(alert.textContent).toContain(ERROR_TEXT);
     expect(alert.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('shows Get started in place of the GitHub button while the GitHub App is missing', async () => {
+    answerProcedure('instance/getStatus', answerJson(MISSING));
+
+    await renderCard();
+
+    const getStarted = await screen.findByRole('link', { name: 'Get started' });
+    expect(getStarted.getAttribute('href')).toBe('/get-started');
+    expect(screen.getByText('Plangineer is not set up yet.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Sign in with GitHub' })).toBeNull();
+  });
+
+  it('shows a skeleton button while the setup status loads', async () => {
+    answerProcedure('instance/getStatus', neverAnswers);
+
+    await renderCard();
+
+    expect(await screen.findByRole('status', { name: 'Loading sign-in' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Sign in with GitHub' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Get started' })).toBeNull();
+  });
+
+  it('shows a failed alert with Try again when the setup status fails, and recovers', async () => {
+    answerProcedure(
+      'instance/getStatus',
+      rpcError('INTERNAL_SERVER_ERROR', 500, 'Database down'),
+      answerJson(CONFIGURED),
+    );
+    await renderCard();
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('Plangineer could not be reached');
+    expect(alert.textContent).toContain('Database down');
+    expect(screen.queryByRole('button', { name: 'Sign in with GitHub' })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
+    expect(await gitHubButton()).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 });

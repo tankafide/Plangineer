@@ -62,3 +62,30 @@ jobs:
           path: |
             apps/web/playwright-report/
             apps/web/test-results/
+
+  bundle:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: ikalnytskyi/action-setup-postgres@v8
+        id: postgres
+        with:
+          username: plangineer
+          password: plangineer
+          database: plangineer
+          postgres-version: '18'
+      - run: pnpm install --frozen-lockfile
+      # No .env: the build must not need one.
+      - run: pnpm build
+      - run: node scripts/smoke-server-bundle.mjs
+        env:
+          DATABASE_URL: ${{ steps.postgres.outputs.connection-uri }}

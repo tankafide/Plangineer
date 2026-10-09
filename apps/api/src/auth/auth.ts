@@ -5,6 +5,7 @@ import type { Database } from '../db/client.ts';
 import * as schema from '../db/schema.ts';
 import { SEED_USER_IDS } from '../db/seed-ids.ts';
 import type { Env } from '../env.ts';
+import type { GithubAppCredentials } from '../github/github-app-store.ts';
 
 /**
  * Whether an admin other than a seeded user exists. The first real user to sign in becomes the
@@ -21,18 +22,28 @@ async function realAdminExists(db: Database): Promise<boolean> {
   return row !== undefined;
 }
 
-export function createAuth({ db, env }: { db: Database; env: Env }) {
+/**
+ * Better Auth for the stored GitHub App. With no App there is no social provider, so a GitHub
+ * sign-in fails with Better Auth's provider-not-found error until the App is created.
+ */
+export function createAuth({
+  db,
+  env,
+  githubApp,
+}: {
+  db: Database;
+  env: Env;
+  githubApp: GithubAppCredentials | null;
+}) {
   return betterAuth({
     database: drizzleAdapter(db, { provider: 'pg', schema }),
     baseURL: env.BETTER_AUTH_URL,
     secret: env.BETTER_AUTH_SECRET,
     trustedOrigins: [env.BETTER_AUTH_URL],
-    socialProviders: {
-      github: {
-        clientId: env.GITHUB_APP_CLIENT_ID,
-        clientSecret: env.GITHUB_APP_CLIENT_SECRET,
-      },
-    },
+    socialProviders:
+      githubApp === null
+        ? {}
+        : { github: { clientId: githubApp.clientId, clientSecret: githubApp.clientSecret } },
     advanced: { database: { generateId: 'uuid' } },
     databaseHooks: {
       user: {

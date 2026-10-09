@@ -4,7 +4,7 @@ The decided stack, for agents working in this repo. The reasoning is in [tech-st
 
 ## Context
 
-- Plangineer ships as an Electron desktop app. It runs the API, the web UI, Postgres and the runner on the engineer's own computer, as the [desktop app plan](../plans/2026-10-08-desktop-app.md) describes. A team-hosted server built from the same server code, and a phone app that connects to the engineer's desktop, come later.
+- Plangineer ships as an Electron desktop app. It runs the API, the web UI, Postgres and the runner on the engineer's own computer, as the [desktop app plan](../plans/2026-10-08-desktop-app.md) describes and the [desktop app guide](desktop-app.md) explains to the person who installs it. A team-hosted server built from the same server code, and a phone app that connects to the engineer's desktop, come later.
 - Open source. Each install is one deployment for one team. No tenancy and no organization model.
 - The runner supports Claude Code first, then Codex. No Cursor.
 - Agent runs and Plangineer's own development work in Git worktrees, never by switching branches in a checkout.
@@ -27,7 +27,7 @@ Pin these majors. Versions checked against npm on 6 October 2026.
 | Logging | pino |
 | Lint and format | Oxlint with tsgolint (type-aware), Oxfmt. No ESLint or Prettier |
 | YAML | `yaml` 2, for skill frontmatter in the API scan and the runner lint |
-| Runner build | tsdown, which bundles `contracts` into the published `plangineer-runner` |
+| Builds | tsdown bundles the API into `apps/api/dist/main.mjs` and `migrate.mjs`, and the runner into `apps/runner/dist/cli.mjs`. Vite builds the web app into `apps/web/dist/`. The published `plangineer-runner` bundles every dependency and has no runtime dependencies |
 | Boundaries | dependency-cruiser, Knip |
 | Tests | Vitest 5, Testing Library on jsdom for components, MSW, Playwright Test, `playwright-cli` for UI checks |
 | Git hooks | lefthook |
@@ -42,7 +42,7 @@ Pin these majors. Versions checked against npm on 6 October 2026.
 | `apps/api` | Hono + oRPC control plane, Drizzle schema, run dispatch, webhooks | `contracts`, `domain` |
 | `apps/web` | React SPA, shown in the desktop app's window | `contracts`, `domain`, `api-client` |
 | `apps/runner` | Local runner npm package and CLI adapters | `contracts`, `domain` |
-| `apps/desktop` | Electron shell that launches the server, web and runner bundles. Added by the desktop app plan | `contracts` |
+| `apps/desktop` | Electron shell that launches the server, web and runner bundles | `contracts` |
 
 Nothing imports from another `apps/*` package.
 
@@ -50,16 +50,18 @@ Nothing imports from another `apps/*` package.
 
 | Command | Does |
 | --- | --- |
-| `pnpm setup:env` | Creates `.env` from `.env.example` with a fresh `BETTER_AUTH_SECRET` and placeholder GitHub App values |
-| `pnpm setup:github-app` | Creates the dev GitHub App through GitHub's manifest flow, writes its credentials to `.env`, then opens its install page to pick repositories |
+| `pnpm setup:env` | Creates `.env` from `.env.example` with a fresh `BETTER_AUTH_SECRET` and `SETUP_TOKEN` |
 | `pnpm db:up` | Starts Postgres (Docker Compose) and waits for its healthcheck |
 | `pnpm db:migrate` | Applies pending migrations to the dev database |
-| `pnpm dev` | Starts Postgres, applies migrations, seeds, then runs the API and web. MinIO joins it with the feature that needs it. For runs without a model, start `pnpm runner:fake` beside it |
+| `pnpm dev` | Starts Postgres, applies migrations, seeds, then runs the API and web. Once the API answers, it prints the Get started link, `http://localhost:5173/get-started#setup-token=<SETUP_TOKEN>`, where the dev GitHub App is created. MinIO joins it with the feature that needs it. For runs without a model, start `pnpm runner:fake` beside it |
+| `pnpm build` | Builds the API, web and runner bundles with `turbo run build`. Needs no `.env` |
+| `pnpm desktop:build` | Builds the bundles, fetches the Postgres binaries, fills `apps/desktop/stage/` and builds the installer for the current system |
+| `pnpm desktop:start` | Runs the desktop app from the checkout against `apps/desktop/stage/` |
 | `pnpm runner` | Runs the runner's CLI from the checkout: `pnpm runner login --server <url>`, then `pnpm runner start` |
 | `pnpm runner:fake` | Starts the paired runner with the fake agent in place of `claude` |
 | `pnpm runner:build` | Builds the runner's published CLI to `apps/runner/dist/cli.mjs` |
 | `pnpm runner:publish` | Refuses a dirty working tree, builds, runs the runner's tests, then publishes `plangineer-runner` to npm. The engineer runs it |
-| `pnpm db:reset` | Drops, migrates and seeds the dev database |
+| `pnpm db:reset` | Drops, migrates and seeds the dev database, keeping its GitHub App row |
 | `pnpm --filter @plangineer/api db:seed` | Seeds the dev database. Running it twice adds nothing |
 | `pnpm worktree:new <branch>` | Creates a worktree for a new or existing branch beside the main checkout, copies `.env` into it and installs dependencies |
 | `pnpm auto:run` | Runs the plan and implementation sessions for `auto-orchestrator` from a linked worktree, then prints whether the work is ready to land, as JSON |
@@ -76,7 +78,7 @@ Nothing imports from another `apps/*` package.
 - Plan revisions are immutable rows with JSONB bodies.
 - Migrations come only from `drizzle-kit generate` (`pnpm --filter @plangineer/api db:generate`). Never `drizzle-kit push` or Better Auth's `migrate`.
 - Each app parses its environment with a Zod schema at startup and exits on any missing or invalid variable. Every variable is listed in `.env.example`.
-- The API and runner log JSON with pino to stdout and `logs/<app>.log`.
+- The API and runner log JSON with pino, through `pino.multistream` and never `pino.transport`, to stdout and a file: `API_LOG_FILE` for the API and `<data>/logs/runner.log` for the runner.
 - Hooks and repo scripts are Node scripts (`node scripts/<name>.mjs`), never bash or PowerShell. The skills commands are the one exception: the hook and the `skills:*` scripts run the runner's CLI through `node apps/runner/src/cli.ts`. No shell syntax in `package.json` scripts.
 - Integration tests use real Postgres through template databases, never PGlite or mocks of the database.
 - Tests never call a real model; runner tests use the fake agent and recorded JSONL fixtures.

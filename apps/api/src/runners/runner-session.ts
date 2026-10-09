@@ -10,7 +10,12 @@ import {
   appendRunEvents,
   highestRunnerSeqs,
 } from '../runs/run-events-repository.ts';
-import { recordPlanLimit, recordRunnerHello, recordRunnerSeen } from './runner-repository.ts';
+import {
+  recordPlanLimit,
+  recordRunnerClis,
+  recordRunnerHello,
+  recordRunnerSeen,
+} from './runner-repository.ts';
 
 type Message<T extends RunnerToServerMessage['type']> = Extract<RunnerToServerMessage, { type: T }>;
 type Reply<T extends ServerToRunnerMessage['type']> = Extract<ServerToRunnerMessage, { type: T }>;
@@ -106,6 +111,15 @@ export async function acceptRunnerStatus(
     runnerId,
     planLimitResetsAt === null ? null : new Date(planLimitResetsAt),
   );
+}
+
+/** Stores the CLI status the runner reports when it changes after its hello. */
+export async function acceptRunnerClis(
+  { db }: ServiceDeps,
+  runnerId: string,
+  { clis }: Message<'runner.clis'>,
+): Promise<void> {
+  await recordRunnerClis(db, runnerId, clis);
 }
 
 /** A pong from the runner: it is online. */

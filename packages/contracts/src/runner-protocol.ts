@@ -60,11 +60,18 @@ const RunnerStatusMessage = z.strictObject({
   planLimitResetsAt: z.iso.datetime().nullable(),
 });
 
+/** The runner's agent CLIs, sent whenever a periodic check finds they changed since the last send. */
+const RunnerClis = z.strictObject({
+  type: z.literal('runner.clis'),
+  clis: z.array(CliStatus).max(4),
+});
+
 export const RunnerToServerMessage = z.discriminatedUnion('type', [
   Hello,
   RunEvents,
   RunHeartbeat,
   RunnerStatusMessage,
+  RunnerClis,
 ]);
 export type RunnerToServerMessage = z.infer<typeof RunnerToServerMessage>;
 

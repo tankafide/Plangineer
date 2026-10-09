@@ -1,0 +1,41 @@
+appId: io.github.tankafide.plangineer
+productName: Plangineer
+directories:
+  buildResources: build
+  # dist/ holds the bundled main process, so installers go elsewhere.
+  output: release
+files:
+  - dist/**
+  - package.json
+# Postgres and the API read real files on disk, so the stage ships beside app.asar, never in it.
+extraResources:
+  - from: stage
+    to: .
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+nsis:
+  oneClick: true
+  perMachine: false
+  # Fixed names, so scripts/release-assets.mjs knows what each release must hold.
+  artifactName: ${productName}-Setup-${version}.${ext}
+mac:
+  target: [dmg, zip]
+  category: public.app-category.developer-tools
+  # An ad-hoc signature, which Apple silicon requires of an otherwise unsigned app.
+  identity: '-'
+  hardenedRuntime: false
+  artifactName: ${productName}-${version}-${arch}.${ext}
+linux:
+  target:
+    - target: AppImage
+      arch: [x64]
+  category: Development
+  executableName: plangineer
+  artifactName: ${productName}-${version}.${ext}
+publish:
+  provider: github
+  owner: tankafide
+  repo: Plangineer
+  releaseType: draft

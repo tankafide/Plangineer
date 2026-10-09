@@ -6,7 +6,8 @@ import { createAuth } from '../auth/auth.ts';
 import { createDatabase } from '../db/client.ts';
 import { SEED_USER_IDS } from '../db/seed-ids.ts';
 import { parseEnv } from '../env.ts';
-import { sessionCookie, storeUser } from './fixtures.ts';
+import { createGithubAppStore } from '../github/github-app-store.ts';
+import { sessionCookie, storeUser } from './users.ts';
 
 const SEEDED_USERS: Record<string, string> = {
   'seed-admin': SEED_USER_IDS.admin,
@@ -23,7 +24,8 @@ const env = parseEnv(process.env);
 const { db, pool } = createDatabase(env.DATABASE_URL);
 
 try {
-  const auth = createAuth({ db, env });
+  const githubApp = await createGithubAppStore({ db, secret: env.BETTER_AUTH_SECRET }).get();
+  const auth = createAuth({ db, env, githubApp });
   const userId = seededId ?? (await storeUser(auth, { name: 'E2E Engineer' })).id;
   const cookie = await sessionCookie(auth, userId);
   const separator = cookie.indexOf('=');

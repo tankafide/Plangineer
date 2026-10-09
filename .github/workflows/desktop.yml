@@ -1,0 +1,74 @@
+name: Desktop
+
+on:
+  pull_request:
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+      - 'scripts/**'
+      - '.github/workflows/desktop.yml'
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  draft:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check the tag matches the desktop version
+        run: node -e "const v = require('./apps/desktop/package.json').version; if (process.env.TAG !== 'v' + v) { console.error(process.env.TAG + ' does not match apps/desktop version v' + v); process.exit(1); }"
+        env:
+          TAG: ${{ github.ref_name }}
+      - run: gh release create "$TAG" --draft --title "$TAG"
+        env:
+          TAG: ${{ github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
+
+  build:
+    needs: draft
+    # On a pull request the draft job is skipped, and the builds still run.
+    if: ${{ !cancelled() && (needs.draft.result == 'success' || needs.draft.result == 'skipped') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, macos-15-intel, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm desktop:build
+        if: github.event_name == 'pull_request'
+      - run: pnpm desktop:build --publish always
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - run: pnpm --filter @plangineer/desktop test:stack
+      - name: Packaged first run
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          xvfb-run --auto-servernum pnpm --filter @plangineer/desktop test:packaged
+      - if: failure() && matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-playwright-report
+          path: |
+            apps/desktop/playwright-report/
+            apps/desktop/test-results/

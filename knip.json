@@ -3,7 +3,8 @@
   "ignoreDependencies": ["@swc/core"],
   "workspaces": {
     ".": {
-      "entry": ["scripts/*.mjs"]
+      "entry": ["scripts/*.mjs"],
+      "ignoreDependencies": ["electron-builder", "@playwright/test"]
     },
     "packages/contracts": {},
     "packages/domain": {},
@@ -14,6 +15,7 @@
     "apps/web": {},
     "apps/runner": {
       "entry": ["src/adapters/claude-code/fake-claude.ts"]
-    }
+    },
+    "apps/desktop": {}
   }
 }

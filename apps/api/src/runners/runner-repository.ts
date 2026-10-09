@@ -193,3 +193,15 @@ export async function lockRunnerForClaim(
     .for('update');
   return row;
 }
+
+/** Stores the agent CLIs a connected runner reports after its hello. */
+export async function recordRunnerClis(
+  executor: Executor,
+  runnerId: string,
+  clis: CliStatus[],
+): Promise<void> {
+  await executor
+    .update(runners)
+    .set({ clis: CliStatus.array().parse(clis), lastSeenAt: sql`now()` })
+    .where(eq(runners.id, runnerId));
+}

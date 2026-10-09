@@ -50,7 +50,8 @@ Rules for the workspace, scripts, hooks, CI and check configuration. The stack a
 ### CI
 
 - One workflow runs `pnpm verify` on a matrix of `ubuntu-latest`, `macos-latest` and `windows-latest` with `fail-fast: false`. The three matrix jobs are the required checks for merging.
-- The same workflow runs `pnpm test:e2e` on `ubuntu-latest` only, since the macOS and Windows runners have no Linux Docker.
+- The same workflow runs `pnpm test:e2e` on `ubuntu-latest` only, since the macOS and Windows runners have no Linux Docker, and a `bundle` job that runs `pnpm build` and `node scripts/smoke-server-bundle.mjs` on all three systems with no `.env`.
+- `desktop.yml` runs `pnpm desktop:build` and the desktop `test:stack` on Windows x64, macOS arm64 and x64, and Linux x64, on pull requests that touch `apps/`, `packages/` or `scripts/`. On a `v*` tag it uploads the installers to one draft release.
 - Steps: checkout, `pnpm/action-setup` with no `version` input (it reads `packageManager`), `actions/setup-node` with Node 24 and `cache: pnpm`, `pnpm install --frozen-lockfile`, then `pnpm verify`. `pnpm/action-setup` runs before `setup-node`, or the pnpm cache step fails.
 - The workflow sets `permissions: contents: read` and a `concurrency` group with `cancel-in-progress: true` for pull requests.
 - Each job installs Postgres natively with `ikalnytskyi/action-setup-postgres`, at the major `compose.yaml` pins, because Windows and macOS runners cannot run the Linux container. No integration test is skipped on any system.

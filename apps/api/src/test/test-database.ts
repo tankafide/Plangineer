@@ -42,13 +42,14 @@ export interface TestDatabase {
   drop: () => Promise<void>;
 }
 
-/** Clones a fresh, migrated database from the template. Each test file creates one in beforeAll. */
-export async function createTestDatabase(): Promise<TestDatabase> {
+async function createNamedDatabase(template: string | null): Promise<TestDatabase> {
   const runPrefix = inject('testRunPrefix');
   const name = `${runPrefix}_${randomUUID().replaceAll('-', '')}`;
   await onMaintenance((client) =>
     client.query(
-      `CREATE DATABASE ${client.escapeIdentifier(name)} TEMPLATE ${client.escapeIdentifier(templateDatabase(runPrefix))}`,
+      template === null
+        ? `CREATE DATABASE ${client.escapeIdentifier(name)}`
+        : `CREATE DATABASE ${client.escapeIdentifier(name)} TEMPLATE ${client.escapeIdentifier(template)}`,
     ),
   );
   const url = databaseUrl(inject('databaseUrl'), name);
@@ -64,4 +65,14 @@ export async function createTestDatabase(): Promise<TestDatabase> {
       );
     },
   };
+}
+
+/** Clones a fresh, migrated database from the template. Each test file creates one in beforeAll. */
+export function createTestDatabase(): Promise<TestDatabase> {
+  return createNamedDatabase(templateDatabase(inject('testRunPrefix')));
+}
+
+/** Creates a database with no tables, for tests of migrating from empty. */
+export function createEmptyTestDatabase(): Promise<TestDatabase> {
+  return createNamedDatabase(null);
 }

@@ -6,9 +6,9 @@ const PEM = '-----BEGIN RSA PRIVATE KEY-----\nMIIEow\nIBAAKC\n-----END RSA PRIVA
 
 describe('setEnvValues', () => {
   it('round-trips a multi-line PEM through util.parseEnv', () => {
-    const text = setEnvValues('A=1\n', { GITHUB_APP_PRIVATE_KEY: PEM });
+    const text = setEnvValues('A=1\n', { APP_PRIVATE_KEY: PEM });
 
-    expect(parseEnv(text)).toEqual({ A: '1', GITHUB_APP_PRIVATE_KEY: PEM });
+    expect(parseEnv(text)).toEqual({ A: '1', APP_PRIVATE_KEY: PEM });
   });
 
   it('round-trips a PEM that arrives with CRLF endings as LF', () => {
@@ -32,8 +32,8 @@ describe('setEnvValues', () => {
   });
 
   it('does not match a key that only shares a prefix', () => {
-    expect(setEnvValues('GITHUB_APP_ID_OLD=1\n', { GITHUB_APP_ID: '2' })).toBe(
-      'GITHUB_APP_ID_OLD=1\nGITHUB_APP_ID=2\n',
+    expect(setEnvValues('RUNNER_ID_OLD=1\n', { RUNNER_ID: '2' })).toBe(
+      'RUNNER_ID_OLD=1\nRUNNER_ID=2\n',
     );
   });
 });

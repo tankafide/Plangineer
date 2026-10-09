@@ -11,3 +11,7 @@ allowBuilds:
   '@swc/core': false
   # Its platform binary also arrives as an optional dependency.
   esbuild: false
+  # Its install script downloads the Electron binary.
+  electron: true
+  # electron-builder builds NSIS installers, not Squirrel.Windows ones.
+  electron-winstaller: false

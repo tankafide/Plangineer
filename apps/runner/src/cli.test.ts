@@ -53,6 +53,9 @@ describe('plangineer-runner CLI', () => {
     [['login', '--server', 'http://localhost', '--bogus']],
     [['pair', '--server', 'http://localhost', '--code', 'ABCD-EFGH-JKMN']],
     [['start', 'now']],
+    [['start', '--server']],
+    [['start', '--server', 'not a url']],
+    [['login', '--server', 'http://localhost', '--json', 'yes']],
   ])('prints the usage and exits 1 for arguments %j', async (args) => {
     const result = await cli(args);
 
@@ -86,6 +89,17 @@ describe('plangineer-runner CLI', () => {
 });
 
 describe('plangineer-runner start', () => {
+  it('exits 3 with the pairing message when there is no runner.json', async () => {
+    const result = await cli(['start', '--server', 'http://127.0.0.1:47100'], {
+      PLANGINEER_RUNNER_DATA_DIR: path.join(cwd, 'unpaired'),
+    });
+
+    expect(result.exitCode).toBe(3);
+    expect(result.stderr).toBe(
+      'This runner is not paired. Run plangineer-runner login --server <url> first.',
+    );
+  });
+
   // Windows cannot deliver a catchable SIGINT from another process, so this case runs only on
   // macOS and Linux. The in-process shutdown test in start-command.test.ts covers all three.
   it.skipIf(process.platform === 'win32')(

@@ -93,6 +93,25 @@ export function githubHandlers(state: GithubState): HttpHandler[] {
         { status: failure.status, headers: failure.headers },
       );
     }),
+    http.post(`${API}/app-manifests/:code/conversions`, ({ params }) => {
+      const app = state.manifestConversions.get(String(params['code']));
+      if (app === undefined) return notFound();
+      return HttpResponse.json(
+        {
+          id: app.id,
+          slug: app.slug,
+          node_id: 'A_kwDOfake',
+          name: app.slug,
+          owner: { login: app.ownerLogin, id: 1, type: 'User' },
+          client_id: app.clientId,
+          client_secret: app.clientSecret,
+          webhook_secret: null,
+          pem: app.pem,
+          html_url: `https://github.com/apps/${app.slug}`,
+        },
+        { status: 201 },
+      );
+    }),
     http.get(`${API}/app/installations`, () => {
       const ids = [...new Set(state.repositories.map((repository) => repository.installationId))];
       return HttpResponse.json(
@@ -104,7 +123,12 @@ export function githubHandlers(state: GithubState): HttpHandler[] {
       const body = TokenBody.parse(await jsonBody(request));
       const repositoryIds = body.repository_ids ?? [];
       const permissions = body.permissions ?? {};
-      state.tokenRequests.push({ installationId, repositoryIds, permissions });
+      state.tokenRequests.push({
+        appJwt: bearer(request),
+        installationId,
+        repositoryIds,
+        permissions,
+      });
       const token = `ghs_fake_${state.tokens.size + 1}`;
       state.tokens.set(token, {
         installationId,

@@ -24,7 +24,7 @@ The app never reads, stores or relays a vendor login. A vendor login is the cred
 ### Sign-in
 
 - Better Auth with the Drizzle adapter (`provider: "pg"`) and the GitHub social provider. No other provider, no email and password, and no organization, SSO or admin plugin.
-- Pass `secret` (32+ random characters), `baseURL` and the GitHub client credentials from the parsed environment in `api-server`, never letting Better Auth read `process.env`.
+- Pass `secret` (32+ random characters) and `baseURL` from the parsed environment in `api-server`, and the GitHub client credentials from the stored GitHub App in `github-integration`, never letting Better Auth read `process.env`. With no App stored, GitHub sign-in is off.
 - Mount the handler as `app.on(["GET", "POST"], "/api/auth/*", (c) => auth.handler(c.req.raw))`, before any catch-all route. When the web app is on another origin, register `cors({ origin, credentials: true })` for `/api/auth/*` before the handler, with an explicit origin, never `*`.
 - `trustedOrigins` lists only the web app's origin from the environment. Production never lists `localhost`. Never set `disableCSRFCheck` or `disableOriginCheck`.
 - Keep Better Auth's cookie defaults (`httpOnly`, `SameSite=Lax`, `Secure` under `https`). Leave `session.cookieCache` off, so revocation and role changes apply on the next request.

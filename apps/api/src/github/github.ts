@@ -1,7 +1,7 @@
 import { GITHUB_FAILED_MESSAGE_MAX, type InstallableRepository } from '@plangineer/contracts';
 import { App, Octokit, RequestError } from 'octokit';
-import type { Env } from '../env.ts';
 import type { Logger } from '../logger.ts';
+import type { GithubAppCredentials, GithubAppStore } from './github-app-store.ts';
 
 /** A failed GitHub call, with GitHub's status and message. It never holds a token or the key. */
 export class GithubError extends Error {
@@ -110,21 +110,36 @@ async function readBlob(client: Octokit, repository: GithubRepository, sha: stri
   return Buffer.from(data.content, 'base64').toString('utf8');
 }
 
-/** The GitHub App adapter: the only module that talks to GitHub. */
-export function createGithub(env: Env, logger: Logger) {
+/**
+ * The GitHub App adapter: the only module that talks to GitHub. The Octokit App is built from the
+ * stored App on first use, and again after the stored App changes. No signed-in path reaches it
+ * before the App exists, since sign-in needs the App.
+ */
+export function createGithub({ appStore, logger }: { appStore: GithubAppStore; logger: Logger }) {
   const log = logger.child({ component: 'github' });
-  const app = new App({
-    appId: env.GITHUB_APP_ID,
-    privateKey: env.GITHUB_APP_PRIVATE_KEY,
-    Octokit: GithubOctokit.defaults({
-      log: {
-        debug: () => {},
-        info: () => {},
-        warn: (message: string) => log.warn({ message }, 'GitHub client warning'),
-        error: (message: string) => log.error({ message }, 'GitHub client error'),
-      },
-    }),
+  const LoggedOctokit = GithubOctokit.defaults({
+    log: {
+      debug: () => {},
+      info: () => {},
+      warn: (message: string) => log.warn({ message }, 'GitHub client warning'),
+      error: (message: string) => log.error({ message }, 'GitHub client error'),
+    },
   });
+  let built: { credentials: GithubAppCredentials; app: App } | undefined;
+
+  async function currentApp(): Promise<App> {
+    const credentials = await appStore.get();
+    if (credentials === null) throw new Error('GitHub App is not configured');
+    if (built?.credentials !== credentials) {
+      const app = new App({
+        appId: credentials.appId,
+        privateKey: credentials.privateKey,
+        Octokit: LoggedOctokit,
+      });
+      built = { credentials, app };
+    }
+    return built.app;
+  }
 
   /** A client whose token reaches one repository with one permission, minted per action. */
   async function scopedClient(
@@ -132,6 +147,7 @@ export function createGithub(env: Env, logger: Logger) {
     permission: Permission,
     access: Access,
   ) {
+    const app = await currentApp();
     const { data } = await app.octokit.request(
       'POST /app/installations/{installation_id}/access_tokens',
       {
@@ -148,6 +164,7 @@ export function createGithub(env: Env, logger: Logger) {
     listInstallableRepositories: () =>
       call(async () => {
         const repositories: InstallableRepository[] = [];
+        const app = await currentApp();
         for await (const { installation, octokit } of app.eachInstallation.iterator()) {
           const items = await octokit.paginate('GET /installation/repositories', {
             per_page: 100,

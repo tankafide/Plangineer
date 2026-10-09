@@ -14,16 +14,16 @@ Rules for `apps/runner`, which runs agents on the engineer's own machine. The de
 
 | Part | Rule |
 | --- | --- |
-| Package | Node 24, published to npm as `plangineer-runner` with `pnpm runner:publish`, one `bin` entry. It ships JavaScript built by tsdown, with `contracts` bundled in. The plan that adds the CLI names its commands |
+| Package | Node 24, published to npm as `plangineer-runner` with `pnpm runner:publish`, one `bin` entry. tsdown bundles every dependency into `dist/cli.mjs`, so the package has no runtime `dependencies`. The plan that adds the CLI names its commands |
 | Config and data | Under `env-paths`. The runner holds no state beyond its token and worktrees |
 | Environment | Parsed with a Zod schema at startup. A missing or invalid variable exits with a message |
-| Logs | pino as JSON to stdout and `logs/runner.log` |
+| Logs | pino as JSON to stdout and `<data>/logs/runner.log`, through `pino.multistream`, never `pino.transport` |
 
 ### Connection
 
 - The runner dials one outbound WebSocket and opens no inbound port.
-- On connect it reports each installed CLI's version (`claude --version`, `codex --version`), its concurrency limit and its platform. A CLI older than the adapter's minimum version is reported unavailable with the version it needs.
-- A revoked or invalid token stops the runner with a clear message. It never retries with another credential.
+- On connect it reports each installed CLI's version (`claude --version`, `codex --version`), its concurrency limit and its platform. While connected it detects the CLIs again every 30 s and sends `runner.clis` when the result changes. A CLI older than the adapter's minimum version is reported unavailable with the version it needs.
+- A revoked or invalid token stops the runner with exit code 3 and a clear message. It never retries with another credential.
 - On its own shutdown (`SIGINT` or `SIGTERM`), the runner stops every running job through the stop function and sends their terminal events before it exits. Children are spawned detached, so nothing else stops them.
 
 ### Worktrees

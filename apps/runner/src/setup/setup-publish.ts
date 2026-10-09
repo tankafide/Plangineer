@@ -62,7 +62,7 @@ export async function finishRepositoryFiles(
 ): Promise<void> {
   await rm(path.join(worktree, INPUTS_DIR), { recursive: true, force: true });
   const synced = await syncSkills(worktree);
-  if (!synced.ok) throw new SetupOutputError(synced.message);
+  if (synced.exitCode !== 0) throw new SetupOutputError(synced.message);
   await addGeneratedAttribute(worktree);
   const workflowFile = path.join(worktree, ...WORKFLOW.split('/'));
   await mkdir(path.dirname(workflowFile), { recursive: true });

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { base } from './base.ts';
+import { GithubFailed } from './github-failed.ts';
 import { PageInput, pageOutput } from './pagination.ts';
 import { RepositoryScan, SelectionError, SetupSelection, SetupStatus } from './repository-setup.ts';
 import { RunStatus } from './run.ts';
@@ -152,13 +153,6 @@ export const SetupStartInput = z.strictObject({
   selection: SetupSelection,
 });
 export type SetupStartInput = z.infer<typeof SetupStartInput>;
-
-export const GITHUB_FAILED_MESSAGE_MAX = 500;
-
-const GithubFailed = {
-  status: 502,
-  data: z.object({ status: z.int(), message: z.string().max(GITHUB_FAILED_MESSAGE_MAX) }),
-};
 
 export const InvalidSelectionData = z.object({
   reason: SelectionError,

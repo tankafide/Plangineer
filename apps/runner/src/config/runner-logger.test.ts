@@ -5,12 +5,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRunnerLogger } from './runner-logger.ts';
 
 let dir: string;
+let stdout: string[];
 
 beforeEach(async () => {
   dir = await mkdtemp(path.join(os.tmpdir(), 'runner-logger-'));
+  stdout = [];
+  vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+    stdout.push(String(chunk));
+    return true;
+  });
 });
 
-afterEach(() => rm(dir, { recursive: true, force: true, maxRetries: 5 }));
+afterEach(async () => {
+  vi.restoreAllMocks();
+  await rm(dir, { recursive: true, force: true, maxRetries: 5 });
+});
+
+async function fileText(logFile: string, message: string): Promise<string> {
+  await vi.waitFor(async () => expect(await readFile(logFile, 'utf8')).toContain(message));
+  return readFile(logFile, 'utf8');
+}
 
 describe('createRunnerLogger', () => {
   it('writes JSON lines to the log file with tokens, login secrets and authorization redacted', async () => {
@@ -29,8 +43,7 @@ describe('createRunnerLogger', () => {
     );
     logger.flush();
 
-    await vi.waitFor(async () => expect(await readFile(logFile, 'utf8')).toContain('paired'));
-    const text = await readFile(logFile, 'utf8');
+    const text = await fileText(logFile, 'paired');
     expect(text).not.toContain('secret-token');
     expect(text).not.toContain('secret-device');
     expect(text).not.toContain('ABCD-EFGH-JKMN');
@@ -42,5 +55,16 @@ describe('createRunnerLogger', () => {
       userCode: '[Redacted]',
       code: 1006,
     });
+  });
+
+  it('writes a debug line to stdout and the log file at level debug', async () => {
+    const logFile = path.join(dir, 'logs', 'runner.log');
+    const logger = createRunnerLogger('debug', logFile);
+
+    logger.debug('detail');
+    logger.flush();
+
+    expect(JSON.parse(await fileText(logFile, 'detail'))).toMatchObject({ msg: 'detail' });
+    expect(stdout.join('')).toContain('"msg":"detail"');
   });
 });

@@ -17,6 +17,7 @@ import {
   acceptHello,
   acceptPong,
   acceptRunEvents,
+  acceptRunnerClis,
   acceptRunnerStatus,
 } from './runner-session.ts';
 
@@ -120,6 +121,9 @@ function runnerSession(
       case 'runner.status':
         await acceptRunnerStatus(deps, runnerId, message);
         if (message.planLimitResetsAt === null) await connections.dispatch(runnerId);
+        return;
+      case 'runner.clis':
+        await acceptRunnerClis(deps, runnerId, message);
         return;
       default: {
         const unhandled: never = message;

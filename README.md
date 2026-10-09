@@ -4,15 +4,15 @@ Plangineer is a desktop app for Windows, macOS and Linux that takes a feature fr
 
 ## Install
 
-The desktop app is planned in the [desktop app plan](docs/plans/2026-10-08-desktop-app.md) and has no release yet. Until it ships, run Plangineer from a developer checkout.
+Download the installer for your system from the [latest release](https://github.com/tankafide/Plangineer/releases/latest): `.exe` for Windows, `.dmg` for macOS on Apple silicon (`arm64`) or Intel (`x64`), and `.AppImage` for Linux. The installers are unsigned. The [desktop app guide](docs/engineering/desktop-app.md) shows how to open them, what the first run asks of you, and where the app keeps its data.
 
 ## Developer setup
 
 1. Install Node 24 and Docker Desktop, and start Docker Desktop.
 2. Install dependencies: `pnpm install`.
 3. Create your `.env`: `pnpm setup:env`.
-4. Create your dev GitHub App: `pnpm setup:github-app`. Click "Create GitHub App" on the page it opens. GitHub then opens the App's install page: pick the repositories Plangineer may read, and click "Install". You can change them later from the Repositories screen.
-5. Start Postgres, the API and the web UI on http://localhost:5173: `pnpm dev`.
+4. Start Postgres, the API and the web UI on http://localhost:5173: `pnpm dev`.
+5. Open the Get started link `pnpm dev` prints, and click **Create GitHub App** to create your dev GitHub App. Sign in with GitHub, click **Add repository**, then **Install on GitHub**, and pick the repositories Plangineer may read. `pnpm db:reset` keeps the App.
 6. Check your work: `pnpm verify`, then `pnpm test:e2e` with `pnpm dev` stopped.
 
 Work in a Git worktree beside the checkout, created with `pnpm worktree:new <type>/<slug>`, never by switching branches in it, as the [git workflow](.agents/skills/orchestrator-references/git-workflow.md) describes. The stack, commands and conventions are in [stack decisions](docs/engineering/stack-decisions.md).
