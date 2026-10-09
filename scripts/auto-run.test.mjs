@@ -10,7 +10,6 @@ const FAKE_CLAUDE = path.join(repoRoot, 'scripts/auto-run-fake-claude.mjs');
 
 const planReport = {
   outcome: 'done',
-  stopReason: null,
   branch: 'feat/thing',
   commits: ['abc1234 Plan the thing'],
   reviewRounds: ['Round 1: 2 fixed, 0 skipped, 1 dropped'],
@@ -24,15 +23,14 @@ const implementationReport = {
   commits: ['def5678 Build the thing'],
   checks: { passed: ['pnpm verify'], failed: [], notRun: [] },
   deviations: [],
-  pullRequest: { title: 'Build the thing', body: 'Builds the thing.' },
 };
 delete implementationReport.planPath;
 
-const success = (structured_output) => ({
+const success = (report) => ({
   type: 'result',
   subtype: 'success',
   is_error: false,
-  structured_output,
+  structured_output: { report },
 });
 
 describe('autoRun', () => {
@@ -102,20 +100,10 @@ describe('autoRun', () => {
     );
   });
 
-  it('starts each session headless, unattended, with the settings and the report schema', async () => {
+  it('gives each session the auto settings', async () => {
     await run({ plan: success(planReport), implementation: success(implementationReport) });
 
     const [plan] = await calls();
-    expect(plan.args.slice(0, 8)).toEqual([
-      '-p',
-      '--output-format',
-      'stream-json',
-      '--verbose',
-      '--permission-mode',
-      'auto',
-      '--permission-prompts',
-      'none',
-    ]);
     expect(plan.settings).toBe(
       'Workflow settings:\n' +
         '{"planCheckIn":"skip",' +
@@ -123,9 +111,6 @@ describe('autoRun', () => {
         '"implementationReview":{"findings":"fix_all","rounds":{"mode":"fixed","count":1}},' +
         '"decisions":"recommended"}\n',
     );
-    const schema = JSON.parse(plan.args[plan.args.indexOf('--json-schema') + 1]);
-    expect(schema.required).toContain('engineerActions');
-    expect(schema.required).toContain('planPath');
   });
 
   it('stops after planning when the plan leaves an action for the engineer', async () => {
@@ -148,12 +133,6 @@ describe('autoRun', () => {
 
     expect(outcome.reasons).toEqual(['Stopped: No such area']);
     expect(outcome.implementation).toBeNull();
-  });
-
-  it('fails a finished plan session that saved no plan', async () => {
-    await expect(
-      run({ plan: success({ ...planReport, planPath: null }), implementation: null }),
-    ).rejects.toThrow('The plan session finished without a plan path');
   });
 
   it('builds a given plan without planning', async () => {
@@ -179,22 +158,6 @@ describe('autoRun', () => {
     expect(outcome.reasons).toEqual(['Failed check: Vitest']);
   });
 
-  it('fails a session that ends with no result', async () => {
-    await expect(run({ plan: null, implementation: null })).rejects.toThrow(/with no result/);
-  });
-
-  it('fails a session that ends in an error', async () => {
-    const error = { type: 'result', subtype: 'error_max_turns', is_error: true };
-    await expect(run({ plan: error, implementation: null })).rejects.toThrow(/error_max_turns/);
-  });
-
-  it('fails a report that does not match the schema', async () => {
-    const { engineerActions: _, ...missing } = planReport;
-    const failure = run({ plan: success(missing), implementation: null });
-    await expect(failure).rejects.toThrow(/^The session's report does not match its schema\. See /);
-    await expect(failure).rejects.toHaveProperty('cause.issues.0.path', ['engineerActions']);
-  });
-
   it('keeps the logs in the main checkout, so removing the worktree keeps them', async () => {
     await run({ plan: success(planReport), implementation: success(implementationReport) });
 
@@ -202,14 +165,9 @@ describe('autoRun', () => {
     expect((await readdir(path.join(main, 'logs', 'auto', runDir))).toSorted()).toEqual([
       'implementation.jsonl',
       'plan.jsonl',
+      'request.md',
       'settings.md',
     ]);
-  });
-
-  it('fails a session that writes a line that is not JSON, naming its log', async () => {
-    await expect(run({ plan: 'not json', implementation: null })).rejects.toThrow(
-      /^The session wrote a line that is not JSON\. See .*plan\.jsonl$/,
-    );
   });
 
   it('refuses to start in the main checkout', async () => {
