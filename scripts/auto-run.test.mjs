@@ -1,9 +1,9 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { execa } from 'execa';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { autoRun, parseCli, settingsBlock } from './auto-run.mjs';
+import { autoRun, parseCli } from './auto-run.mjs';
 import { repoRoot } from './script-entry.mjs';
 
 const FAKE_CLAUDE = path.join(repoRoot, 'scripts/auto-run-fake-claude.mjs');
@@ -37,17 +37,23 @@ const success = (structured_output) => ({
 
 describe('autoRun', () => {
   let root;
+  let main;
+  let worktree;
   let configFile;
   let recordFile;
 
   beforeEach(async () => {
-    root = await mkdtemp(path.join(os.tmpdir(), 'auto-run-'));
-    await execa('git', ['init', '--quiet'], { cwd: root });
-    await writeFile(path.join(root, '.gitignore'), 'logs/\nfake/\n');
-    await execa('git', ['add', '.gitignore'], { cwd: root });
+    root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'auto-run-')));
+    main = path.join(root, 'main');
+    worktree = path.join(root, 'main.worktrees', 'thing');
+    await mkdir(main);
+    await execa('git', ['init', '--quiet'], { cwd: main });
+    await writeFile(path.join(main, '.gitignore'), 'logs/\n');
+    await execa('git', ['add', '.gitignore'], { cwd: main });
     await execa('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'init'], {
-      cwd: root,
+      cwd: main,
     });
+    await execa('git', ['worktree', 'add', '--quiet', '-b', 'feat/thing', worktree], { cwd: main });
     configFile = path.join(root, 'fake', 'config.json');
     recordFile = path.join(root, 'fake', 'calls.jsonl');
   });
@@ -61,7 +67,7 @@ describe('autoRun', () => {
     await writeFile(configFile, JSON.stringify({ recordFile, results }));
     return autoRun({
       command: [process.execPath, FAKE_CLAUDE, configFile],
-      cwd: root,
+      cwd: worktree,
       planRounds: 3,
       implementationRounds: 1,
       ...options,
@@ -110,7 +116,13 @@ describe('autoRun', () => {
       '--permission-prompts',
       'none',
     ]);
-    expect(plan.settings).toBe(settingsBlock({ planRounds: 3, implementationRounds: 1 }));
+    expect(plan.settings).toBe(
+      'Workflow settings:\n' +
+        '{"planCheckIn":"skip",' +
+        '"planReview":{"findings":"fix_all","rounds":{"mode":"fixed","count":3}},' +
+        '"implementationReview":{"findings":"fix_all","rounds":{"mode":"fixed","count":1}},' +
+        '"decisions":"recommended"}\n',
+    );
     const schema = JSON.parse(plan.args[plan.args.indexOf('--json-schema') + 1]);
     expect(schema.required).toContain('engineerActions');
     expect(schema.required).toContain('planPath');
@@ -178,13 +190,43 @@ describe('autoRun', () => {
 
   it('fails a report that does not match the schema', async () => {
     const { engineerActions: _, ...missing } = planReport;
-    await expect(run({ plan: success(missing), implementation: null })).rejects.toThrow(
-      /engineerActions/,
+    const failure = run({ plan: success(missing), implementation: null });
+    await expect(failure).rejects.toThrow(/^The session's report does not match its schema\. See /);
+    await expect(failure).rejects.toHaveProperty('cause.issues.0.path', ['engineerActions']);
+  });
+
+  it('keeps the logs in the main checkout, so removing the worktree keeps them', async () => {
+    await run({ plan: success(planReport), implementation: success(implementationReport) });
+
+    const [runDir] = await readdir(path.join(main, 'logs', 'auto'));
+    expect((await readdir(path.join(main, 'logs', 'auto', runDir))).toSorted()).toEqual([
+      'implementation.jsonl',
+      'plan.jsonl',
+      'settings.md',
+    ]);
+  });
+
+  it('fails a session that writes a line that is not JSON, naming its log', async () => {
+    await expect(run({ plan: 'not json', implementation: null })).rejects.toThrow(
+      /^The session wrote a line that is not JSON\. See .*plan\.jsonl$/,
+    );
+  });
+
+  it('refuses to start in the main checkout', async () => {
+    await expect(
+      run({ plan: null, implementation: null }, { request: 'x', cwd: main }),
+    ).rejects.toThrow('Run auto-run from a linked worktree');
+  });
+
+  it('refuses to start on a detached HEAD', async () => {
+    await execa('git', ['switch', '--quiet', '--detach'], { cwd: worktree });
+    await expect(run({ plan: null, implementation: null })).rejects.toThrow(
+      'The worktree has a detached HEAD',
     );
   });
 
   it('refuses to start with uncommitted changes', async () => {
-    await writeFile(path.join(root, 'stray.txt'), 'x');
+    await writeFile(path.join(worktree, 'stray.txt'), 'x');
     await expect(run({ plan: null, implementation: null })).rejects.toThrow(
       'The working tree has uncommitted changes',
     );

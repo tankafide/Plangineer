@@ -28,12 +28,12 @@ const reportFields = {
   ),
 };
 
-export const PlanReport = z.strictObject({
+const PlanReport = z.strictObject({
   ...reportFields,
   planPath: z.string().nullable().describe('The saved plan, or null when stopped before saving'),
 });
 
-export const ImplementationReport = z.strictObject({
+const ImplementationReport = z.strictObject({
   ...reportFields,
   checks: z.strictObject({
     passed: lines('Each check that ran and passed'),
@@ -50,7 +50,7 @@ export const ImplementationReport = z.strictObject({
 const autoReview = (count) => ({ findings: 'fix_all', rounds: { mode: 'fixed', count } });
 
 /** The settings block for both sessions: no pauses, every kept finding fixed, fixed rounds. */
-export function settingsBlock({ planRounds, implementationRounds }) {
+function settingsBlock({ planRounds, implementationRounds }) {
   const settings = {
     planCheckIn: 'skip',
     planReview: autoReview(planRounds),
@@ -60,7 +60,7 @@ export function settingsBlock({ planRounds, implementationRounds }) {
   return `Workflow settings:\n${JSON.stringify(settings)}\n`;
 }
 
-export function planPrompt(request) {
+function planPrompt(request) {
   return [
     'Use the plan-orchestrator skill to plan the engineer request below.',
     '',
@@ -72,7 +72,7 @@ export function planPrompt(request) {
   ].join('\n');
 }
 
-export function implementationPrompt(planPath) {
+function implementationPrompt(planPath) {
   return [
     `Use the implementation-orchestrator skill to build the plan at ${planPath} on the current branch.`,
     'Write the pull request description and do not push.',
@@ -80,11 +80,19 @@ export function implementationPrompt(planPath) {
   ].join('\n');
 }
 
-function lastResult(log) {
+function parseEvent(line, logFile) {
+  try {
+    return JSON.parse(line);
+  } catch (error) {
+    throw new Error(`The session wrote a line that is not JSON. See ${logFile}`, { cause: error });
+  }
+}
+
+function lastResult(log, logFile) {
   const events = log
     .split(/\r?\n/)
     .filter((line) => line.trim() !== '')
-    .map((line) => JSON.parse(line));
+    .map((line) => parseEvent(line, logFile));
   return events.findLast((event) => event.type === 'result');
 }
 
@@ -92,7 +100,7 @@ function lastResult(log) {
  * Runs one headless session, logs its stream to logFile, and returns its validated report. Auto
  * mode lets its classifier approve each action, and anything that would prompt is denied.
  */
-export async function runSession({ command, cwd, prompt, settingsFile, schema, logFile }) {
+async function runSession({ command, cwd, prompt, settingsFile, schema, logFile }) {
   const [file, ...prefix] = command;
   const args = [
     ...prefix,
@@ -116,18 +124,24 @@ export async function runSession({ command, cwd, prompt, settingsFile, schema, l
     stderr: 'inherit',
     reject: false,
   });
-  const result = lastResult(await readFile(logFile, 'utf8'));
+  const result = lastResult(await readFile(logFile, 'utf8'), logFile);
   if (result === undefined) {
     throw new Error(`The session exited ${run.exitCode} with no result. See ${logFile}`);
   }
   if (result.is_error || result.subtype !== 'success') {
     throw new Error(`The session ended with ${result.subtype}. See ${logFile}`);
   }
-  return schema.parse(result.structured_output);
+  const report = schema.safeParse(result.structured_output);
+  if (!report.success) {
+    throw new Error(`The session's report does not match its schema. See ${logFile}`, {
+      cause: report.error,
+    });
+  }
+  return report.data;
 }
 
 /** Why a session's work cannot go on to the next phase. Empty when it can. */
-export function blockers(report) {
+function blockers(report) {
   return [
     ...(report.outcome === 'stopped' ? [`Stopped: ${report.stopReason}`] : []),
     ...report.engineerActions.map((action) => `Engineer action: ${action}`),
@@ -135,9 +149,30 @@ export function blockers(report) {
   ];
 }
 
-async function assertCleanTree(cwd) {
-  const { stdout } = await execa('git', ['status', '--porcelain'], { cwd });
-  if (stdout.trim() !== '') throw new Error('The working tree has uncommitted changes');
+async function git(cwd, ...args) {
+  return (await execa('git', args, { cwd })).stdout.trim();
+}
+
+/**
+ * Checks that cwd is a clean linked worktree on a branch, and returns the main checkout, which
+ * keeps the logs after the worktree is removed.
+ */
+async function mainCheckoutOf(cwd) {
+  const dirs = await git(
+    cwd,
+    'rev-parse',
+    '--path-format=absolute',
+    '--git-dir',
+    '--git-common-dir',
+  );
+  const [gitDir, commonDir] = dirs.split(/\r?\n/);
+  if (gitDir === commonDir) throw new Error('Run auto-run from a linked worktree');
+  const branch = await execa('git', ['symbolic-ref', '--quiet', 'HEAD'], { cwd, reject: false });
+  if (branch.exitCode !== 0) throw new Error('The worktree has a detached HEAD');
+  if ((await git(cwd, 'status', '--porcelain')) !== '') {
+    throw new Error('The working tree has uncommitted changes');
+  }
+  return path.dirname(commonDir);
 }
 
 /**
@@ -152,14 +187,13 @@ export async function autoRun({
   planRounds,
   implementationRounds,
 }) {
-  await assertCleanTree(cwd);
-  const logDir = path.join(cwd, LOG_DIR);
-  await mkdir(logDir, { recursive: true });
   const stamp = new Date().toISOString().replaceAll(/[:.]/g, '-');
-  const settingsFile = path.join(logDir, `${stamp}-settings.md`);
+  const logDir = path.join(await mainCheckoutOf(cwd), LOG_DIR, stamp);
+  await mkdir(logDir, { recursive: true });
+  const settingsFile = path.join(logDir, 'settings.md');
   await writeFile(settingsFile, settingsBlock({ planRounds, implementationRounds }));
   const session = (name, prompt, schema) => {
-    const logFile = path.join(logDir, `${stamp}-${name}.jsonl`);
+    const logFile = path.join(logDir, `${name}.jsonl`);
     console.error(`Running the ${name} session. Its log is ${logFile}`);
     return runSession({ command, cwd, prompt, settingsFile, schema, logFile });
   };

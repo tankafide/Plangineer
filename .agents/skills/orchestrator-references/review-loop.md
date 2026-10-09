@@ -51,7 +51,7 @@ Two subagents run the first review of a plan or an implementation, which the pla
 | 4. Fix | The session | Fixes and commits, as the review orchestrator's fix and commit steps describe |
 | 5. Next | The engineer | Accepts or declines the next round, which the session offers as [Offering another round](#offering-another-round) describes |
 
-- **Handoff.** The review subagent gets only the target, the commits and the review orchestrator's path: the plan path and its commit for a plan review, or the base and head commits and the plan path for an implementation review. Pass no summary, decision or reasoning from the session, so the review stays independent.
+- **Handoff.** The review subagent gets only the worktree's absolute path, the target, the commits and the review orchestrator's path: the plan path and its commit for a plan review, or the base and head commits and the plan path for an implementation review. Pass no summary, decision or reasoning from the session, so the review stays independent.
 - **No filtering.** The session presents what verification returns, kept and dropped, and never judges, merges or drops a finding itself.
 
 ## How each review fixes
