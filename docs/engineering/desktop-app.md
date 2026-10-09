@@ -19,7 +19,7 @@ On first open the app creates its database and its settings, then opens the **Ge
 1. Open Plangineer. A window shows "Starting Plangineer" while Postgres, the migrations and the API start.
 2. **Create the GitHub App.** Click **Create GitHub App**. GitHub opens in the window. Sign in to GitHub if it asks, then click **Create GitHub App for `<your account>`**. GitHub returns you to **Get started** with step 1 done. The App belongs to your personal GitHub account.
 3. **Sign in.** Click **Sign in with GitHub**, then **Authorize** on GitHub. The first person to sign in becomes the admin. A macOS passkey is not offered in the window, so use your password, an authenticator app, GitHub Mobile or a security key.
-4. **Claude Code.** The app pairs its own runner with your account, with no code to copy. When Claude Code is missing, the step links to its install page. Install it and run `claude` once in a terminal to sign in. The runner checks for Claude Code every 30 seconds, and the step then turns done.
+4. **Claude Code.** The app pairs its own runner with your account, with no code to copy. When Claude Code is missing, the step links to its install page. Install it, run `claude` once in a terminal to sign in, then quit Plangineer from its tray icon and open it again. The runner reads your `PATH` when Plangineer starts, so it finds a new install only after that restart. It then checks for Claude Code every 30 seconds, and the step turns done.
 5. **Add a repository.** Click **Add repository**, then **Install on GitHub**. Pick the repositories Plangineer may read and click **Install**. GitHub returns you to the Repositories screen, where you choose a repository and add it.
 6. Click **Open Plangineer**.
 

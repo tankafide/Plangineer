@@ -17,7 +17,7 @@ import {
   type RepositoryRef,
   updateRepository,
 } from '../repositories/repository-repository.ts';
-import { githubFailed } from '../repositories/repository-service.ts';
+import { githubFailed } from '../github/github-failed.ts';
 import { lockRunnerForUser, wakeRunner } from '../runners/runner-repository.ts';
 import { appendRunEvents } from '../runs/run-events-repository.ts';
 import { insertRun } from '../runs/run-repository.ts';

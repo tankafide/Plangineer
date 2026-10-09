@@ -22,9 +22,9 @@ Rules for `apps/desktop`, the Electron 44 main process. The [desktop app plan](.
 ### Window
 
 - One `BrowserWindow` on the partition `persist:plangineer`. Keep `contextIsolation`, `sandbox` and `webSecurity` on and `nodeIntegration` off. Never set `allowRunningInsecureContent`, `experimentalFeatures` or `enableBlinkFeatures`.
-- The partition's `setPermissionRequestHandler` and `setPermissionCheckHandler` deny everything.
+- The partition's `setPermissionRequestHandler` and `setPermissionCheckHandler` deny everything except a `clipboard-sanitized-write` request whose `requestingUrl` has the app origin.
 - `will-navigate`, `will-redirect` and `setWindowOpenHandler` all call one navigation policy. It parses the URL with `new URL` and compares `origin` exactly, never with `startsWith`. The app origin and `https://github.com` stay in the window. Any other `http` or `https` URL goes to `shell.openExternal`. Every other scheme is refused.
-- `setWindowOpenHandler` always returns `{ action: 'deny' }`. An allowed URL loads in the one window.
+- `setWindowOpenHandler` always returns `{ action: 'deny' }` and sends every `http` or `https` URL to `shell.openExternal`, so no page replaces the app with no way back.
 - A secret in a URL goes in the fragment, never the query, so no server log records it.
 - Closing the window hides it, and the stack keeps running from the tray. The `close` handler hides only until `before-quit` fires.
 - `app.requestSingleInstanceLock()` before anything starts. A second launch shows the existing window and exits.
@@ -70,7 +70,7 @@ Raise findings with source skill `electron-desktop`, in the [finding format](../
 | Rule | Severity if broken |
 | --- | --- |
 | `nodeIntegration` on, `contextIsolation`, `sandbox` or `webSecurity` off, a preload, IPC or `webview` added | blocker |
-| A permission granted, or a navigation allowed outside the app origin and `https://github.com` | blocker |
+| A permission granted beyond a `clipboard-sanitized-write` request from the app origin, or a navigation allowed outside the app origin and `https://github.com` | blocker |
 | `setWindowOpenHandler` returning `allow`, or `will-navigate` or `will-redirect` with no handler | blocker |
 | `shell.openExternal` with a URL not checked as `http` or `https`, or an origin compared with `startsWith` | blocker |
 | Postgres or the API listening beyond loopback | blocker |

@@ -49,6 +49,7 @@ function Progress({ progress, primary }: { progress: ClaudeCodeProgress; primary
       <p className="text-muted-foreground">
         Install Claude Code on {progress.runner}, then run{' '}
         <code className="font-mono text-xs">claude</code> once in a terminal to sign in.
+        {isDesktopApp() && ' Then quit Plangineer from its tray icon and open it again.'}
       </p>
       <a
         href={INSTALL_URL}

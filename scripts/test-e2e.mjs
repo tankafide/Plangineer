@@ -9,6 +9,7 @@ import { reportFailure, repoRoot } from './script-entry.mjs';
 
 const WEB_DIR = path.join(repoRoot, 'apps', 'web');
 const WEB_PORT = 5173;
+const API_SCRIPT = ['--filter', '@plangineer/api'];
 
 async function main() {
   const env = parseEnv(await readFile(path.join(repoRoot, '.env'), 'utf8'));
@@ -26,18 +27,25 @@ async function main() {
   }
   const options = { cwd: repoRoot, stdio: 'inherit' };
   await execa('pnpm', ['db:reset'], options);
-  // The App must exist before Playwright starts the API.
-  await execa('pnpm', ['--filter', '@plangineer/api', 'e2e:github-app'], options);
+  // The App must exist before Playwright starts the API. An App this run creates is removed
+  // afterwards, so the dev database never keeps the fake one.
+  const githubApp = [...API_SCRIPT, 'e2e:github-app'];
+  const { stdout } = await execa('pnpm', ['--silent', ...githubApp], { cwd: repoRoot });
+  const { created } = JSON.parse(stdout);
   const playwright = binPath(
     '@playwright/test',
     'playwright',
     pathToFileURL(path.join(WEB_DIR, 'package.json')).href,
   );
-  await execa(
-    process.execPath,
-    [playwright, 'test', '--config', path.join(WEB_DIR, 'playwright.config.ts')],
-    options,
-  );
+  try {
+    await execa(
+      process.execPath,
+      [playwright, 'test', '--config', path.join(WEB_DIR, 'playwright.config.ts')],
+      options,
+    );
+  } finally {
+    if (created) await execa('pnpm', [...githubApp, '--remove'], options);
+  }
   return 0;
 }
 

@@ -65,6 +65,26 @@ describe('ClaudeCodeStep', () => {
     expect(isPrimary(addRepository)).toBe(false);
   });
 
+  it('asks the desktop app to be reopened after installing, so its runner sees the new PATH', async () => {
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(DESKTOP_AGENT);
+    answerSetup({
+      runners: [
+        runnerFixture({
+          clis: [
+            { name: 'claude-code', version: null, available: false, minimumVersion: '2.1.284' },
+          ],
+        }),
+      ],
+    });
+
+    await renderRoute('/get-started');
+
+    const step = await stepCard(TITLE);
+    expect(
+      await step.findByText(/Then quit Plangineer from its tray icon and open it again\./),
+    ).toBeTruthy();
+  });
+
   it('names the version and the runner once Claude Code is available', async () => {
     answerSetup();
 

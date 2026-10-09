@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   decideNavigation,
-  denyAllPermissions,
   type GuardedContents,
   guardNavigation,
   type PermissionSession,
+  restrictPermissions,
 } from './navigation-policy.ts';
 
 const APP_ORIGIN = 'http://127.0.0.1:47100';
@@ -107,21 +107,45 @@ describe('guardNavigation', () => {
 type RequestHandler = Parameters<PermissionSession['setPermissionRequestHandler']>[0];
 type CheckHandler = Parameters<PermissionSession['setPermissionCheckHandler']>[0];
 
-describe('denyAllPermissions', () => {
+function handlers(appOrigin: string | undefined) {
+  const found: { request?: RequestHandler; check?: CheckHandler } = {};
+  restrictPermissions(
+    {
+      setPermissionRequestHandler: (handler) => (found.request = handler),
+      setPermissionCheckHandler: (handler) => (found.check = handler),
+    },
+    () => appOrigin,
+  );
+  return found;
+}
+
+function request(appOrigin: string | undefined, permission: string, requestingUrl: string) {
+  const granted: boolean[] = [];
+  handlers(appOrigin).request?.(undefined, permission, (answer) => granted.push(answer), {
+    requestingUrl,
+  });
+  return granted;
+}
+
+describe('restrictPermissions', () => {
   it.each(['media', 'notifications', 'geolocation', 'clipboard-read', 'openExternal'])(
-    'denies a %s request and check',
+    'denies a %s request and check, even from the app',
     (permission) => {
-      const handlers: { request?: RequestHandler; check?: CheckHandler } = {};
-      denyAllPermissions({
-        setPermissionRequestHandler: (handler) => (handlers.request = handler),
-        setPermissionCheckHandler: (handler) => (handlers.check = handler),
-      });
-      const granted: boolean[] = [];
-
-      handlers.request?.(undefined, permission, (answer) => granted.push(answer));
-
-      expect(granted).toEqual([false]);
-      expect(handlers.check?.(undefined, permission)).toBe(false);
+      expect(request(APP_ORIGIN, permission, `${APP_ORIGIN}/runners`)).toEqual([false]);
+      expect(handlers(APP_ORIGIN).check?.(undefined, permission)).toBe(false);
     },
   );
+
+  it('grants a clipboard write the app requests, so its copy buttons work', () => {
+    expect(request(APP_ORIGIN, 'clipboard-sanitized-write', `${APP_ORIGIN}/runners`)).toEqual([
+      true,
+    ]);
+  });
+
+  it.each([
+    ['GitHub', APP_ORIGIN, 'https://github.com/settings/apps'],
+    ['any page before the stack starts', undefined, `${APP_ORIGIN}/runners`],
+  ])('denies a clipboard write from %s', (_, appOrigin, requestingUrl) => {
+    expect(request(appOrigin, 'clipboard-sanitized-write', requestingUrl)).toEqual([false]);
+  });
 });

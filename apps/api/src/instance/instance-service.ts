@@ -9,7 +9,7 @@ import { buildManifest, MANIFEST_POST_URL } from '../github/github-app-manifest.
 import type { GithubAppCredentials } from '../github/github-app-store.ts';
 import { fail, ok, type Result } from '../lib/result.ts';
 import type { ServiceDeps } from '../lib/service-deps.ts';
-import { githubFailed } from '../repositories/repository-service.ts';
+import { githubFailed } from '../github/github-failed.ts';
 
 const sha256 = (value: string) => createHash('sha256').update(value).digest();
 

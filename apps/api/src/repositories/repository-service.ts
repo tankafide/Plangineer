@@ -10,9 +10,9 @@ import {
   type RoleSetting,
   type RoleSettings,
 } from '@plangineer/contracts';
-import { GithubError } from '../github/github.ts';
+import { githubFailed } from '../github/github-failed.ts';
 import { toPage } from '../lib/page.ts';
-import { err, fail, ok, type Result } from '../lib/result.ts';
+import { fail, ok, type Result } from '../lib/result.ts';
 import type { ServiceDeps } from '../lib/service-deps.ts';
 import { findSetupStatus } from '../setup/setup-repository.ts';
 import {
@@ -40,14 +40,6 @@ const DEFAULT_ROLE_SETTINGS: RoleSettings = {
   implementation_review: DEFAULT_ROLE,
   verification: DEFAULT_ROLE,
 };
-
-export type GithubFailed = { ok: false; error: 'GITHUB_FAILED'; data: unknown };
-
-/** GitHub's status and message as the GITHUB_FAILED error data. Any other error is rethrown. */
-export function githubFailed(error: unknown): GithubFailed {
-  if (!(error instanceof GithubError)) throw error;
-  return err('GITHUB_FAILED', { status: error.status, message: error.message });
-}
 
 const byOwnerThenName = (a: InstallableRepository, b: InstallableRepository) =>
   a.owner.localeCompare(b.owner) || a.name.localeCompare(b.name);

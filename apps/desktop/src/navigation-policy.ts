@@ -55,13 +55,36 @@ export function guardNavigation(
 /** The part of Electron's `Session` that grants web permissions. */
 export interface PermissionSession {
   setPermissionRequestHandler(
-    handler: (contents: unknown, permission: string, callback: (granted: boolean) => void) => void,
+    handler: (
+      contents: unknown,
+      permission: string,
+      callback: (granted: boolean) => void,
+      details: { requestingUrl?: string },
+    ) => void,
   ): void;
   setPermissionCheckHandler(handler: (contents: unknown, permission: string) => boolean): void;
 }
 
-/** Denies every permission, since the window also loads `https://github.com`. */
-export function denyAllPermissions(session: PermissionSession): void {
-  session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
+/** What the app's own copy buttons need. Chromium asks only the request handler for it. */
+const CLIPBOARD_WRITE = 'clipboard-sanitized-write';
+
+function isFrom(url: string | undefined, origin: string | undefined): boolean {
+  return (
+    url !== undefined && origin !== undefined && URL.canParse(url) && new URL(url).origin === origin
+  );
+}
+
+/**
+ * Denies every permission, since the window also loads `https://github.com`, except a clipboard
+ * write the app's own pages request. `appOrigin` is read per request, because the origin is
+ * known only once the stack has started.
+ */
+export function restrictPermissions(
+  session: PermissionSession,
+  appOrigin: () => string | undefined,
+): void {
+  session.setPermissionRequestHandler((_contents, permission, callback, details) =>
+    callback(permission === CLIPBOARD_WRITE && isFrom(details.requestingUrl, appOrigin())),
+  );
   session.setPermissionCheckHandler(() => false);
 }

@@ -4,7 +4,7 @@ import type {
   Session,
   WebPreferences,
 } from 'electron';
-import { denyAllPermissions, guardNavigation } from './navigation-policy.ts';
+import { guardNavigation, restrictPermissions } from './navigation-policy.ts';
 
 /** The one partition the window, its sign-in cookie and the desktop's API calls share. */
 export const PARTITION = 'persist:plangineer';
@@ -22,8 +22,12 @@ function webPreferences(): WebPreferences {
 }
 
 /** Denies every permission and names the app in the user agent. */
-export function prepareSession(session: Session, appVersion: string): void {
-  denyAllPermissions(session);
+export function prepareSession(
+  session: Session,
+  appVersion: string,
+  appOrigin: () => string | undefined,
+): void {
+  restrictPermissions(session, appOrigin);
   session.setUserAgent(`${session.getUserAgent()} Plangineer-Desktop/${appVersion}`);
 }
 

@@ -230,18 +230,7 @@ async function launch(): Promise<void> {
   };
   pairing = startPairing(stack.origin, runnerEnv);
 
-  if (app.isPackaged) {
-    inBackground(turnOnLoginItem());
-    startUpdates({
-      platform: process.platform,
-      updater: autoUpdater,
-      log,
-      onOffer: (offer) => {
-        trayState.update = offer;
-        renderTray();
-      },
-    });
-  }
+  if (app.isPackaged) inBackground(turnOnLoginItem());
 }
 
 /** Turns Open at login on after the first successful start, and keeps it current after that. */
@@ -268,7 +257,7 @@ async function offerMoveToApplications(): Promise<void> {
 
 async function main(): Promise<void> {
   await app.whenReady();
-  prepareSession(session.fromPartition(PARTITION), app.getVersion());
+  prepareSession(session.fromPartition(PARTITION), app.getVersion(), () => stackSlot.stack?.origin);
   await offerMoveToApplications();
   app.on('before-quit', (event) => quit.onBeforeQuit(event));
   // The tray keeps the app running with no window, so closing the last one never quits.
@@ -278,6 +267,19 @@ async function main(): Promise<void> {
   tray = new Tray(path.join(import.meta.dirname, 'tray-icon.png'));
   tray.setToolTip('Plangineer');
   tray.on('click', showWindow);
+  // Before the tray renders, so a Check for updates click never runs with the updater's
+  // default autoDownload, which would download on macOS.
+  if (app.isPackaged) {
+    startUpdates({
+      platform: process.platform,
+      updater: autoUpdater,
+      log,
+      onOffer: (offer) => {
+        trayState.update = offer;
+        renderTray();
+      },
+    });
+  }
   renderTray();
   await launch();
 }
