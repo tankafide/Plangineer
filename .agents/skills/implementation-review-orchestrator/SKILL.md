@@ -54,7 +54,7 @@ Rule skills are read by path with the file-read tool, never through a skill tool
    - A defect is fixed under the rule skills for its area from the routing table, with a test that shows the fix. A bug follows `debugging`.
    - A deviation or extra the engineer keeps stays as built.
    - A reverted deviation or extra changes the code back to what the plan says.
-   - When a fix needs business or use-case context, or a choice between real trade-offs, ask the engineer as a choice with a recommended option.
+   - When a fix needs business or use-case context, or a choice between real trade-offs, ask the engineer as a choice with a recommended option, or take that option when the `decisions` [workflow setting](../orchestrator-references/review-loop.md#workflow-settings) is `recommended`.
 9. **Checks.** Run the checks as [implementation-orchestrator](../implementation-orchestrator/SKILL.md) describes under Checks, and report each check that did not run as not run.
 10. **Commit.** Commit the round's fixes together, as [git workflow](../orchestrator-references/git-workflow.md) describes. The commit body lists the defects fixed, skipped and dropped, each deviation and extra with keep or revert, and the plan audit, so the history stays in Git.
 11. **Report.** Say what changed and the checks that ran and did not run, then run or offer another round as the `implementationReview` [workflow settings](../orchestrator-references/review-loop.md#workflow-settings) decide. On another round, run it through subagents, because this session never reviews its own fixes. List the skills used, per [execution](../orchestrator-references/execution.md). Say when no actionable findings were found without implying the review was exhaustive.

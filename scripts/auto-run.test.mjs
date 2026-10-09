@@ -1,0 +1,229 @@
+import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { execa } from 'execa';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { autoRun, parseCli } from './auto-run.mjs';
+import { repoRoot } from './script-entry.mjs';
+
+const FAKE_CLAUDE = path.join(repoRoot, 'scripts/auto-run-fake-claude.mjs');
+
+const planReport = {
+  outcome: 'done',
+  branch: 'feat/thing',
+  commits: ['abc1234 Plan the thing'],
+  reviewRounds: ['Round 1: 2 fixed, 0 skipped, 1 dropped'],
+  decisions: [],
+  engineerActions: [],
+  planPath: 'docs/plans/2026-10-08-thing.md',
+};
+
+const implementationReport = {
+  ...planReport,
+  commits: ['def5678 Build the thing'],
+  checks: { passed: ['pnpm verify'], failed: [], notRun: [] },
+  deviations: [],
+};
+delete implementationReport.planPath;
+
+const success = (report) => ({
+  type: 'result',
+  subtype: 'success',
+  is_error: false,
+  structured_output: { report },
+});
+
+describe('autoRun', () => {
+  let root;
+  let main;
+  let worktree;
+  let configFile;
+  let recordFile;
+
+  beforeEach(async () => {
+    root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'auto-run-')));
+    main = path.join(root, 'main');
+    worktree = path.join(root, 'main.worktrees', 'thing');
+    await mkdir(main);
+    await execa('git', ['init', '--quiet'], { cwd: main });
+    await writeFile(path.join(main, '.gitignore'), 'logs/\n');
+    await execa('git', ['add', '.gitignore'], { cwd: main });
+    await execa('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'init'], {
+      cwd: main,
+    });
+    await execa('git', ['worktree', 'add', '--quiet', '-b', 'feat/thing', worktree], { cwd: main });
+    configFile = path.join(root, 'fake', 'config.json');
+    recordFile = path.join(root, 'fake', 'calls.jsonl');
+  });
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true, maxRetries: 5 });
+  });
+
+  async function run(results, options = { request: 'Add a thing.' }) {
+    await mkdir(path.dirname(configFile), { recursive: true });
+    await writeFile(configFile, JSON.stringify({ recordFile, results }));
+    return autoRun({
+      command: [process.execPath, FAKE_CLAUDE, configFile],
+      cwd: worktree,
+      planRounds: 3,
+      implementationRounds: 1,
+      ...options,
+    });
+  }
+
+  async function calls() {
+    const text = await readFile(recordFile, 'utf8').catch(() => '');
+    return text
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => JSON.parse(line));
+  }
+
+  it('plans, then builds the saved plan, and is ready when nothing is left', async () => {
+    const outcome = await run({
+      plan: success(planReport),
+      implementation: success(implementationReport),
+    });
+
+    expect(outcome).toEqual({
+      ready: true,
+      reasons: [],
+      plan: planReport,
+      implementation: implementationReport,
+    });
+    const [plan, implementation] = await calls();
+    expect(plan.prompt).toContain('plan-orchestrator');
+    expect(plan.prompt).toContain('<request>\nAdd a thing.\n</request>');
+    expect(implementation.prompt).toContain(
+      'implementation-orchestrator skill to build the plan at docs/plans/2026-10-08-thing.md',
+    );
+  });
+
+  it('gives each session the auto settings', async () => {
+    await run({ plan: success(planReport), implementation: success(implementationReport) });
+
+    const [plan] = await calls();
+    expect(plan.settings).toBe(
+      'Workflow settings:\n' +
+        '{"planCheckIn":"skip",' +
+        '"planReview":{"findings":"fix_all","rounds":{"mode":"fixed","count":3}},' +
+        '"implementationReview":{"findings":"fix_all","rounds":{"mode":"fixed","count":1}},' +
+        '"decisions":"recommended"}\n',
+    );
+  });
+
+  it('stops after planning when the plan leaves an action for the engineer', async () => {
+    const outcome = await run({
+      plan: success({ ...planReport, engineerActions: ['Add GITHUB_TOKEN to .env'] }),
+      implementation: success(implementationReport),
+    });
+
+    expect(outcome.ready).toBe(false);
+    expect(outcome.reasons).toEqual(['Engineer action: Add GITHUB_TOKEN to .env']);
+    expect(outcome.implementation).toBeNull();
+    expect(await calls()).toHaveLength(1);
+  });
+
+  it('stops after planning when the plan session stopped', async () => {
+    const outcome = await run({
+      plan: success({ ...planReport, outcome: 'stopped', stopReason: 'No such area' }),
+      implementation: success(implementationReport),
+    });
+
+    expect(outcome.reasons).toEqual(['Stopped: No such area']);
+    expect(outcome.implementation).toBeNull();
+  });
+
+  it('builds a given plan without planning', async () => {
+    const outcome = await run(
+      { plan: null, implementation: success(implementationReport) },
+      { planPath: 'docs/plans/given.md' },
+    );
+
+    expect(outcome.ready).toBe(true);
+    expect(outcome.plan).toBeNull();
+    const [implementation] = await calls();
+    expect(implementation.prompt).toContain('the plan at docs/plans/given.md');
+  });
+
+  it('is not ready when a check failed', async () => {
+    const checks = { passed: [], failed: ['Vitest'], notRun: [] };
+    const outcome = await run({
+      plan: success(planReport),
+      implementation: success({ ...implementationReport, checks }),
+    });
+
+    expect(outcome.ready).toBe(false);
+    expect(outcome.reasons).toEqual(['Failed check: Vitest']);
+  });
+
+  it('keeps the logs in the main checkout, so removing the worktree keeps them', async () => {
+    await run({ plan: success(planReport), implementation: success(implementationReport) });
+
+    const [runDir] = await readdir(path.join(main, 'logs', 'auto'));
+    expect((await readdir(path.join(main, 'logs', 'auto', runDir))).toSorted()).toEqual([
+      'implementation.jsonl',
+      'plan.jsonl',
+      'request.md',
+      'settings.md',
+    ]);
+  });
+
+  it('refuses to start in the main checkout', async () => {
+    await expect(
+      run({ plan: null, implementation: null }, { request: 'x', cwd: main }),
+    ).rejects.toThrow('Run auto-run from a linked worktree');
+  });
+
+  it('refuses to start on a detached HEAD', async () => {
+    await execa('git', ['switch', '--quiet', '--detach'], { cwd: worktree });
+    await expect(run({ plan: null, implementation: null })).rejects.toThrow(
+      'The worktree has a detached HEAD',
+    );
+  });
+
+  it('refuses to start with uncommitted changes', async () => {
+    await writeFile(path.join(worktree, 'stray.txt'), 'x');
+    await expect(run({ plan: null, implementation: null })).rejects.toThrow(
+      'The working tree has uncommitted changes',
+    );
+    expect(await calls()).toEqual([]);
+  });
+});
+
+describe('parseCli', () => {
+  it('defaults both review loops to two rounds', () => {
+    expect(parseCli(['--request-file', 'r.md'])).toEqual({
+      requestFile: 'r.md',
+      planPath: undefined,
+      planRounds: 2,
+      implementationRounds: 2,
+    });
+  });
+
+  it('takes the round counts', () => {
+    const options = parseCli([
+      '--plan',
+      'p.md',
+      '--plan-rounds',
+      '4',
+      '--implementation-rounds',
+      '1',
+    ]);
+    expect(options).toMatchObject({ planPath: 'p.md', planRounds: 4, implementationRounds: 1 });
+  });
+
+  it.each([[[]], [['--request-file', 'r.md', '--plan', 'p.md']]])(
+    'requires exactly one of a request and a plan: %j',
+    (argv) => {
+      expect(() => parseCli(argv)).toThrow('Pass exactly one of --request-file and --plan');
+    },
+  );
+
+  it('rejects a round count under one', () => {
+    expect(() => parseCli(['--plan', 'p.md', '--plan-rounds', '0'])).toThrow(
+      'expected number to be >=1',
+    );
+  });
+});

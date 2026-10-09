@@ -14,6 +14,7 @@ The detail behind the delegation rule in each orchestrator. The rule itself is s
 A subagent inherits nothing. Every handoff states:
 
 - The objective, in one or two sentences.
+- The worktree's absolute path, where every read, edit and command runs.
 - The exact skill paths to read, and the mode each applies in (for example `data-model-design` in review mode).
 - The decisions and contracts already settled, quoted or linked, not summarized.
 - The input files, the plan path and the base commit where they exist.

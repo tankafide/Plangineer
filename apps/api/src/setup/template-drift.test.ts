@@ -133,6 +133,7 @@ describe('workflow settings in this repository', () => {
       '`fix_all`',
       '`fixed`, `count`',
       '`adaptive`, `max`',
+      '`recommended`',
     ]) {
       expect(reviewLoop).toContain(value);
     }

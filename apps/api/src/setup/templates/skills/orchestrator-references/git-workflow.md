@@ -2,10 +2,16 @@
 
 How work finishes. Nothing is committed to `{{defaultBranch}}` directly.
 
-## Branches
+## Worktrees
 
-- Name a branch `<type>/<short-slug>`. Type is one of `feat`, `fix`, `refactor`, `test`, `docs` or `chore`. The slug is short, lowercase and hyphenated.
-- Create the branch when planning starts, or when implementation starts if there is no plan.
+Each piece of work gets its own branch in its own Git worktree. The main checkout never changes branch, so sessions running side by side never share a working tree.
+
+- Name the branch `<type>/<short-slug>`. Type is one of `feat`, `fix`, `refactor`, `test`, `docs` or `chore`. The slug is short, lowercase and hyphenated.
+- A session already in a linked worktree works there. `git rev-parse --git-dir` differs from `git rev-parse --git-common-dir` in a linked worktree. On a detached HEAD there, create the branch in place with `git switch -c <branch>`.
+- Otherwise create the worktree when planning starts, or when implementation starts if there is no plan: `git worktree add -b <branch> <path> <base>`. The base is the default branch on `origin`, such as `origin/main`, after `git fetch origin`. The path is `../<checkout folder>.worktrees/<slug>`, beside the main checkout, so no tool run in the checkout scans it.
+- Install the dependencies in a new worktree before the first check.
+- Run every later step in the worktree. A subagent starts in the session's first directory, so give each one the worktree's absolute path, as [execution](execution.md#what-a-handoff-holds) describes. Never run `git switch` or `git checkout` in the main checkout.
+- Once the branch is merged, remove the worktree with `git worktree remove <path>` and delete the branch.
 
 ## Commits
 

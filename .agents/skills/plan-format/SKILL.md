@@ -80,7 +80,7 @@ One paragraph on what each layer covers and the fixtures it uses.
 ## Rules for each section
 
 - **Goal.** One or two lines. No background essay.
-- **Prerequisites.** Setup outside the code that does not exist yet and must be done before implementation, such as an account, token, registered app or service access. Avoid them: resolve each with the engineer while planning, and list one only when the engineer agrees. Each row has an owner and a status, `open` or `resolved`, which the engineer updates. Omit the section when empty.
+- **Prerequisites.** Setup outside the code that does not exist yet and must be done before implementation, such as an account, token, registered app or service access. Avoid them: resolve each with the engineer while planning, and list one only when the engineer agrees, or when the `decisions` [workflow setting](../orchestrator-references/review-loop.md#workflow-settings) is `recommended`. Each row has an owner and a status, `open` or `resolved`, which the engineer updates. Omit the section when empty.
 - **Steps.** In build order. Each step names its files and has at least one "done when" line. Size a step so it can be verified and reviewed on its own: split one a reviewer could half accept. Give signatures, schema fields, error codes and exact values. Add code only where those still leave two readings. A feature across repositories groups steps by repository, then by phase. Steps in one phase run in parallel only if their files do not overlap.
 - **Done when.** Numbered `<step><letter>`, such as `1a`. One plain sentence each, written as an observable result and not an activity. "The API rejects a plan with no steps" is a line. "Validation is added" is not.
 - **Decisions.** One bullet per decision with its reason. Record every decision made without asking the engineer, so they can overrule it, and record what was left out.
@@ -118,7 +118,7 @@ A plan is ready only when every item passes.
 9. Every decision that crosses steps or repositories is recorded once under Decisions, and each step that depends on it points to it.
 10. Every dependency, library or service the plan relies on is named, and either exists in the stack or is added by a step.
 11. The step order is possible: nothing uses a contract, table or file that a later step creates.
-12. Outside setup is resolved, or listed under Prerequisites with the engineer's agreement. No action item is left anywhere else. Open prerequisites block implementation, not the plan.
+12. Outside setup is resolved, or listed under Prerequisites with the engineer's agreement or under `decisions` set to `recommended`. No action item is left anywhere else. Open prerequisites block implementation, not the plan.
 13. Every behavior of a library, CLI or API the plan relies on has been checked. One that cannot be checked while planning is proven by the first step that needs it, before anything builds on it.
 14. Verification names the commands, and every check that is not automated says who runs it.
 15. The plan follows the stack decisions and the architecture rules, or records why not under Decisions.

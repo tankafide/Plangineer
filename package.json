@@ -25,7 +25,8 @@
     "skills:sync": "node apps/runner/src/cli.ts skills sync",
     "skills:lint": "node scripts/lint-skills.mjs",
     "skills:check": "node apps/runner/src/cli.ts skills check",
-    "verify": "node scripts/verify.mjs"
+    "verify": "node scripts/verify.mjs",
+    "auto:run": "node scripts/auto-run.mjs"
   },
   "devDependencies": {
     "@swc/core": "1.16.13",
