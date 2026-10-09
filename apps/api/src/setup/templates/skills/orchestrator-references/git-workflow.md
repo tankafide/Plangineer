@@ -1,6 +1,6 @@
 # Git workflow
 
-How work finishes. Nothing is committed to `{{defaultBranch}}` directly.
+How work finishes. Nothing is committed in the main checkout. Work reaches `{{defaultBranch}}` through a pull request, or by landing when the engineer asks.
 
 ## Worktrees
 
@@ -8,8 +8,7 @@ Each piece of work gets its own branch in its own Git worktree. The main checkou
 
 - Name the branch `<type>/<short-slug>`. Type is one of `feat`, `fix`, `refactor`, `test`, `docs` or `chore`. The slug is short, lowercase and hyphenated.
 - A session already in a linked worktree works there. `git rev-parse --git-dir` differs from `git rev-parse --git-common-dir` in a linked worktree. On a detached HEAD there, create the branch in place with `git switch -c <branch>`.
-- Otherwise create the worktree when planning starts, or when implementation starts if there is no plan: `git worktree add -b <branch> <path> <base>`. The base is the default branch on `origin`, such as `origin/main`, after `git fetch origin`. The path is `../<checkout folder>.worktrees/<slug>`, beside the main checkout, so no tool run in the checkout scans it.
-- Install the dependencies in a new worktree before the first check.
+- Otherwise, when planning starts, or implementation without a plan, run `git fetch origin` and `git worktree add -b <branch> ../<checkout folder>.worktrees/<slug> origin/{{defaultBranch}}`, or `git worktree add <path> <branch>` for an existing branch. Copy the ignored environment files the checks need from the main checkout, then install dependencies.
 - Run every later step in the worktree. A subagent starts in the session's first directory, so give each one the worktree's absolute path, as [execution](execution.md#what-a-handoff-holds) describes. Never run `git switch` or `git checkout` in the main checkout.
 - Once the branch is merged, remove the worktree with `git worktree remove <path>` and delete the branch.
 
@@ -35,6 +34,15 @@ Written to `writing-style`. It holds:
 - Every departure from the plan, with its reason, and the engineer's keep or revert for any that review raised.
 - Which checks ran and which did not. A check that did not run is listed as not run, never as passed.
 
+## Landing on {{defaultBranch}}
+
+When the engineer asks to land the work on `{{defaultBranch}}` without a pull request, run these from the worktree:
+
+1. Run `git fetch origin` and `git rebase origin/{{defaultBranch}}`. On a conflict, run `git rebase --abort`, then stop and report the conflicting files.
+2. Run the `check` command in [project-stack](../project-stack/SKILL.md#commands). When it fails, stop and report the failing check.
+3. Push with `git push origin HEAD:{{defaultBranch}}`. Git refuses the push when `{{defaultBranch}}` moved in the meantime: repeat from step 1. Never pass `--force` or `--no-verify`.
+4. From the main checkout, run `git worktree remove <path>` and `git branch -D <branch>`. `-d` refuses a branch never merged locally.
+
 ## Permission
 
-Committing needs no permission. Push or open the pull request only when the engineer asks, because both are visible outside the machine.
+Committing needs no permission. Push, land on `{{defaultBranch}}` or open the pull request only when the engineer asks, because each is visible outside the machine.

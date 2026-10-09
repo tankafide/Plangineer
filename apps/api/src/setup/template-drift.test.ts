@@ -78,8 +78,33 @@ const REPLACEMENTS: [file: string, from: string | RegExp, to: string][] = [
   ],
   [
     'orchestrator-references/git-workflow.md',
-    'Nothing is committed to `main` directly.',
-    'Nothing is committed to `{{defaultBranch}}` directly.',
+    'Work reaches `main` through',
+    'Work reaches `{{defaultBranch}}` through',
+  ],
+  [
+    'orchestrator-references/git-workflow.md',
+    /^- Otherwise, when planning starts[^\n]*$/m,
+    '- Otherwise, when planning starts, or implementation without a plan, run `git fetch origin` and `git worktree add -b <branch> ../<checkout folder>.worktrees/<slug> origin/{{defaultBranch}}`, or `git worktree add <path> <branch>` for an existing branch. Copy the ignored environment files the checks need from the main checkout, then install dependencies.',
+  ],
+  [
+    'orchestrator-references/git-workflow.md',
+    /^## Landing on main\n[\s\S]*?(?=\n## Permission)/m,
+    [
+      '## Landing on {{defaultBranch}}',
+      '',
+      'When the engineer asks to land the work on `{{defaultBranch}}` without a pull request, run these from the worktree:',
+      '',
+      '1. Run `git fetch origin` and `git rebase origin/{{defaultBranch}}`. On a conflict, run `git rebase --abort`, then stop and report the conflicting files.',
+      '2. Run the `check` command in [project-stack](../project-stack/SKILL.md#commands). When it fails, stop and report the failing check.',
+      '3. Push with `git push origin HEAD:{{defaultBranch}}`. Git refuses the push when `{{defaultBranch}}` moved in the meantime: repeat from step 1. Never pass `--force` or `--no-verify`.',
+      '4. From the main checkout, run `git worktree remove <path>` and `git branch -D <branch>`. `-d` refuses a branch never merged locally.',
+      '',
+    ].join('\n'),
+  ],
+  [
+    'orchestrator-references/git-workflow.md',
+    'land on `main` or',
+    'land on `{{defaultBranch}}` or',
   ],
   [
     'codebase-exploration/SKILL.md',

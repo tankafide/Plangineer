@@ -128,7 +128,7 @@ describe('renderSetupFiles', () => {
     }
     expect(paths(files)).toContain('.agents/skills/testing/agents/openai.yaml');
     expect(content(files, '.agents/skills/orchestrator-references/git-workflow.md')).toContain(
-      'Nothing is committed to `trunk` directly.',
+      'Work reaches `trunk` through a pull request',
     );
   });
 
