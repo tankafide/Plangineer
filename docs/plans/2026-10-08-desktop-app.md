@@ -10,32 +10,32 @@ A person downloads Plangineer from GitHub Releases, opens it on Windows, macOS o
 
 ### 1. Bundle-safe logging and asset paths
 
-**Files:** `apps/api/src/logger.ts`, `apps/api/src/logger.test.ts`, `apps/api/src/env.ts`, `apps/api/src/env.test.ts`, `apps/api/src/main.ts`, `apps/api/src/db/reset.ts`, `apps/api/src/db/seed-cli.ts`, `apps/api/src/db/migrate-cli.ts`, `apps/api/src/db/migrate-cli.test.ts`, `apps/api/src/package-root.ts`, `apps/api/src/db/migrate.ts`, `apps/api/src/setup/setup-files.ts`, `apps/api/src/server.ts`, `apps/api/src/test/fixtures.ts`, `apps/runner/src/config/runner-logger.ts`, `apps/runner/src/config/runner-logger.test.ts`, `.env.example`
+**Files:** `apps/api/src/logger.ts`, `apps/api/src/logger.test.ts`, `apps/api/src/env.ts`, `apps/api/src/env.test.ts`, `apps/api/src/main.ts`, `apps/api/src/db/reset.ts`, `apps/api/src/db/seed-cli.ts`, `apps/api/src/db/migrate-cli.ts`, `apps/api/src/db/migrate-cli.test.ts`, `apps/api/src/package-root.ts`, `apps/api/src/db/migrate.ts`, `apps/api/src/setup/setup-files.ts`, `apps/api/src/server.ts`, `apps/api/src/server.test.ts`, `apps/api/src/test/fixtures.ts`, `apps/runner/src/config/runner-logger.ts`, `apps/runner/src/config/runner-logger.test.ts`, `.env.example`
 
-The API and runner must run from a single bundled file outside the repository (D4). Three things stop that today: pino worker transports, a log path relative to the source file, and asset paths relative to source files.
+The API and runner must run from a single bundled file outside the repository (D4). Three things stop that at `59223b1`: pino worker transports, a log path relative to the source file, and asset paths relative to source files.
 
-- **Loggers.** `createLogger` in the API and the runner logger replace `pino.transport` with `pino.multistream([{ stream: process.stdout }, { stream: pino.destination({ dest: logFile, mkdir: true, sync: false }) }])`. Level, redaction and serializers stay as they are. The API's `createLogger(level, logFile?)` writes to stdout only when no file is given. `main.ts` logs an environment that fails to parse that way, since it has no file yet. The server, `reset.ts` and `seed-cli.ts` pass `env.API_LOG_FILE`. The test global setup keeps its stdout-only `createLogger('warn')`. The runner keeps `<data>/logs/runner.log`.
-- **New API variables.** `API_LOG_FILE` is required, `z.string().min(1)`, resolved with `path.resolve(PACKAGE_ROOT, value)`, so the working folder never matters. `.env.example` sets `API_LOG_FILE=../../logs/api.log`, which is `<repo>/logs/api.log` from `apps/api/`. The desktop app passes an absolute path. `API_HOST` is required, `z.string().min(1)`, passed to `serve({ hostname })`. `.env.example` sets `API_HOST=127.0.0.1`.
-- **Package root.** `apps/api/src/package-root.ts` exports `PACKAGE_ROOT = fileURLToPath(new URL('..', import.meta.url))`. From source it is `apps/api/`. From the bundle at `<server>/dist/main.mjs` it is `<server>/`. `migrate.ts` uses `path.join(PACKAGE_ROOT, 'drizzle')`. `setup-files.ts` uses `path.join(PACKAGE_ROOT, 'src', 'setup', 'templates')`. No other module resolves a file from `import.meta.url`.
+- **Loggers.** `createLogger` in the API and the runner logger replace `pino.transport` with `pino.multistream([{ level, stream: process.stdout }, { level, stream: pino.destination({ dest: logFile, mkdir: true, sync: false }) }])`. Each stream carries the logger's level, since a stream with none defaults to `info`. Redaction and serializers stay as they are. The API's `createLogger(level, logFile?)` writes to stdout only when no file is given. `main.ts` logs an environment that fails to parse that way, since it has no file yet. The server, `reset.ts` and `seed-cli.ts` pass `env.API_LOG_FILE`. The test global setup keeps its stdout-only `createLogger('warn')`. The runner keeps `<data>/logs/runner.log`.
+- **New API variables.** `API_LOG_FILE` is required, `z.string().min(1)`, resolved with `path.resolve(PACKAGE_ROOT, value)`, so the working folder never matters. `.env.example` sets `API_LOG_FILE=../../logs/api.log`, which is `<repo>/logs/api.log` from `apps/api/`. The desktop app passes an absolute path. `API_HOST` is required, `z.string().min(1)`, passed to `serve({ hostname })`. `.env.example` sets `API_HOST=127.0.0.1`. The implementer adds both keys to their local `.env` in this step, since the API test global setup parses it.
+- **Package root.** `apps/api/src/package-root.ts` exports `PACKAGE_ROOT = fileURLToPath(new URL('..', import.meta.url))`. From source it is `apps/api/`. From the bundle at `<server>/dist/main.mjs` it is `<server>/`. `migrate.ts` uses `path.join(PACKAGE_ROOT, 'drizzle')`. `setup-files.ts` uses `path.join(PACKAGE_ROOT, 'src', 'setup', 'templates')`. No other module bundled into the API resolves a file from `import.meta.url`.
 - **Migrate environment.** `migrate-cli.ts` parses its own schema, `z.object({ DATABASE_URL: z.url() })`, and nothing else. Migrating needs only the database, so the migrate bundle runs with `DATABASE_URL` alone.
 
 **Done when:**
 
-- 1a. The API logger writes each line to stdout and to the file `API_LOG_FILE` names, creating its folder, with redaction unchanged.
-- 1b. The runner logger writes to stdout and `<data>/logs/runner.log` with no worker thread, and its redaction tests still pass.
+- 1a. The API logger writes each line to stdout and to the file `API_LOG_FILE` names, creating its folder, with redaction unchanged, and at level `debug` it writes a debug line to both.
+- 1b. The runner logger writes to stdout and `<data>/logs/runner.log` with no worker thread, writes a debug line to both at level `debug`, and its redaction tests still pass.
 - 1c. `parseEnv` rejects a missing `API_LOG_FILE` or `API_HOST` and names the key.
-- 1d. The API listens only on the host `API_HOST` names.
+- 1d. The API listens only on the host `API_HOST` names, in `server.test.ts`.
 - 1e. Migrations and setup templates load through `PACKAGE_ROOT`, and the existing migration and template tests pass.
 - 1f. `migrate-cli.ts` migrates an empty database with only `DATABASE_URL` set, and fails naming `DATABASE_URL` when it is missing.
 - 1g. A relative `API_LOG_FILE` resolves against `PACKAGE_ROOT` whatever the working folder.
 
 ### 2. Builds for the API, web and runner
 
-**Files:** `apps/api/package.json`, `apps/api/tsdown.config.ts`, `apps/web/package.json`, `apps/runner/package.json`, `apps/runner/tsdown.config.ts`, `apps/runner/src/package.test.ts`, `turbo.json`, `package.json`, `pnpm-lock.yaml`, `knip.json`, `.gitignore`, `scripts/setup-env.mjs`, `scripts/smoke-server-bundle.mjs`, `.github/workflows/ci.yml`
+**Files:** `apps/api/package.json`, `apps/api/tsdown.config.ts`, `apps/web/package.json`, `apps/web/vite.config.ts`, `apps/runner/package.json`, `apps/runner/tsdown.config.ts`, `apps/runner/src/package.test.ts`, `turbo.json`, `package.json`, `pnpm-lock.yaml`, `knip.json`, `.gitignore`, `scripts/setup-env.mjs`, `scripts/smoke-server-bundle.mjs`, `.github/workflows/ci.yml`
 
 - **API.** Add tsdown 0.23.0 and a `build` script. Entries `main: src/main.ts` and `migrate: src/db/migrate-cli.ts`, ESM, `platform: 'node'`, `target: 'node24'`, out to `apps/api/dist/` with `.mjs`. Every dependency is bundled, including the workspace packages, except `pg-native`, which `pg` requires only when installed.
-- **Web.** Add a `build` script, `vite build`, out to `apps/web/dist/`.
-- **Runner.** The build bundles every dependency, not only `@plangineer/contracts`. The runtime packages move from `dependencies` to `devDependencies`, so the published `plangineer-runner` has no dependencies. Bundled, `open` 11.0.4 finds no local `xdg-open` and uses the system one, as its `index.js` does when its folder has no `xdg-open`. The version stays `0.2.0` until the engineer next publishes. `package.test.ts` builds into a folder under `os.tmpdir()` that holds only `dist/` and `package.json`, so no `node_modules` can resolve a missing dependency.
+- **Web.** Add a `build` script, `vite build`, out to `apps/web/dist/`. `vite.config.ts` reads `API_PORT` from `.env` only when `command === 'serve'`, for the dev proxy, so a build needs no `.env`.
+- **Runner** (D20). The build bundles every dependency, not only `@plangineer/contracts`. The runtime packages move from `dependencies` to `devDependencies`, so the published `plangineer-runner` has no dependencies. Bundled, `open` 11.0.4 finds no local `xdg-open` and uses the system one, as its `index.js` does when its folder has no `xdg-open`. The version becomes `0.3.0`, since the package changes here and in step 5 (D25). `package.test.ts` builds into a folder under `os.tmpdir()` that holds only `dist/` and `package.json`, so no `node_modules` can resolve a missing dependency.
 - **Turborepo.** Add a `build` task with `dependsOn: ["^build"]` and `outputs: ["dist/**"]`. Add a root `build` script, `turbo run build`. `.gitignore` adds `apps/api/dist/`.
 - **Smoke.** `scripts/smoke-server-bundle.mjs` copies `apps/api/dist`, `apps/api/drizzle` and `apps/api/src/setup/templates` into a temp folder as `server/dist/`, `server/drizzle/` and `server/src/setup/templates/`, the layout the desktop app ships. It runs `migrate.mjs` with only `DATABASE_URL`, from its own environment. It runs `main.mjs` with the values `pnpm setup:env` writes, through a new export `envValues(exampleText)` in `scripts/setup-env.mjs`, overridden with that `DATABASE_URL`, a free `API_PORT` and an `API_LOG_FILE` in the temp folder. Both run with `process.execPath`. It waits for `GET /api/auth/ok` to answer 200, and stops the server. A CI job `bundle` runs `pnpm build` and the smoke script on all three systems, with Postgres from `ikalnytskyi/action-setup-postgres`.
 
@@ -43,27 +43,28 @@ The API and runner must run from a single bundled file outside the repository (D
 
 - 2a. `pnpm build` writes `apps/api/dist/main.mjs`, `apps/api/dist/migrate.mjs`, `apps/web/dist/index.html` and `apps/runner/dist/cli.mjs`.
 - 2b. The smoke script migrates an empty database and gets 200 from `/api/auth/ok`, from a folder outside the repository with no `node_modules`, on Windows, macOS and Linux.
-- 2c. `node apps/runner/dist/cli.mjs --version` prints `0.2.0` from a folder with only `dist/` and `package.json`.
+- 2c. `node apps/runner/dist/cli.mjs --version` prints `0.3.0` from a folder with only `dist/` and `package.json`.
+- 2d. `pnpm build` passes in a checkout with no `.env`, as the CI `bundle` job runs it.
 
 ### 3. The API serves the web app
 
 **Files:** `apps/api/src/env.ts`, `apps/api/src/app.ts`, `apps/api/src/web-assets.ts`, `apps/api/src/web-assets.test.ts`, `.env.example`
 
-`WEB_DIST_DIR` is an optional absolute path. When it is set, the API serves the built SPA on the same origin as `/api` and `/rpc`. A team server's container sets it too. When it is unset, as in dev, Vite serves the web app and proxies to the API, as today (D5).
+`WEB_DIST_DIR` is an optional absolute path. When it is set, the API serves the built SPA on the same origin as `/api` and `/rpc`. A team server's container sets it too. When it is unset, as in dev, Vite serves the web app and proxies to the API, as it does at `59223b1` (D5).
 
 - `web-assets.ts` registers `serveStatic({ root: WEB_DIST_DIR })` from `@hono/node-server/serve-static` after every API route. Files under `/assets/` get `Cache-Control: public, max-age=31536000, immutable`.
-- A `GET` that matches no file and does not start with `/api/` or `/rpc/` gets `index.html` with `Cache-Control: no-cache`, so TanStack Router handles the path.
+- A `GET` that matches no file and does not start with `/api/` or `/rpc/` gets `index.html`, so TanStack Router handles the path. Every `index.html` response, including `GET /` and `GET /index.html`, has `Cache-Control: no-cache`, so an updated app never loads an old page that names deleted assets.
 - `.env.example` lists `# WEB_DIST_DIR=<absolute path to apps/web/dist; unset in dev, where Vite serves the web app>`.
 
 **Done when:**
 
-- 3a. With `WEB_DIST_DIR` set to a fixture folder, `GET /` and `GET /repositories` return `index.html`, and `GET /assets/app.js` returns the file with the immutable header.
+- 3a. With `WEB_DIST_DIR` set to a fixture folder, `GET /` and `GET /repositories` return `index.html` with `Cache-Control: no-cache`, and `GET /assets/app.js` returns the file with the immutable header.
 - 3b. `GET /api/unknown` and `GET /rpc/unknown` still answer 404 from the API, never `index.html`.
 - 3c. With `WEB_DIST_DIR` unset, `GET /` answers 404.
 
 ### 4. GitHub App stored in the database
 
-**Files:** `packages/contracts/src/instance.ts`, `packages/contracts/src/instance.test.ts`, `packages/contracts/src/github-failed.ts`, `packages/contracts/src/repository.ts`, `packages/contracts/src/index.ts`, `apps/api/src/db/schema.ts`, `apps/api/drizzle/0004_*.sql`, `apps/api/drizzle/meta/*` (generated), `apps/api/src/db/schema.test.ts`, `apps/api/src/github/github-app-store.ts`, `apps/api/src/github/github-app-store.test.ts`, `apps/api/src/github/github-app-manifest.ts`, `apps/api/src/github/github-app-manifest.test.ts`, `apps/api/src/github/github-app-conversion.ts`, `apps/api/src/github/github-app-conversion.test.ts`, `apps/api/src/github/github.ts`, `apps/api/src/github/github.test.ts`, `apps/api/src/lib/service-deps.ts`, `apps/api/src/auth/auth-cli.ts`, `apps/api/src/auth/session.ts`, `apps/api/src/runs/run-event-stream.ts`, `apps/api/src/test/test-app.ts`, `apps/api/src/app.test.ts`, `apps/api/src/test/global-setup.ts`, `apps/api/src/test/e2e-session-cli.ts`, `scripts/env-file.test.mjs`, `scripts/test-e2e.mjs`, `apps/api/src/instance/instance-service.ts`, `apps/api/src/instance/instance-service.test.ts`, `apps/api/src/auth/auth.ts`, `apps/api/src/auth/auth.test.ts`, `apps/api/src/auth/auth-provider.ts`, `apps/api/src/auth/auth-provider.test.ts`, `apps/api/src/app.ts`, `apps/api/src/server.ts`, `apps/api/src/rpc/router.ts`, `apps/api/src/logger.ts`, `apps/api/src/env.ts`, `apps/api/src/env.test.ts`, `apps/api/src/repositories/repository-service.ts`, `apps/api/src/db/reset.ts`, `apps/api/src/db/reset.test.ts`, `apps/api/src/test/fixtures.ts`, `apps/api/src/test/e2e-github-app-cli.ts`, `apps/api/package.json`, `apps/web/e2e/global-setup.ts`, `apps/web/e2e/session-state.ts`, `apps/web/e2e/sign-in.spec.ts`, `.env.example`, `scripts/setup-env.mjs`, `scripts/setup-env.test.mjs`, `scripts/dev.mjs`, `scripts/setup-github-app.mjs` (deleted), `scripts/github-app-manifest.mjs` (deleted), `scripts/github-app-manifest.test.mjs` (deleted), `scripts/github-app-callback.mjs` (deleted), `scripts/github-app-callback.test.mjs` (deleted), `scripts/github-app-conversion.mjs` (deleted), `scripts/github-app-conversion.test.mjs` (deleted), `package.json`
+**Files:** `packages/contracts/src/instance.ts`, `packages/contracts/src/instance.test.ts`, `packages/contracts/src/github-failed.ts`, `packages/contracts/src/repository.ts`, `packages/contracts/src/index.ts`, `apps/api/src/db/schema.ts`, `apps/api/drizzle/0004_*.sql`, `apps/api/drizzle/meta/*` (generated), `apps/api/src/db/schema.test.ts`, `apps/api/src/github/github-app-store.ts`, `apps/api/src/github/github-app-store.test.ts`, `apps/api/src/github/github-app-manifest.ts`, `apps/api/src/github/github-app-manifest.test.ts`, `apps/api/src/github/github-app-conversion.ts`, `apps/api/src/github/github-app-conversion.test.ts`, `apps/api/src/github/github.ts`, `apps/api/src/github/github.test.ts`, `apps/api/src/lib/service-deps.ts`, `apps/api/src/auth/auth-cli.ts`, `apps/api/src/auth/session.ts`, `apps/api/src/runs/run-event-stream.ts`, `apps/api/src/test/test-app.ts`, `apps/api/src/app.test.ts`, `apps/api/src/test/global-setup.ts`, `apps/api/src/test/e2e-session-cli.ts`, `scripts/env-file.test.mjs`, `scripts/test-e2e.mjs`, `apps/api/src/instance/instance-service.ts`, `apps/api/src/instance/instance-service.test.ts`, `apps/api/src/auth/auth.ts`, `apps/api/src/auth/auth.test.ts`, `apps/api/src/auth/auth-provider.ts`, `apps/api/src/auth/auth-provider.test.ts`, `apps/api/src/app.ts`, `apps/api/src/server.ts`, `apps/api/src/rpc/router.ts`, `apps/api/src/logger.ts`, `apps/api/src/env.ts`, `apps/api/src/env.test.ts`, `apps/api/src/repositories/repository-service.ts`, `apps/api/src/repositories/repository-service.test.ts`, `apps/api/src/db/reset.ts`, `apps/api/src/db/reset.test.ts`, `apps/api/src/test/fixtures.ts`, `apps/api/src/test/e2e-github-app-cli.ts`, `apps/api/package.json`, `apps/web/e2e/global-setup.ts`, `apps/web/e2e/session-state.ts`, `apps/web/e2e/sign-in.spec.ts`, `.env.example`, `scripts/setup-env.mjs`, `scripts/setup-env.test.mjs`, `scripts/dev.mjs`, `scripts/setup-github-app.mjs` (deleted), `scripts/github-app-manifest.mjs` (deleted), `scripts/github-app-manifest.test.mjs` (deleted), `scripts/github-app-callback.mjs` (deleted), `scripts/github-app-callback.test.mjs` (deleted), `scripts/github-app-conversion.mjs` (deleted), `scripts/github-app-conversion.test.mjs` (deleted), `package.json`, `pnpm-lock.yaml`
 
 The API creates the GitHub App through GitHub's manifest flow and stores it in Postgres, so every install, desktop or team, sets it up from the web (D6). The five `GITHUB_APP_*` variables and `pnpm setup:github-app` go.
 
@@ -102,21 +103,21 @@ No index beyond the primary key and the `singleton` unique: every read takes the
 
 **API.**
 
-- **Environment.** `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET` and `GITHUB_APP_PRIVATE_KEY` leave `env.ts` and `.env.example`, with `privateKeyPem`. `SETUP_TOKEN` is required, `z.string().min(32)`. `pnpm setup:env` writes 32 random bytes as base64url for it. `pnpm dev` prints `Set up Plangineer at http://localhost:5173/get-started#setup-token=<SETUP_TOKEN>` after the stack starts.
-- **`github-app-store.ts`.** `createGithubAppStore({ db, secret })` is synchronous and returns `get()` and `save(conversion)`.
+- **Environment.** `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET` and `GITHUB_APP_PRIVATE_KEY` leave `env.ts` and `.env.example`, with `privateKeyPem`. `SETUP_TOKEN` is required, `z.string().min(32).max(200)`, the bounds of the input schema. `pnpm setup:env` writes 32 random bytes as base64url for it. `dev.mjs` starts `turbo run dev` without awaiting it, polls `http://localhost:<API_PORT>/api/auth/ok` every 500 ms, and once it answers 200 prints `Set up Plangineer at http://localhost:5173/get-started#setup-token=<SETUP_TOKEN>`. It then awaits turbo as before. The root `package.json` drops `open` and `zod`, whose only root users were the deleted scripts. The implementer updates their local `.env` in this step: add `SETUP_TOKEN` and remove the five `GITHUB_APP_*` lines.
+- **`github-app-store.ts`** (D23). `createGithubAppStore({ db, secret })` is synchronous and returns `get()` and `save(conversion)`.
   - `get(): Promise<GithubAppCredentials | null>` decrypts the row with `symmetricDecrypt({ key: secret, data })` from `better-auth/crypto` and caches it. While nothing is cached, each call reads the row again, so a row another process inserts is seen without a restart.
   - `save` encrypts the client secret and the PKCS#8 key with `symmetricEncrypt`, inserts the row and caches it. An existing row makes `save` return `'exists'`, through the `singleton` unique and `onConflictDoNothing`.
   - `server.ts` calls `get()` once before listening, so a row that fails to decrypt stops the server at startup with `The stored GitHub App cannot be decrypted. BETTER_AUTH_SECRET changed since the App was created.`
   - `ServiceDeps` gains `appStore`, so services reach it as they reach `db`.
 - **`github-app-manifest.ts`.** `buildManifest(origin)` returns the manifest from `scripts/github-app-manifest.mjs` at `59223b1`, with these changes: `name` is `plangineer-<6 hex>`, `redirect_url` is `<origin>/get-started`, `callback_urls` is `[<origin>/api/auth/callback/github]`, and `setup_url` is `<origin>/repositories`. `origin` is `BETTER_AUTH_URL`. `postUrl` is `https://github.com/settings/apps/new`, so the App belongs to the signed-in GitHub account (D7).
-- **`github-app-conversion.ts`.** `convertManifestCode(code)` posts to `https://api.github.com/app-manifests/<code>/conversions` and parses `id`, `slug`, `client_id`, `client_secret`, `pem` and `owner.login` with Zod, as `readConversion` does at `59223b1`. A non-2xx answer or a bad body raises `GITHUB_FAILED` with GitHub's status and a message cut to `GITHUB_FAILED_MESSAGE_MAX`.
+- **`github-app-conversion.ts`.** `convertManifestCode(code)` posts to `https://api.github.com/app-manifests/<code>/conversions` and parses `id`, `slug`, `client_id`, `client_secret`, `pem` and `owner.login` with Zod, as `readConversion` does at `59223b1`. GitHub issues a PKCS#1 key, so it returns the key as `createPrivateKey(pem).export({ type: 'pkcs8', format: 'pem' })`, the form Octokit signs with and `privateKeyPem` produced at `59223b1`. A non-2xx answer or a bad body raises `GITHUB_FAILED` with GitHub's status and a message cut to `GITHUB_FAILED_MESSAGE_MAX`.
 - **Setup token.** Both token procedures compare `sha256(input.setupToken)` with `sha256(env.SETUP_TOKEN)` using `timingSafeEqual`. A mismatch is `UNAUTHORIZED`. A configured App makes both answer `CONFLICT`, so the token is spent once an App exists. The logger redacts `setupToken`, `*.setupToken`, `code` under `instance` input, `client_secret`, `clientSecret`, `pem` and `privateKey`.
 - **Auth.** `createAuth` takes `githubApp: GithubAppCredentials | null`. With `null`, `socialProviders` is empty, so a GitHub sign-in fails with Better Auth's provider-not-found error. `apps/api/src/auth/auth-provider.ts` exports `createAuthProvider({ db, env, appStore })`, whose `get(): Promise<Auth>` rebuilds the Better Auth instance when `appStore.get()` returns a different object. `createApp` takes the provider in place of an `Auth`. The `/api/auth/*` handler, the session middleware in `session.ts` and `run-event-stream.ts` each call `get()` per request. `auth-cli.ts` and `e2e-session-cli.ts` pass the stored App from `appStore.get()` to `createAuth`.
 - **GitHub client.** `createGithub({ appStore, logger })` builds the Octokit `App` from `await appStore.get()` on first use, and again after the credentials change. With no App it throws `Error('GitHub App is not configured')`. No signed-in path can reach it, since sign-in needs the App. `repository-service.ts` builds `installUrl` from the stored App's slug.
 - **First admin.** Unchanged: the first user who is not a seed user becomes admin. The desktop API listens only on `127.0.0.1`, so nobody else can sign in first (D8).
 - **Dev reset.** `pnpm db:reset` reads the `github_apps` row before the reset and inserts it again after migrating, so a dev App survives every reset and `pnpm test:e2e`. A missing database or a missing `github_apps` table means there is no row to keep. The seed adds no App.
 - **e2e App.** `e2e:github-app`, run as `node --env-file=../../.env src/test/e2e-github-app-cli.ts`, inserts an App with client ID `e2e-github-client-id` and a generated key when no row exists. It then prints `{"clientId": ...}` for the stored row. `scripts/test-e2e.mjs` runs it after `pnpm db:reset` and before Playwright, so the App exists before Playwright starts the API. The e2e global setup runs it again, which inserts nothing and prints the client ID. It saves the ID beside the session state, and `sign-in.spec.ts` reads it there in place of `.env`.
-- **API tests.** `testEnv` drops the five GitHub values and gains `SETUP_TOKEN`. The API test global setup inserts an App row into the template database with `appStore.save`, so every cloned test database starts with one. `testDeps` and `testAuth` stay synchronous: they build a store and an auth provider that read that row. Tests of the missing state delete the row in their own database. `scripts/env-file.test.mjs` uses keys other than `GITHUB_APP_*` in its examples.
+- **API tests.** `testEnv` drops the five GitHub values and gains `SETUP_TOKEN`. The API test global setup generates one PKCS#8 key and shares it with `project.provide('githubAppPrivateKey')`. It inserts an App row into the template database with `appStore.save`, encrypted with `testEnv().BETTER_AUTH_SECRET`, with client ID `test-github-client-id`, client secret `test-github-client-secret`, App ID `4242`, slug `plangineer-test` and that key. Every cloned test database starts with the row. `fixtures.ts` reads the key with `inject('githubAppPrivateKey')` and keeps exporting `GITHUB_CLIENT_ID` and `GITHUB_APP_PRIVATE_KEY` with those values. `testAuth(db)` keeps returning an `Auth`, built synchronously by `createAuth` with those known credentials, so its callers do not change. A new `testAuthProvider(db)` serves `createApp` in `test-app.ts`. `testDeps` builds a store over the test database. Tests of the missing state delete the row in their own database. `scripts/env-file.test.mjs` uses keys other than `GITHUB_APP_*` in its examples.
 
 **Done when:**
 
@@ -124,7 +125,7 @@ No index beyond the primary key and the `singleton` unique: every read takes the
 - 4b. The migration applies from empty with `pnpm db:reset`, and a second `github_apps` row is rejected.
 - 4c. `instance.getStatus` answers `missing` with no row and `configured` with the slug once a row exists, with no session.
 - 4d. `instance.githubAppManifest` with the right token returns a manifest whose callback, redirect and setup URLs start with `BETTER_AUTH_URL`. A wrong token answers `UNAUTHORIZED`, and a configured App answers `CONFLICT`.
-- 4e. `instance.completeGithubApp` with the right token and a code that the MSW GitHub handler converts stores one row with the client secret and key encrypted, and answers `configured`.
+- 4e. `instance.completeGithubApp` with the right token and a code that the MSW GitHub handler converts, returning a PKCS#1 `pem`, stores one row with the client secret and a PKCS#8 key encrypted, and answers `configured`.
 - 4f. `instance.completeGithubApp` answers `UNAUTHORIZED` for a wrong token, `CONFLICT` when a row exists, and `GITHUB_FAILED` with the status for a GitHub 404, storing nothing in each case.
 - 4g. After `completeGithubApp`, `/api/auth/sign-in/social` with provider `github` redirects to GitHub's authorize URL with the stored client ID, with no restart. Before it, the same call fails.
 - 4h. After `completeGithubApp`, an installation token request signs its JWT with the stored App ID and key.
@@ -136,7 +137,7 @@ No index beyond the primary key and the `singleton` unique: every read takes the
 
 ### 5. Runner: machine-readable login and live Claude Code status
 
-**Files:** `packages/contracts/src/runner-cli.ts`, `packages/contracts/src/runner-cli.test.ts`, `packages/contracts/src/runner-protocol.ts`, `packages/contracts/src/runner-protocol.test.ts`, `packages/contracts/src/index.ts`, `apps/runner/src/login-command.ts`, `apps/runner/src/login-command.test.ts`, `apps/runner/src/cli.ts`, `apps/runner/src/cli.test.ts`, `apps/runner/src/command-result.ts`, `apps/runner/src/start-command.ts`, `apps/runner/src/start-command-connection.test.ts`, `apps/api/src/runners/runner-socket.ts`, `apps/api/src/runners/runner-session.ts`, `apps/api/src/runners/runner-socket-lifecycle.test.ts`, `apps/runner/README.md`
+**Files:** `packages/contracts/src/runner-cli.ts`, `packages/contracts/src/runner-cli.test.ts`, `packages/contracts/src/runner-protocol.ts`, `packages/contracts/src/runner-protocol.test.ts`, `packages/contracts/src/index.ts`, `apps/runner/src/login-command.ts`, `apps/runner/src/login-command.test.ts`, `apps/runner/src/cli.ts`, `apps/runner/src/cli.test.ts`, `apps/runner/src/command-result.ts`, `apps/runner/src/start-command.ts`, `apps/runner/src/start-command.test.ts`, `apps/runner/src/start-command-connection.test.ts`, `apps/runner/src/skills/skill-lint.ts`, `apps/runner/src/skills/skill-lint.test.ts`, `apps/runner/src/skills/skills-mirror.ts`, `apps/runner/src/skills/skills-mirror.test.ts`, `apps/api/src/runners/runner-socket.ts`, `apps/api/src/runners/runner-session.ts`, `apps/api/src/runners/runner-socket-lifecycle.test.ts`, `apps/runner/README.md`
 
 - **`login --json`.** The desktop app reads the login's progress from the runner's stdout. With `--json`, `login` prints one `RunnerLoginEvent` per line and no other text. `--json` implies `--no-browser`.
 
@@ -148,8 +149,8 @@ No index beyond the primary key and the `singleton` unique: every read takes the
 
 `RunnerLoginEvent` is `z.discriminatedUnion('event', [...])` in `packages/contracts/src/runner-cli.ts`, with `message` at most 500 characters.
 
-- **Claude Code status.** The runner detects Claude Code once at start today, so installing it later never shows. While connected, the runner runs `adapter.detect()` every 30,000 ms. When the result differs from the last one sent, it sends `z.strictObject({ type: z.literal('runner.clis'), clis: z.array(CliStatus).max(4) })`, a new `RunnerToServerMessage`. The API writes `clis` to the runner's row as the `hello` handler does. Every switch on the message type gains the case.
-- **Exit codes.** `CommandResult` becomes `{ exitCode: 0 | 1 | 3; message: string | null }`. `cli.ts` sets `process.exitCode` from it and prints nothing when `message` is `null`, which is how `login --json` prints only its events. Code 3 means this runner needs pairing, so the desktop app can tell it from other failures. `apps/runner/README.md` lists the codes.
+- **Claude Code status.** At `59223b1` the runner detects Claude Code once at start, so installing it later never shows. While connected, the runner runs `adapter.detect()` every 30,000 ms. When the result differs from the last one sent, it sends `z.strictObject({ type: z.literal('runner.clis'), clis: z.array(CliStatus).max(4) })`, a new `RunnerToServerMessage`. The API writes `clis` to the runner's row as the `hello` handler does. Every switch on the message type gains the case.
+- **Exit codes.** `CommandResult` becomes `{ exitCode: 0 | 1 | 3; message: string | null }`. `cli.ts` sets `process.exitCode` from it and prints nothing when `message` is `null`, which is how `login --json` prints only its events. Every other producer, `skill-lint.ts` and `skills-mirror.ts`, maps `ok: true` to `exitCode: 0` and `ok: false` to `exitCode: 1`, and their tests assert the code. Code 3 means this runner needs pairing, so the desktop app can tell it from other failures (D22). `apps/runner/README.md` lists the codes.
 
 | `start` ends because | Exit code |
 | --- | --- |
@@ -158,7 +159,7 @@ No index beyond the primary key and the `singleton` unique: every read takes the
 | The control plane refuses the token (401) or closes with `revoked` | 3 |
 | The control plane closes with `replaced` or `protocol` | 1 |
 
-- **`start --server <url>`.** An optional flag. When given, `start` checks it against the paired server before connecting. An unreachable server keeps the runner reconnecting with backoff, as today, and never exits.
+- **`start --server <url>`.** An optional flag. When given, `start` checks it against the paired server before connecting. An unreachable server keeps the runner reconnecting with backoff, unchanged from `59223b1`, and never exits.
 
 **Done when:**
 
@@ -174,7 +175,7 @@ No index beyond the primary key and the `singleton` unique: every read takes the
 
 **Files:** `packages/api-client/src/instance.ts`, `packages/api-client/src/instance.test.tsx`, `packages/api-client/src/index.ts`, `apps/web/src/routes/get-started.tsx`, `apps/web/src/features/get-started/get-started-screen.tsx`, `apps/web/src/features/get-started/get-started-screen.test.tsx`, `apps/web/src/features/get-started/github-app-step.tsx`, `apps/web/src/features/get-started/sign-in-step.tsx`, `apps/web/src/features/get-started/claude-code-step.tsx`, `apps/web/src/features/get-started/repository-step.tsx`, `apps/web/src/features/get-started/setup-token.ts`, `apps/web/src/features/get-started/setup-token.test.ts`, `apps/web/src/features/get-started/get-started-card.tsx`, `apps/web/src/features/get-started/get-started-card.test.tsx`, `apps/web/src/routes/_app/index.tsx`, `apps/web/src/features/auth/sign-in-card.tsx`, `apps/web/src/features/auth/sign-in-card.test.tsx`
 
-`/get-started` is a public route beside `/sign-in`. It shows the four steps as cards in one column, at every width, in the order below. Desktop adds nothing beside them. Each card has a status icon (Lucide `CircleCheck` when done, `Circle` when not), a title, one line of text and at most two buttons. `visual-style` sets colors and type.
+`/get-started` is a public route beside `/sign-in`. It shows the four steps as cards in one column, at every width, in the order below. Desktop adds nothing beside them. Each card has a status icon (Lucide `CircleCheck` when done, `Circle` when not), a title, one line of text and at most two buttons. The button of the first step that is not done is the one primary button, and every other button uses the `outline` variant. `visual-style` sets colors and type.
 
 - **Hooks.** `useInstanceStatus()` queries `instance.getStatus`. `useGithubAppManifest()` and `useCompleteGithubApp()` are mutations, and `useCompleteGithubApp` sets the status query data on success.
 - **Setup token.** `setup-token.ts` reads `#setup-token=<value>` from the URL on load, stores it in `sessionStorage` under `plangineer.setupToken`, and removes the fragment with `history.replaceState`.
@@ -183,25 +184,25 @@ No index beyond the primary key and the `singleton` unique: every read takes the
 | Step | States and buttons |
 | --- | --- |
 | 1. Create the GitHub App | **Missing, token present:** "Create the GitHub App on your GitHub account. GitHub asks you to confirm." Button **Create GitHub App**. **Missing, no token:** "Open this page from the link the Plangineer app or server gave you." No button. **Creating:** button disabled with a spinner, from the click through the completion call. **State mismatch:** "This link did not come from this setup. Start again." Button **Create GitHub App**. **Failed:** GitHub's message and button **Try again**. **Done:** "GitHub App `<slug>` is ready." Link **Open on GitHub** |
-| 2. Sign in | **Blocked** until step 1 is done: no button. **To do:** button **Sign in with GitHub**, to `/sign-in?redirect=/get-started`. **Done:** "Signed in as `<name>`." |
+| 2. Sign in | Reads `authClient.useSession()`. **Blocked** until step 1 is done: no button. **To do:** button **Sign in with GitHub**, to `/sign-in?redirect=/get-started`. **Done:** "Signed in as `<name>`." |
 | 3. Claude Code | Needs step 2. Reads the first page of `runner.list` with `limit: 100` every 5 s, and considers only active runners. **Done** wins when any online runner has Claude Code available. Otherwise the step is **unavailable** when any runner is online, else **offline**. Each state names the runner with the latest `lastSeenAt` among those it considers. **No runner:** "Connecting this computer's runner." In a browser that is not the desktop app, it shows the Add runner card's command instead. **Runner online, Claude Code unavailable:** "Install Claude Code, then run `claude` once in a terminal to sign in." Link **Install Claude Code** to `https://code.claude.com/docs/en/setup`. **Done:** "Claude Code `<version>` on `<runner name>`." **Runner offline:** "`<runner name>` is offline." |
 | 4. Add a repository | Needs step 2. Reads `repository.list` with `limit: 1`. **To do, admin:** button **Add repository**, to `/repositories`. **To do, member:** "An admin adds repositories." **Done:** "`<owner>/<name>` added." |
 
 - Once every step is done, the screen shows a button **Open Plangineer** to `/`.
-- **Remote states.** The status query shows a skeleton per card while loading and a failed card with **Try again** when the query fails. With stale data it keeps the cards and shows "Reconnecting" under the heading. Steps 3 and 4 have no empty state beyond their "to do" states.
+- **Remote states.** The status query shows a skeleton per card while loading and a failed card with **Try again** when the query fails. With stale data it keeps the cards and shows "Reconnecting" under the heading. The session in step 2, `runner.list` in step 3 and `repository.list` in step 4 each show a skeleton line in their card on first load and a failed line with **Try again** when their query fails. Steps 3 and 4 have no empty state beyond their "to do" states.
 - **Desktop detection.** The desktop app adds ` Plangineer-Desktop/<version>` to its user agent (step 8). The Claude Code step uses it only to choose which text to show for "No runner".
 - **Home card.** `_app/index.tsx` shows `GetStartedCard` above the account summary while step 3 or 4 is not done. The card reads "Finish setting up Plangineer" with a button **Get started**.
-- **Sign-in card.** With `githubApp: 'missing'`, the sign-in card shows "Plangineer is not set up yet." with a button **Get started** in place of the GitHub button.
+- **Sign-in card.** With `githubApp: 'missing'`, the sign-in card shows "Plangineer is not set up yet." with a button **Get started** in place of the GitHub button. While `instance.getStatus` loads, the card shows a skeleton button. When it fails, the card shows a failed alert with **Try again**.
 
 **Done when:**
 
 - 6a. A fragment `#setup-token=<value>` is stored in `sessionStorage` and removed from the URL.
 - 6b. With a token and no App, **Create GitHub App** posts a form to GitHub's `postUrl` with the manifest and a state that is stored.
 - 6c. Returning with a matching state calls `completeGithubApp` once and shows step 1 done. A mismatched state shows the mismatch text and calls nothing.
-- 6d. Each step renders each of its states in the table, from MSW responses.
-- 6e. The screen shows a skeleton while loading, a failed card with **Try again** on a failed status query, and "Reconnecting" with stale data.
+- 6d. Each step renders each of its states in the table, from MSW responses, with only the first unfinished step's button primary.
+- 6e. The screen shows a skeleton while loading, a failed card with **Try again** on a failed status query, and "Reconnecting" with stale data. Steps 2 to 4 each show their skeleton line and their failed line with **Try again**.
 - 6f. The home card shows while step 3 or 4 is not done and hides once both are.
-- 6g. The sign-in card shows **Get started** in place of the GitHub button when the App is missing.
+- 6g. The sign-in card shows **Get started** in place of the GitHub button when the App is missing, a skeleton button while the status loads, and a failed alert with **Try again** when it fails.
 - 6h. Screenshots at 1280 px and 375 px show `/get-started` in each step 1 state, with steps 3 and 4 each to do and done, and no horizontal scroll or target under 44 px.
 
 ### 7. Desktop app package
@@ -210,7 +211,7 @@ No index beyond the primary key and the `singleton` unique: every read takes the
 
 `apps/desktop` is the Electron 44.7.0 main process and imports only `contracts` (D2, D3). It starts the stack in a fixed order and stops it in reverse. It holds no server logic, no preload script and no IPC: it launches the bundles from step 2 and talks to the API over HTTP.
 
-- **Dependencies.** `electron` 44.7.0, `electron-updater` 6.8.9, `env-paths` 4.0.0, `execa` 10.1.0, `shell-env` 4.0.3, `@orpc/client` 1.15.5, `@orpc/contract` 1.15.5 and `@plangineer/contracts` (`workspace:*`). Every one is a `devDependency`, and `dependencies` stays empty: electron-builder requires `electron` there and copies production dependencies into the app. tsdown bundles everything except `electron` into `apps/desktop/dist/main.mjs`, so the packaged app ships no `node_modules`. `.gitignore` adds `apps/desktop/dist/`. `pnpm-workspace.yaml`'s `allowBuilds` gets `electron: true`, since its install script downloads the Electron binary.
+- **Dependencies.** `electron` 44.7.0, `electron-updater` 6.8.9, `env-paths` 4.0.0, `execa` 10.1.0, `shell-env` 4.0.3, `@orpc/client` 1.15.5, `@orpc/contract` 1.15.5 and `@plangineer/contracts` (`workspace:*`), plus the tools `tsdown` 0.23.0, `vitest` 5.0.3, `@types/node` 24.19.1 and `@playwright/test` 1.63.0. Every one is a `devDependency`, and `dependencies` stays empty: electron-builder requires `electron` there and copies production dependencies into the app. tsdown bundles everything except `electron` into `apps/desktop/dist/main.mjs`, so the packaged app ships no `node_modules`. `.gitignore` adds `apps/desktop/dist/`. `pnpm-workspace.yaml`'s `allowBuilds` gets `electron: true`, since its install script downloads the Electron binary.
 - **API client** (`api-client.ts`). `createDesktopClient(origin, fetch)` builds a `ContractRouterClient` with `RPCLink`, `SimpleCsrfProtectionLinkPlugin` and `ResponseValidationPlugin(contract)`, as the runner's `login-command.ts` does. The window session's `fetch` is passed in, so calls carry the signed-in cookie and pass the API's CSRF check.
 - **Tests.** `apps/desktop/vitest.config.ts` is the `desktop` project the root config picks up, and it excludes `*.stack.test.ts`. Tests that need the Postgres binaries or the step 2 bundles are named `*.stack.test.ts`, and `vitest.stack.config.ts` runs only them, as the `test:stack` script. Step 9's workflow runs it on every system. Stack tests pass a temp config, data and log folder and two free ports into `ensureServerEnv` and `startStack`, so they never use 47100, 47101 or the person's data. They sign a user in by running `node apps/api/src/test/e2e-session-cli.ts` with the stack's environment and no `--env-file`, which creates a new user in the stack's database.
 - **Paths.** `desktop-paths.ts` takes `envPaths('Plangineer', { suffix: '' })`. Resources are `process.resourcesPath` when packaged and `apps/desktop/stage/` from the checkout (step 9 fills it).
@@ -229,9 +230,9 @@ No index beyond the primary key and the `singleton` unique: every read takes the
 
 | Key | Value |
 | --- | --- |
-| `DATABASE_URL` | `postgres://plangineer:<password>@127.0.0.1:47101/plangineer`, with a 32-byte base64url password |
+| `DATABASE_URL` | `postgres://plangineer:<password>@127.0.0.1:47101/plangineer`, with a 32-byte base64url password (D17) |
 | `API_HOST` | `127.0.0.1` |
-| `API_PORT` | `47100` |
+| `API_PORT` | `47100` (D17) |
 | `BETTER_AUTH_URL` | `http://127.0.0.1:47100` |
 | `BETTER_AUTH_SECRET` | 32 random bytes as base64url |
 | `SETUP_TOKEN` | 32 random bytes as base64url |
@@ -247,8 +248,8 @@ On later starts, the file is the source of truth and is never rewritten. A key t
 - **Port check** (`port-check.ts`). `isPortFree(host, port)` listens on the port with `node:net` and closes at once. A busy port stops the start with `Port <n> is in use by another program. Free it, or change the port in <server.env path> as the desktop app guide describes.` The API port is checked before step 4 of the start order, and the Postgres port before `pg_ctl start`.
 - **Node processes** (`node-process.ts`). The migrate bundle, the API and the runner run with `utilityProcess.fork(modulePath, args, { env, stdio: 'pipe', serviceName })` on Electron's Node 24.21.0. `env` is the desktop's `process.env` merged with the values each process needs. `utilityProcess` takes a whole environment object, so this is the one place the desktop builds one (D12). Child stdout and stderr go to `desktop.log`.
 - **Runner `PATH`.** On macOS and Linux, an app opened from the dock or menu gets a minimal `PATH` that lacks `~/.local/bin`, where Claude Code installs, and Homebrew's `git`. `user-path.ts` reads the login shell's `PATH` with `shell-env` and passes it to the runner. On Windows the runner gets the desktop's `Path` unchanged.
-- **Stopping** (`stop-process-tree.ts`). The runner and API stop with `taskkill /pid <pid> /T /F` on Windows and `process.kill(pid, 'SIGTERM')` elsewhere. Each gets 10 s to exit before `SIGKILL`. The runner's own `SIGTERM` handler already stops its runs' process groups.
-- **Start order** (`stack.ts`). `startStack()` runs each step and stops at the first failure:
+- **Stopping** (`stop-process-tree.ts`, D24). The runner and API stop with `taskkill /pid <pid> /T /F` on Windows and `process.kill(pid, 'SIGTERM')` elsewhere. The API gets 10 s to exit before `SIGKILL`. The runner gets 20 s, longer than its own 10 s `STOP_GRACE_MS`, so its `SIGTERM` handler kills its runs' process groups before the desktop could kill the runner itself.
+- **Start order** (`stack.ts`). `startStack()` runs each step and stops at the first failure. It never seeds (D18):
   1. `ensureServerEnv()`.
   2. Start Postgres.
   3. Run `migrate.mjs`, and require exit 0. Every start runs it, so an upgrade migrates before the API starts (D11).
@@ -266,7 +267,7 @@ On later starts, the file is the source of truth and is never rewritten. A key t
 - 7c. Against the real Postgres 18.6.0 binaries, `postgres.ts` initializes an empty folder, starts, accepts a connection with the generated password on `127.0.0.1` with `listen_addresses` set to `localhost`, stops, and starts again with the data kept.
 - 7d. A data folder whose `PG_VERSION` is `17` fails with the message above, and `pg_ctl` never runs.
 - 7e. `startStack()` with the step 2 bundles and real Postgres reaches 200 on `/api/auth/ok` within 15 s on a warm start, and `stopStack()` leaves no Postgres, API or runner process.
-- 7f. On Windows the stop runs `taskkill` with `/T /F`, and on macOS and Linux it sends `SIGTERM`, then `SIGKILL` after 10 s.
+- 7f. On Windows the stop runs `taskkill` with `/T /F`. On macOS and Linux it sends `SIGTERM`, then `SIGKILL` after 10 s for the API and 20 s for the runner.
 - 7g. `user-path.ts` returns the login shell's `PATH` on macOS and Linux, and the unchanged `Path` on Windows.
 - 7h. dependency-cruiser allows `apps/desktop` to import only `contracts`, and fails an import into any other app.
 - 7i. With a server from the data folder already running, `postgres.ts` uses it and runs no `pg_ctl start`.
@@ -277,18 +278,18 @@ On later starts, the file is the source of truth and is never rewritten. A key t
 
 ### 8. Window, runner pairing, tray, login item and updates
 
-**Files:** `apps/desktop/src/main.ts`, `apps/desktop/src/app-window.ts`, `apps/desktop/src/navigation-policy.ts`, `apps/desktop/src/navigation-policy.test.ts`, `apps/desktop/src/runner-pairing.ts`, `apps/desktop/src/runner-pairing.test.ts`, `apps/desktop/src/runner-pairing.stack.test.ts`, `apps/desktop/src/tray.ts`, `apps/desktop/src/login-item.ts`, `apps/desktop/src/login-item.test.ts`, `apps/desktop/src/updates.ts`, `apps/desktop/src/updates.test.ts`
+**Files:** `apps/desktop/src/main.ts`, `apps/desktop/src/app-window.ts`, `apps/desktop/src/navigation-policy.ts`, `apps/desktop/src/navigation-policy.test.ts`, `apps/desktop/src/runner-pairing.ts`, `apps/desktop/src/runner-pairing.test.ts`, `apps/desktop/src/runner-pairing.stack.test.ts`, `apps/desktop/src/tray.ts`, `apps/desktop/src/login-item.ts`, `apps/desktop/src/login-item.test.ts`, `apps/desktop/src/updates.ts`, `apps/desktop/src/updates.test.ts`, `apps/desktop/src/quit.ts`, `apps/desktop/src/quit.test.ts`
 
 - **Single instance.** `app.requestSingleInstanceLock()`. A second launch shows the existing window and exits.
-- **Window** (`app-window.ts`). One `BrowserWindow` on the partition `persist:plangineer`, with `contextIsolation`, `sandbox`, no `nodeIntegration` and no preload. Its user agent is Electron's default plus ` Plangineer-Desktop/<app version>`. After `startStack()`, the desktop calls `instance.getStatus`. With `missing`, the window opens `<BETTER_AUTH_URL>/get-started#setup-token=<SETUP_TOKEN>`. Otherwise it opens `<BETTER_AUTH_URL>/`. Closing the window hides it, and the stack keeps running.
+- **Window** (`app-window.ts`, D17, D19). One `BrowserWindow` on the partition `persist:plangineer`, with `contextIsolation`, `sandbox`, no `nodeIntegration` and no preload. The partition's `setPermissionRequestHandler` and `setPermissionCheckHandler` deny every permission, since the window loads `https://github.com`. Its user agent is Electron's default plus ` Plangineer-Desktop/<app version>`. After `startStack()`, the desktop calls `instance.getStatus`. With `missing`, the window opens `<BETTER_AUTH_URL>/get-started#setup-token=<SETUP_TOKEN>`. Otherwise it opens `<BETTER_AUTH_URL>/`. Closing the window hides it, and the stack keeps running.
 - **Navigation policy** (`navigation-policy.ts`). Navigation stays in the window for `BETTER_AUTH_URL`'s origin and `https://github.com`, where sign-in, the App's creation and its install happen. Any other `http` or `https` navigation or new window opens in the default browser with `shell.openExternal`. Every other scheme is refused.
-- **Runner pairing** (`runner-pairing.ts`, D13). Once the API is up, the desktop forks the runner with `start --server <BETTER_AUTH_URL>`. It never reads the runner's files. When `start` exits 3, which means no pairing, a pairing for another origin or a revoked token, the desktop polls `GET /api/auth/get-session` every 2 s through the window's session, using `session.fetch`. Once a user is signed in:
+- **Runner pairing** (`runner-pairing.ts`, D13, D22). Once the API is up, the desktop forks the runner with `start --server <BETTER_AUTH_URL>`. It never reads the runner's files. When `start` exits 3, which means no pairing, a pairing for another origin or a revoked token, the desktop polls `GET /api/auth/get-session` every 2 s through the window's session, with `session.fromPartition('persist:plangineer').fetch(url, { credentials: 'include' })`. The oRPC client gets the same function as its `fetch`. Once a user is signed in:
   1. Fork the runner with `login --server <BETTER_AUTH_URL> --name <os.hostname()> --json`.
   2. Read its first line as `RunnerLoginEvent`. On `login_started`, call `runner.approveLogin({ userCode })` with an oRPC client whose `fetch` is the window session's `fetch`, so the signed-in user approves it.
   3. Wait for `paired` and exit 0. Then fork the runner with `start --server <BETTER_AUTH_URL>` again.
-  4. On `failed`, an approve error or a nonzero exit, log it to `desktop.log` and try again on the next session poll, at most 3 times per launch.
+  4. On `failed`, an approve error or a nonzero exit, log it to `desktop.log` and try again on the next session poll. After the third failure in a row, show a native dialog, `This computer's runner could not be paired: <last message>`, with **Retry** and **Open logs folder**. **Retry** resets the count.
 
-  `login` overwrites `runner.json`, so a changed port or a revoked runner pairs again by the same path. A runner that exits with code 1 is started again after 5 s.
+  `login` overwrites `runner.json`, so a changed port or a revoked runner pairs again by the same path. A runner that exits with code 1 is started again after 5 s. After 5 exits with code 1 in a row, the desktop stops restarting it and shows a native dialog, `This computer's runner keeps stopping: <last stderr line>`, with **Retry** and **Open logs folder**.
 - **Tray** (`tray.ts`). Menu items, in order: **Open Plangineer**, **Open at login** (checkbox), **Check for updates**, **Open logs folder** and **Quit Plangineer**. On macOS, clicking the dock icon also opens the window.
 - **Login item** (`login-item.ts`). **Open at login** is on after the first successful start (D21), and the app then starts with `--hidden`, which runs the stack and tray with no window.
 
@@ -300,25 +301,27 @@ On later starts, the file is the source of truth and is never rewritten. A key t
 
 On macOS, an app not in `/Applications` asks once to move there with `app.moveToApplicationsFolder()`, so the login item and updates have a stable path.
 
+- **Quit** (`quit.ts`). Electron does not wait for async quit handlers. So `before-quit`, while the stack runs, calls `event.preventDefault()`, awaits `stopStack()`, then calls `app.quit()` again, which now finds the stack stopped. **Restart to update** awaits `stopStack()` before `autoUpdater.quitAndInstall()`. An update installed on quit runs after the same stop, so no Postgres or API process holds a file the installer replaces.
 - **Updates** (`updates.ts`, D15). electron-updater uses the GitHub provider from step 9's publish settings. It checks at start and every 6 hours.
   - **Windows and Linux.** Downloads in the background, then the tray adds **Restart to update to `<version>`**, and the update installs on quit.
   - **macOS.** An unsigned app cannot replace itself, so `autoDownload` is off. A found update adds **Download Plangineer `<version>`** to the tray, which opens `https://github.com/tankafide/Plangineer/releases/tag/v<version>`.
 
 **Done when:**
 
-- 8a. The navigation policy keeps the app origin and `https://github.com` in the window, sends other `http` and `https` URLs to the default browser, and refuses `file:` and `javascript:`.
+- 8a. The navigation policy keeps the app origin and `https://github.com` in the window, sends other `http` and `https` URLs to the default browser, and refuses `file:` and `javascript:`. The permission handlers deny every request.
 - 8b. Against the step 2 API bundle with a signed-in session cookie, `runner-pairing.ts` runs `login --json`, approves the login request as that user, and the runner reaches `paired` with `runner.json` written.
-- 8c. A pairing whose approve call fails is retried on the next poll, and stops after 3 failures in one launch.
+- 8c. A pairing whose approve call fails is retried on the next poll, and after 3 failures in a row shows the dialog, whose **Retry** starts again from zero.
 - 8d. The login item writes the LaunchAgent plist on macOS and the autostart file on Linux with `--hidden`, and removes each when turned off.
 - 8e. On macOS a found update offers the release page and downloads nothing. On Windows and Linux it downloads and offers a restart.
 - 8f. Opening the packaged app with `--hidden` starts the stack, `/api/auth/ok` answers 200, and no window is visible.
-- 8g. A runner that exits with code 3 is paired again, and one that exits with code 1 is started again after 5 s.
+- 8g. A runner that exits with code 3 is paired again, one that exits with code 1 is started again after 5 s, and after 5 exits with code 1 in a row the dialog shows.
+- 8h. Quitting while the stack runs awaits `stopStack()` before the app exits, and **Restart to update** calls `quitAndInstall` only after `stopStack()` resolves.
 
 ### 9. Packaging and releases
 
-**Files:** `scripts/fetch-postgres.mjs`, `scripts/fetch-postgres.test.mjs`, `scripts/build-desktop.mjs`, `scripts/build-desktop.test.mjs`, `scripts/render-desktop-icons.mjs`, `scripts/release-assets.mjs`, `apps/desktop/build/icon.svg`, `apps/desktop/build/icon.png`, `apps/desktop/build/tray-icon.png`, `apps/desktop/build/tray-icon@2x.png`, `apps/desktop/electron-builder.yml`, `apps/desktop/package.json`, `apps/desktop/e2e/first-run.spec.ts`, `apps/desktop/playwright.config.ts`, `apps/desktop/vitest.stack.config.ts`, `package.json`, `.gitignore`, `.github/workflows/desktop.yml`
+**Files:** `scripts/fetch-postgres.mjs`, `scripts/fetch-postgres.test.mjs`, `scripts/build-desktop.mjs`, `scripts/build-desktop.test.mjs`, `scripts/render-desktop-icons.mjs`, `scripts/release-assets.mjs`, `apps/desktop/build/icon.svg`, `apps/desktop/build/icon.png`, `apps/desktop/build/tray-icon.png`, `apps/desktop/build/tray-icon@2x.png`, `apps/desktop/electron-builder.yml`, `apps/desktop/package.json`, `apps/desktop/e2e/first-run.spec.ts`, `apps/desktop/playwright.config.ts`, `apps/desktop/vitest.stack.config.ts`, `package.json`, `pnpm-lock.yaml`, `.gitignore`, `.github/workflows/desktop.yml`
 
-- **Postgres binaries.** `fetch-postgres.mjs [--platform <win32|darwin|linux>] [--arch <x64|arm64>]` defaults to the current system. It downloads `https://github.com/theseus-rs/postgresql-binaries/releases/download/18.6.0/postgresql-18.6.0-<triple>.tar.gz`, checks its SHA-256 against the pinned value, and extracts it into `apps/desktop/stage/postgres` without its top folder, using `tar` 7.5.22. A hash mismatch deletes the download and exits 1.
+- **Postgres binaries.** `fetch-postgres.mjs [--platform <win32|darwin|linux>] [--arch <x64|arm64>]` defaults to the current system. It downloads `https://github.com/theseus-rs/postgresql-binaries/releases/download/18.6.0/postgresql-18.6.0-<triple>.tar.gz`, checks its SHA-256 against the pinned value, and extracts it into `apps/desktop/stage/postgres` without its top folder, using `tar` 7.5.22. A hash mismatch deletes the download and exits 1. The root `package.json` adds `tar` 7.5.22 and `electron-builder` 26.15.3 as devDependencies, since `scripts/` resolves them through `binPath` and imports.
 
 | Platform and arch | Triple | SHA-256 |
 | --- | --- | --- |
@@ -350,8 +353,12 @@ On macOS, an app not in `/Applications` asks once to move there with `app.moveTo
 
   `publish` is `{ provider: github, owner: tankafide, repo: Plangineer, releaseType: draft }`. The app's version is `apps/desktop/package.json`'s, starting at `0.1.0`, and its tag is `v<version>`.
 - **Icons.** `icon.svg` is the Lucide `blocks` icon in white on a rounded square of the `visual-style` primary color. `render-desktop-icons.mjs` renders it to `icon.png` (1024 px), `tray-icon.png` (16 px) and `tray-icon@2x.png` (32 px) with Playwright's screenshot and a transparent background. Playwright is a dependency of `apps/web`, so the script resolves `@playwright/test` with `createRequire` from `apps/web/package.json` and imports that path. The PNGs are committed.
-- **Workflow** (`desktop.yml`). It runs on pull requests that touch `apps/`, `packages/`, `scripts/` or the workflow, and on tags `v*`. A matrix of `windows-latest` (x64), `macos-latest` (arm64), `macos-15-intel` (x64) and `ubuntu-latest` (x64) runs `pnpm desktop:build`. Then it runs `pnpm --filter @plangineer/desktop test:stack`, the Vitest project for 7c to 7e and 8b, on that system. `ubuntu-latest` also runs `first-run.spec.ts` under `xvfb-run`. On a tag, the build runs with `--publish always` and `GH_TOKEN`, under `permissions: contents: write`, which fills a draft release. The engineer publishes the draft.
-- **Desktop journey** (`first-run.spec.ts`). It launches the packaged Linux app with Playwright's `_electron.launch`, with `XDG_CONFIG_HOME`, `XDG_DATA_HOME` and `XDG_STATE_HOME` set to temp folders. It waits for the window to show `/get-started` with **Create GitHub App** enabled, quits, and checks that `server.env` exists and no Postgres process is left. A second test launches with `--hidden` and checks 8f.
+- **Workflow** (`desktop.yml`). It runs on pull requests that touch `apps/`, `packages/`, `scripts/` or the workflow, and on tags `v*`. A matrix of `windows-latest` (x64), `macos-latest` (arm64), `macos-15-intel` (x64) and `ubuntu-latest` (x64) runs `pnpm desktop:build`. Then it runs `pnpm --filter @plangineer/desktop test:stack`, the Vitest project for 7c to 7e and 8b, on that system. `ubuntu-latest` also runs `first-run.spec.ts` under `xvfb-run`. On a tag, a `draft` job runs first. It fails unless the tag equals `v` plus `apps/desktop/package.json`'s version, then runs `gh release create <tag> --draft --title <tag>`. The matrix jobs need it and build with `--publish always` and `GH_TOKEN`, under `permissions: contents: write`, so each uploads into the one existing draft. Each macOS job writes `latest-mac.yml` for its own architecture and the later upload replaces the earlier. That is harmless, because the macOS app reads only the version from it (step 8).
+- **Desktop journey** (`first-run.spec.ts`). It launches the packaged Linux app with Playwright's `_electron.launch`, with `XDG_CONFIG_HOME`, `XDG_DATA_HOME` and `XDG_STATE_HOME` set to temp folders. It waits for the window to show `/get-started` with **Create GitHub App** enabled, quits, and checks that `server.env` exists and no Postgres process is left. A second test launches with `--hidden` and checks 8f. A third test proves the real session cookie path of D13:
+  1. Launch the app and wait for `/api/auth/ok`.
+  2. Insert an App row with `e2e-github-app-cli.ts` and get a session cookie with `e2e-session-cli.ts`, both run with node and the app's `server.env` plus an `API_LOG_FILE` in the temp folder.
+  3. Set the cookie into the `persist:plangineer` partition with `electronApp.evaluate` and `session.cookies.set`.
+  4. Assert, through `runner.list` with the same cookie, that a runner named after the host comes online within 60 s.
 - **Release check.** `scripts/release-assets.mjs <tag>` runs `gh release view <tag> --json assets` with execa and fails naming each asset of 9e that is missing.
 
 **Done when:**
@@ -360,13 +367,14 @@ On macOS, an app not in `/Applications` asks once to move there with `app.moveTo
 - 9b. `build-desktop.mjs` lays out `stage/` as the table says, and fails naming the first missing source path.
 - 9c. `pnpm desktop:build` produces the installer for its system on each of the four matrix jobs.
 - 9d. The packaged Linux app, opened with empty data folders, shows `/get-started` with **Create GitHub App** enabled, and leaves no Postgres process after quitting.
+- 9f. In the packaged Linux app, a session cookie set in the window's partition lets the desktop pair its runner, which comes online.
 - 9e. A `v*` tag creates a draft release holding the Windows installer, both macOS dmgs and the AppImage, with `latest.yml`, `latest-mac.yml` and `latest-linux.yml`.
 
 ### 10. Docs and rules
 
-**Files:** `docs/engineering/stack-decisions.md`, `docs/plans/mvp-roadmap.md`, `docs/product/mvp.md`, `README.md`, `docs/engineering/desktop-app.md`, `.agents/skills/auth-and-access/SKILL.md`, `.agents/skills/github-integration/SKILL.md`, `.agents/skills/security/SKILL.md`, `.agents/skills/data-model-design/SKILL.md`, `.agents/skills/tooling-and-infra/SKILL.md`, `.agents/skills/cross-platform/SKILL.md`
+**Files:** `docs/engineering/stack-decisions.md`, `docs/plans/mvp-roadmap.md`, `docs/product/mvp.md`, `README.md`, `docs/engineering/desktop-app.md`, `.agents/skills/auth-and-access/SKILL.md`, `.agents/skills/github-integration/SKILL.md`, `.agents/skills/security/SKILL.md`, `.agents/skills/data-model-design/SKILL.md`, `.agents/skills/tooling-and-infra/SKILL.md`, `.agents/skills/cross-platform/SKILL.md`, `.agents/skills/api-server/SKILL.md`, `.agents/skills/runner-adapters/SKILL.md`
 
-- **`stack-decisions.md`.** Add rows: Desktop (Electron 44, electron-builder 26, electron-updater 6, Postgres 18.6.0 binaries from theseus-rs), and the package layout row `apps/desktop | Electron shell that launches the server, web and runner bundles | contracts`. Commands: remove `pnpm setup:github-app`, and add `pnpm build`, `pnpm desktop:build` and `pnpm desktop:start`. `pnpm setup:env` now writes `SETUP_TOKEN` and no GitHub values. `pnpm dev` prints the Get started link.
+- **`stack-decisions.md`.** Add rows: Desktop (Electron 44, electron-builder 26, electron-updater 6, Postgres 18.6.0 binaries from theseus-rs), and the package layout row `apps/desktop | Electron shell that launches the server, web and runner bundles | contracts`. The Runner build row says every dependency is bundled and the package has no runtime dependencies. Commands: remove `pnpm setup:github-app`, and add `pnpm build`, `pnpm desktop:build` and `pnpm desktop:start`. `pnpm setup:env` now writes `SETUP_TOKEN` and no GitHub values. `pnpm dev` prints the Get started link.
 - **`desktop-app.md`.** What the app installs and where, per system: the paths table from step 7, the first-run steps with the manual clicks, the unsigned-build warnings and how to pass them on macOS and Windows, how to change a port: `API_PORT` and `BETTER_AUTH_URL`, or the port in `DATABASE_URL`, in `server.env`, then the GitHub App's callback, setup and redirect URLs on GitHub to match, after which the runner pairs again by itself (step 8), and how to move to a team server by `pg_dump` of the embedded database with the bundled `pg_dump`. It states the webhook limit (D16).
 - **`README.md`.** The install section links to the latest release and `desktop-app.md`. The developer checkout section follows.
 - **Roadmap and MVP doc.** The desktop row records this plan, and the MVP's open "Desktop shell and packaging" item is answered.
@@ -377,6 +385,8 @@ On macOS, an app not in `/Applications` asks once to move there with `app.moveTo
   - `data-model-design`: a GitHub App record, one row, never deleted by the app, secrets encrypted.
   - `tooling-and-infra`: the `bundle` CI job and the `desktop.yml` workflow.
   - `cross-platform`: the `utilityProcess` environment exception from D12.
+  - `api-server`: the Logging bullet uses `pino.multistream` with a level per stream and `API_LOG_FILE`, never `pino.transport`.
+  - `runner-adapters`: the Package row says every dependency is bundled and the package has no runtime dependencies.
 - Run `pnpm skills:sync` and `pnpm skills:lint`.
 
 **Done when:**
@@ -403,14 +413,16 @@ All decisions were made on Oct 8, 2026. The engineer chose D6 and D15. The plann
 - **D13. The desktop approves its own runner.** The desktop starts the login request itself, reads the user code from the runner's stdout and approves it through the window's signed-in session. No approval page appears and no secret leaves the machine. The request never passes through a link, so the phishing defense the approval page provides is not needed. The runner belongs to whoever signs in first in the window. A second machine still pairs with `plangineer-runner login`.
 - **D14. Left out of the first version.** Hosted or team deployment, Codex, the mobile app, Windows and Linux on arm64, `.deb` and `.rpm`, organization-owned Apps, Postgres major upgrades, and a standalone runner binary. The roadmap asked the plan to settle the standalone binary. The desktop runs the runner on Electron's Node, so a binary would serve only second machines, where `npx plangineer-runner` works. It can be built later with Node SEA once the ESM backport lands.
 - **D15. Unsigned installers on GitHub Releases (engineer's choice).** The repository is public, and people download installers from its releases with no store. On macOS, the first open needs System Settings > Privacy & Security > Open Anyway, and updates are offered as a download. On Windows, SmartScreen asks once, and updates install themselves. AppImage updates itself. The macOS login item uses a LaunchAgent, since `setLoginItemSettings` can fail silently for an unsigned app. Signing can be added later with no redesign.
-- **D16. Webhooks need a public URL.** The manifest keeps webhooks inactive, as today. A later feature that needs GitHub events will not work from a laptop without a tunnel, and `desktop-app.md` says so.
+- **D16. Webhooks need a public URL.** The manifest keeps webhooks inactive, as at `59223b1`. A later feature that needs GitHub events will not work from a laptop without a tunnel, and `desktop-app.md` says so.
 - **D17. Fixed ports 47100 and 47101 on `127.0.0.1`.** The GitHub App's callback URL holds the port, so it must not change between runs. A port in use stops the start with a message naming it.
 - **D18. No seed in the desktop app.** The seed is dev data: fake users and `acme` repositories. The desktop migrates only.
-- **D19. Sign-in happens in the app window.** The session cookie must land in the window that uses it. GitHub's password, authenticator app, GitHub Mobile and security key sign-ins work there. A macOS passkey may not, and the person then uses another GitHub method.
+- **D19. Sign-in happens in the app window.** The session cookie must land in the window that uses it. GitHub's password, authenticator app, GitHub Mobile and security key sign-ins work there. A macOS passkey is not offered there, so the person uses another GitHub method.
 - **D20. One build for the published runner.** Bundling every dependency into `plangineer-runner` removes its install step and matches what the desktop runs. The cost is a larger package, which `npx` downloads once.
 - **D21. Open at login is on by default.** The request asks for the runner to keep running at login, and runs need the local API and Postgres too, so the whole app starts hidden at login. The person turns it off with the tray's **Open at login** checkbox.
 - **D22. The desktop asks the runner, not its files.** `start --server` and exit code 3 tell the desktop when to pair, so the desktop never reads `runner.json` and the runner's file format stays its own.
 - **D23. The GitHub App store re-reads until it finds a row.** The e2e CLI and a second API process can insert the App while an API runs. Reading again while nothing is cached costs one primary-key read per request only before setup.
+- **D24. The desktop keeps its own process stop.** `apps/desktop` may import only `contracts`, so it cannot use the runner's `stop-process.ts`. The two also differ: the desktop stops Node processes it forked with `utilityProcess`, and the runner stops agent CLIs it spawned in their own groups. The desktop's grace for the runner is longer than the runner's own, so the runner always stops its agents first. Rejected: a shared package for one `taskkill` call.
+- **D25. Follow-ups after merge.** The engineer publishes runner 0.3.0 with `pnpm runner:publish`, since its package changes in steps 2 and 5, and publishes the first draft release once the release check passes. Both are releases, so they wait for the merge.
 
 ## Constraints
 
@@ -435,6 +447,7 @@ All decisions were made on Oct 8, 2026. The engineer chose D6 and D15. The plann
 | 2a. Builds produce their files | | | | | ✓ | |
 | 2b. Bundle smoke on three systems | | ✓ | | | | |
 | 2c. Bundled runner prints its version | | ✓ | | | | |
+| 2d. Build without `.env` | | ✓ | | | | |
 | 3a. SPA and assets served | | ✓ | | | | |
 | 3b. API 404s stay | | ✓ | | | | |
 | 3c. No web without the variable | | ✓ | | | | |
@@ -486,11 +499,13 @@ All decisions were made on Oct 8, 2026. The engineer chose D6 and D15. The plann
 | 8e. Update behavior per system | ✓ | | | | | |
 | 8f. Hidden start | | | | ✓ | | |
 | 8g. Runner restart or re-pair by exit code | ✓ | | | | | |
+| 8h. Quit awaits the stack stop | ✓ | | | | | |
 | 9a. Postgres fetch and hash | ✓ | | | | | |
 | 9b. Stage layout | ✓ | | | | | |
 | 9c. Installer per system | | | | | ✓ | |
 | 9d. Packaged first run | | | | ✓ | | |
 | 9e. Draft release assets | | | | | ✓ | |
+| 9f. Packaged app pairs its runner | | | | ✓ | | |
 | 10a. Skills lint | | | | | ✓ | |
 | 10b. No old setup terms | | | | | ✓ | |
 | C1. Local only | | ✓ | | | | |
@@ -522,6 +537,3 @@ Unit tests cover the schemas, the loggers, `parseEnv`, `server-env.ts`, the stop
 
 - **The gate, on Windows, macOS and Linux.** The engineer downloads the installer from a draft release built by `desktop.yml` and opens it, passing the unsigned warning as `desktop-app.md` describes. They click **Create GitHub App**, confirm on GitHub, sign in with GitHub, install the App on one repository, and see the Claude Code step done and a repository added, with no terminal. This proves the manifest flow and the GitHub sign-in in the app window against real GitHub, which no test can call.
 - The engineer turns the machine off and on and sees the runner online in the Runners screen without opening the window, on each system. This proves the login item itself, which `first-run.spec.ts` cannot.
-- The engineer publishes the first draft release once the release check passes.
-- The engineer updates their own `.env` once step 1 and step 4 land: add `API_HOST`, `API_LOG_FILE` and `SETUP_TOKEN` and remove the five `GITHUB_APP_*` lines, or delete `.env` and run `pnpm setup:env` again. They then create their dev GitHub App once from the link `pnpm dev` prints.
-- The engineer runs `pnpm runner:publish` after this change merges, since the runner's package changes in step 2.
