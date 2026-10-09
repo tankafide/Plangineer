@@ -61,9 +61,7 @@ export function createAppWindow(options: AppWindowOptions): BrowserWindow {
     webPreferences: webPreferences(),
   });
   const openExternal = (url: string) => options.openExternal(url);
-  guardNavigation(window.webContents, options.origin, openExternal, (url) => {
-    void window.loadURL(url);
-  });
+  guardNavigation(window.webContents, options.origin, openExternal);
   window.on('close', (event) => {
     if (options.isQuitting()) return;
     event.preventDefault();

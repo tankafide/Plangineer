@@ -3,7 +3,7 @@ import type { DesktopLog } from './desktop-log.ts';
 import type { DesktopPaths } from './desktop-paths.ts';
 import { type ForkNode, type RunningNode, runNode } from './node-process.ts';
 import { assertPortFree } from './port-check.ts';
-import { type PostgresOptions, startPostgres, stopPostgres } from './postgres.ts';
+import { ensureDatabase, type PostgresOptions, startPostgres, stopPostgres } from './postgres.ts';
 import { ensureServerEnv, requireValue, type ServerEnv } from './server-env.ts';
 import { API_STOP_GRACE_MS, type StopSystem, stopProcessTree } from './stop-process-tree.ts';
 
@@ -127,7 +127,9 @@ export async function startStack(options: StackOptions): Promise<LocalStack> {
       checkPortFree: (port) => assertPortFree('127.0.0.1', port, paths.serverEnv),
     };
     await startPostgres(postgresOptions);
+    // Recorded before the database check, so a failed check still stops the server.
     postgres = postgresOptions;
+    await ensureDatabase(postgresOptions);
   });
 
   await step('Migrate the database', async () => {

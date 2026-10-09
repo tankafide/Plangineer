@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { type PostgresOptions, startPostgres, stopPostgres } from './postgres.ts';
+import { ensureDatabase, type PostgresOptions, startPostgres, stopPostgres } from './postgres.ts';
 import { freePort, postgresRunning, psql, STAGE_DIR } from './test/stack-fixture.ts';
 
 describe('postgres with the real Postgres 18.6.0 binaries', () => {
@@ -32,6 +32,7 @@ describe('postgres with the real Postgres 18.6.0 binaries', () => {
 
   it('initializes an empty folder, starts on localhost, stops, and starts again with the data kept', async () => {
     await startPostgres(options);
+    await ensureDatabase(options);
 
     expect(await psql(options.databaseUrl, 'SELECT current_user')).toBe('plangineer');
     expect(await psql(options.databaseUrl, 'SHOW listen_addresses')).toBe('localhost');
@@ -46,14 +47,17 @@ describe('postgres with the real Postgres 18.6.0 binaries', () => {
     expect(await postgresRunning(options.dataDir)).toBe(false);
 
     await startPostgres(options);
+    await ensureDatabase(options);
     expect(await psql(options.databaseUrl, 'SELECT id FROM kept')).toBe('7');
   });
 
   it('uses a server already running from the data folder and runs no pg_ctl start', async () => {
     await startPostgres(options);
+    await ensureDatabase(options);
     checkedPorts = [];
 
     await startPostgres(options);
+    await ensureDatabase(options);
 
     // The port check runs only before pg_ctl start, which a running server would fail.
     expect(checkedPorts).toEqual([]);
@@ -62,10 +66,12 @@ describe('postgres with the real Postgres 18.6.0 binaries', () => {
 
   it('creates the database on the next start when a first run stopped before createdb', async () => {
     await startPostgres(options);
+    await ensureDatabase(options);
     await psql(options.databaseUrl, 'DROP DATABASE plangineer', 'postgres');
     await stopPostgres(options);
 
     await startPostgres(options);
+    await ensureDatabase(options);
 
     expect(await psql(options.databaseUrl, 'SELECT current_database()')).toBe('plangineer');
   });

@@ -92,6 +92,20 @@ describe('startStack with the built bundles and real Postgres', () => {
     expect(await postgresRunning(fixture.paths.postgresData)).toBe(false);
   });
 
+  it('stops Postgres when its database check fails after the server started', async () => {
+    await (await startStack(fixture.stackOptions)).stop();
+    const text = await readFile(fixture.paths.serverEnv, 'utf8');
+    const databaseUrl = new URL(/^DATABASE_URL=(.*)$/m.exec(text)?.[1] ?? '');
+    const wrong = new URL(databaseUrl);
+    wrong.password = 'not-the-password';
+    await writeFile(fixture.paths.serverEnv, text.replace(databaseUrl.href, wrong.href));
+
+    const error = await startFailure(fixture);
+
+    expect(error.step).toBe('Start Postgres');
+    expect(await postgresRunning(fixture.paths.postgresData)).toBe(false);
+  });
+
   it('fails within 1 s of an API exit during startup, with its exit code and last stderr line', async () => {
     await ensureServerEnv({
       examplePath: fixture.paths.envExample,

@@ -1,4 +1,4 @@
-import { createWriteStream, mkdirSync, type WriteStream } from 'node:fs';
+import { appendFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 
 type Level = 'debug' | 'info' | 'warn' | 'error';
@@ -11,7 +11,6 @@ export interface DesktopLog {
   error(message: unknown): void;
   /** Masks a value wherever a later line holds it, such as the Postgres password. */
   addSecret(value: string): void;
-  close(): Promise<void>;
 }
 
 const REDACTED = '[redacted]';
@@ -21,16 +20,18 @@ function text(message: unknown): string {
   return typeof message === 'string' ? message : JSON.stringify(message);
 }
 
-/** Appends timestamped lines to `desktop.log`, never writing a registered secret. */
+/**
+ * Appends timestamped lines to `desktop.log`, never writing a registered secret. Each line is
+ * written synchronously, so the lines logged just before the app quits or crashes are kept.
+ */
 export function createDesktopLog(file: string): DesktopLog {
   mkdirSync(path.dirname(file), { recursive: true });
-  const stream: WriteStream = createWriteStream(file, { flags: 'a' });
   const secrets = new Set<string>();
 
   function write(level: Level, message: unknown): void {
     let line = text(message);
     for (const secret of secrets) line = line.replaceAll(secret, REDACTED);
-    stream.write(`${new Date().toISOString()} ${level} ${line}\n`);
+    appendFileSync(file, `${new Date().toISOString()} ${level} ${line}\n`);
   }
 
   return {
@@ -41,6 +42,5 @@ export function createDesktopLog(file: string): DesktopLog {
     addSecret: (value) => {
       if (value !== '') secrets.add(value);
     },
-    close: () => new Promise((resolve) => stream.end(resolve)),
   };
 }

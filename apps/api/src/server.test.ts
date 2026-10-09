@@ -1,4 +1,5 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createServer } from 'node:net';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { silentLogger, testEnv } from './test/fixtures.ts';
 import { createTestDatabase, type TestDatabase } from './test/test-database.ts';
 import { startServer } from './server.ts';
@@ -43,6 +44,29 @@ describe('startServer', () => {
     await expect(start).rejects.toThrow(
       'The stored GitHub App cannot be decrypted. BETTER_AUTH_SECRET changed since the App was created.',
     );
+  });
+
+  it('fails on a port in use, leaving nothing open that keeps the process alive', async () => {
+    const busy = createServer();
+    await new Promise<void>((resolve) => busy.listen(0, '127.0.0.1', resolve));
+    const address = busy.address();
+    if (address === null || typeof address === 'string') throw new Error('No port');
+    const handles = process.getActiveResourcesInfo().length;
+
+    try {
+      await expect(
+        startServer({
+          env: testEnv({ DATABASE_URL: database.url, API_PORT: address.port }),
+          logger: silentLogger,
+        }),
+      ).rejects.toThrow('EADDRINUSE');
+
+      await vi.waitFor(() =>
+        expect(process.getActiveResourcesInfo().length).toBeLessThanOrEqual(handles),
+      );
+    } finally {
+      await new Promise((resolve) => busy.close(resolve));
+    }
   });
 
   it('listens only on the host API_HOST names', async () => {

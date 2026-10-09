@@ -23,7 +23,8 @@ import type { ForkNode } from './node-process.ts';
 import { createQuitController } from './quit.ts';
 import { startRunnerPairing, type RunnerPairing } from './runner-pairing.ts';
 import { requireValue } from './server-env.ts';
-import { type LocalStack, StackStartError, startStack } from './stack.ts';
+import { StackStartError, startStack } from './stack.ts';
+import { createStackSlot } from './stack-slot.ts';
 import { realStopSystem } from './stop-process-tree.ts';
 import { trayMenu, type TrayState } from './tray.ts';
 import { type UpdateOffer, startUpdates } from './updates.ts';
@@ -42,7 +43,7 @@ const log = createDesktopLog(paths.desktopLog);
 const forkNode: ForkNode = (modulePath, args, { env, serviceName }) =>
   utilityProcess.fork(modulePath, args, { env, serviceName, stdio: 'pipe' });
 
-let stack: LocalStack | undefined;
+const stackSlot = createStackSlot();
 let pairing: RunnerPairing | undefined;
 let appWindow: BrowserWindow | undefined;
 let startupWindow: BrowserWindow | undefined;
@@ -53,8 +54,7 @@ const trayState: TrayState = { packaged: app.isPackaged, openAtLogin: false, upd
 async function stopStack(): Promise<void> {
   await pairing?.stop();
   pairing = undefined;
-  await stack?.stop();
-  stack = undefined;
+  await stackSlot.stop();
 }
 
 const quit = createQuitController({ quit: () => app.quit(), stopStack, log });
@@ -89,6 +89,7 @@ async function retryDialog(message: string, detail: string, buttons: string[]): 
 }
 
 function showWindow(): void {
+  const stack = stackSlot.stack;
   if (appUrl === undefined || stack === undefined) {
     startupWindow?.show();
     return;
@@ -143,14 +144,16 @@ function sessionFetch(): SessionFetch {
 
 /** Starts the stack and finds the first page: Get started until a GitHub App exists. */
 async function startAndFindPage(): Promise<string> {
-  stack = await startStack({
-    paths,
-    apiPort: API_PORT,
-    postgresPort: POSTGRES_PORT,
-    fork: forkNode,
-    log,
-    stopSystem: realStopSystem,
-  });
+  const stack = await stackSlot.start(() =>
+    startStack({
+      paths,
+      apiPort: API_PORT,
+      postgresPort: POSTGRES_PORT,
+      fork: forkNode,
+      log,
+      stopSystem: realStopSystem,
+    }),
+  );
   const client = createDesktopClient(stack.origin, sessionFetch());
   const status = await client.instance.getStatus();
   if (status.githubApp === 'configured') return `${stack.origin}/`;
@@ -166,8 +169,8 @@ async function startWithRetry(): Promise<boolean> {
       return true;
     } catch (error) {
       log.error(error);
-      await stack?.stop();
-      stack = undefined;
+      await stackSlot.stop();
+      if (quit.quitting) return false;
       const step = error instanceof StackStartError ? error.step : 'Open Plangineer';
       const reason = error instanceof Error ? error.message : String(error);
       const retry = await retryDialog('Plangineer could not start', `${step}: ${reason}`, [
@@ -213,6 +216,8 @@ async function launch(): Promise<void> {
   const started = await startWithRetry();
   startupWindow?.destroy();
   startupWindow = undefined;
+  if (quit.quitting) return;
+  const stack = stackSlot.stack;
   if (!started || stack === undefined) {
     app.quit();
     return;
@@ -266,6 +271,8 @@ async function main(): Promise<void> {
   prepareSession(session.fromPartition(PARTITION), app.getVersion());
   await offerMoveToApplications();
   app.on('before-quit', (event) => quit.onBeforeQuit(event));
+  // The tray keeps the app running with no window, so closing the last one never quits.
+  app.on('window-all-closed', () => {});
   app.on('second-instance', showWindow);
   app.on('activate', showWindow);
   tray = new Tray(path.join(import.meta.dirname, 'tray-icon.png'));

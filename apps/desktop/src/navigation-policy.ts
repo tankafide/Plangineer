@@ -28,14 +28,15 @@ export interface GuardedContents {
 }
 
 /**
- * Applies the policy to every navigation, redirect and new window. A new window is always
- * denied: an allowed URL loads in the one window instead.
+ * Applies the policy to every navigation and redirect. A new window is always denied, and an
+ * `http` or `https` one opens in the default browser: GitHub's sign-in, App creation and install
+ * are same-window flows, and a page such as the App's settings would otherwise replace the app
+ * with no way back.
  */
 export function guardNavigation(
   contents: GuardedContents,
   appOrigin: string,
   openExternal: (url: string) => Promise<void>,
-  loadInWindow: (url: string) => void,
 ): void {
   function blockUnlessAllowed(event: PreventableEvent, url: string): void {
     const decision = decideNavigation(url, appOrigin);
@@ -46,9 +47,7 @@ export function guardNavigation(
   contents.on('will-navigate', blockUnlessAllowed);
   contents.on('will-redirect', blockUnlessAllowed);
   contents.setWindowOpenHandler(({ url }) => {
-    const decision = decideNavigation(url, appOrigin);
-    if (decision === 'allow') loadInWindow(url);
-    else if (decision === 'external') void openExternal(url);
+    if (decideNavigation(url, appOrigin) !== 'refuse') void openExternal(url);
     return { action: 'deny' };
   });
 }

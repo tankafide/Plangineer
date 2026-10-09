@@ -80,7 +80,6 @@ export async function stackFixture(): Promise<StackFixture> {
       stopSystem: realStopSystem,
     },
     async cleanUp() {
-      await log.close();
       await rm(root, { recursive: true, force: true, maxRetries: 5 });
     },
   };

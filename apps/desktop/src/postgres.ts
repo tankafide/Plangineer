@@ -105,7 +105,8 @@ async function initialize(options: PostgresOptions, db: Connection): Promise<voi
 }
 
 /** Creates the app's database when a first run was cut off before it existed. */
-async function ensureDatabase(options: PostgresOptions, db: Connection): Promise<void> {
+export async function ensureDatabase(options: PostgresOptions): Promise<void> {
+  const db = connection(options.databaseUrl);
   const env = { PGPASSWORD: db.password };
   const target = ['-h', '127.0.0.1', '-p', String(db.port), '-U', db.user];
   const found = await runOrFail(
@@ -142,8 +143,9 @@ async function startServer(options: PostgresOptions, port: number): Promise<void
 }
 
 /**
- * Starts the desktop's Postgres: initializes an empty data folder, refuses another major, reuses
- * a server a crash left running from this folder, and creates the database when it is missing.
+ * Starts the desktop's Postgres: initializes an empty data folder, refuses another major, and
+ * reuses a server a crash left running from this folder. `ensureDatabase` runs next, once the
+ * caller has recorded that the server runs.
  */
 export async function startPostgres(options: PostgresOptions): Promise<void> {
   const db = connection(options.databaseUrl);
@@ -163,7 +165,6 @@ export async function startPostgres(options: PostgresOptions): Promise<void> {
     await options.checkPortFree(db.port);
     await startServer(options, db.port);
   }
-  await ensureDatabase(options, db);
 }
 
 /** Stops the server fast, waiting up to 30 s. */

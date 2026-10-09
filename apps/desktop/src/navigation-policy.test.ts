@@ -22,15 +22,9 @@ function fakeContents() {
     },
   };
   const external: string[] = [];
-  const loaded: string[] = [];
-  guardNavigation(
-    contents,
-    APP_ORIGIN,
-    async (url) => {
-      external.push(url);
-    },
-    (url) => loaded.push(url),
-  );
+  guardNavigation(contents, APP_ORIGIN, async (url) => {
+    external.push(url);
+  });
 
   function navigate(event: 'will-navigate' | 'will-redirect', url: string): boolean {
     let prevented = false;
@@ -41,7 +35,7 @@ function fakeContents() {
     if (openHandler === undefined) throw new Error('No window open handler');
     return openHandler({ url });
   }
-  return { navigate, openWindow, external, loaded };
+  return { navigate, openWindow, external };
 }
 
 describe('decideNavigation', () => {
@@ -93,17 +87,20 @@ describe('guardNavigation', () => {
     expect(contents.navigate('will-navigate', url)).toBe(true);
     expect(contents.openWindow(url)).toEqual({ action: 'deny' });
     expect(contents.external).toEqual([]);
-    expect(contents.loaded).toEqual([]);
   });
 
-  it('denies every new window, loading an allowed URL in the one window', () => {
+  it('denies every new window, opening an http or https one in the default browser', () => {
     const contents = fakeContents();
 
     expect(contents.openWindow('https://github.com/apps/plangineer')).toEqual({ action: 'deny' });
+    expect(contents.openWindow(`${APP_ORIGIN}/runs`)).toEqual({ action: 'deny' });
     expect(contents.openWindow('https://example.com/')).toEqual({ action: 'deny' });
 
-    expect(contents.loaded).toEqual(['https://github.com/apps/plangineer']);
-    expect(contents.external).toEqual(['https://example.com/']);
+    expect(contents.external).toEqual([
+      'https://github.com/apps/plangineer',
+      `${APP_ORIGIN}/runs`,
+      'https://example.com/',
+    ]);
   });
 });
 

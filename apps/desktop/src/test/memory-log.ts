@@ -13,6 +13,5 @@ export function memoryLog(): DesktopLog & { lines: string[] } {
     warn: write,
     error: write,
     addSecret: () => {},
-    close: async () => {},
   };
 }

@@ -59,7 +59,17 @@ export async function startServer({
     listening.resolve,
   );
   server.once('error', listening.reject);
-  const { port } = await listening.promise;
+  let port: number;
+  try {
+    ({ port } = await listening.promise);
+  } catch (error) {
+    // Close what started, so a port in use ends the process with its reason instead of hanging.
+    await realtime.connections.close();
+    realtime.tail.close();
+    await listener.close();
+    await pool.end();
+    throw error;
+  }
 
   return {
     port,

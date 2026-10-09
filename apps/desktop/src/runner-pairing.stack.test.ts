@@ -117,7 +117,6 @@ describe('runner pairing against the built API and runner bundles', () => {
     pairing = undefined;
     await stack.stop();
     stack = undefined;
-    await fixture.log.close();
 
     const log = await readFile(fixture.paths.desktopLog, 'utf8');
     expect(log).toContain('Runner login: paired');
