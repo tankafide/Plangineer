@@ -36,6 +36,7 @@ The goal is a workflow where the plan is the unit of engineering review, and cod
 - Run on each engineer's existing Claude or ChatGPT subscription, with API keys as an option and not a requirement.
 - Ship as open source that any team can self-host with one container and a Postgres database.
 - Work the same on Windows, macOS and Linux: the local runner, the self-hosted deployment and development of Plangineer itself.
+- Install like an ordinary app on one machine, with no Node, Docker or terminal, through a desktop app that grows into a team-hosted server from the same server code.
 
 **Non-goals for this version**
 
@@ -385,6 +386,13 @@ The web app talks only to the control plane. The control plane queues one job pe
 - **Updates.** It updates through npm like any other package, and reports which CLI versions are installed.
 - **Skills mirror.** It provides `skills sync` and `skills check`, which keep `.claude/skills/` an exact copy of `.agents/skills/` (see Skill orchestration).
 
+**The desktop app.** A solo engineer installs a desktop app instead of cloning the repository. It is a thin shell: it starts the same API, web app and Postgres that a team server runs, opens a window on them, and installs, pairs and runs the runner on the same machine.
+
+- **No Docker.** Postgres runs from real Postgres binaries started by the app, never PGlite.
+- **Manual steps stay.** Creating the GitHub App, installing it on repositories, signing in with GitHub and signing in to Claude Code each need the person. The app never reads, stores or relays the Claude Code login.
+- **Growth path.** `DATABASE_URL` and the public origin stay settings, there is no single-user shortcut, and the shell holds no server logic. A team server then needs only a container image, a public HTTPS URL for webhooks, backups and upgrades.
+- **Known limit.** GitHub webhooks need a public URL, which a laptop does not have without a tunnel.
+
 **Running on a subscription.** Each engineer's own Claude or ChatGPT plan can pay for their runs, and the local runner is the path both vendors support. Hosted runs are possible on each, on terms that differ by vendor. Checked October 6, 2026.
 
 | CLI | Local runner, engineer's own login | Hosted runner |
@@ -490,6 +498,8 @@ Each diamond is an exit gate: the next phase starts only when its condition is m
 
 Sizes are rough estimates for one or two engineers, 19 to 27 weeks in total, and should be re-cut after Phase 0.
 
+**Distribution track, outside the phases:** the desktop app described under Architecture, planned next so that installing Plangineer stops being a developer checkout.
+
 **Left for later:** skill auditing and line-level provenance, testing of mobile apps, alternative approaches in the plan workspace, the Cursor CLI, and the mobile app itself.
 
 ## Risks
@@ -526,6 +536,7 @@ These choices are still open, and the first one shapes the architecture more tha
 - [ ] **Runner base.** Recommended: CI runners first. The alternative is an open-source background agent framework such as [Open-Inspect](https://github.com/ColeMurray/background-agents/wiki) or [Open SWE](https://github.com/langchain-ai/open-swe).
 - [x] **Review round limit.** Decided: the `adaptive` rounds setting stops at a maximum the engineer sets from 1 to 5. At the default `ask` setting the engineer decides each time.
 - [x] **Internal tool or product.** Decided: an open-source project that each team self-hosts, one deployment per team. There is no tenancy, the runner ships through npm, and the app never holds a vendor login.
+- [ ] **Desktop shell and packaging.** Electron or Tauri, how Postgres binaries are packaged, and which of code signing, notarization and auto-update are in the first version. The desktop app plan decides.
 - [ ] **Licence.** Recommended: Apache-2.0, which adds an explicit patent grant over MIT.
 - [ ] **Plan review pipeline.** This proposal assumes plan review uses the same confirm step and triage rules as implementation review.
 - [ ] **Verification orchestrator.** Recommended: add a fifth orchestrator for verification, so testing conventions live in the repo too.

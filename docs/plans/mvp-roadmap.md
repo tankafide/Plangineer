@@ -4,7 +4,7 @@ Oct 7, 2026
 
 This roadmap splits the [MVP](../product/mvp.md) into ten chunks, and each chunk gets its own plan. It is not a plan in the plan format and is not reviewed as one. Each chunk ends in a gate that can be demonstrated and checked, and builds only on the chunks before it.
 
-Chunks 1 to 9 cover MVP Phases 1 to 3. Chunk 10 is Phase 4, which is rollout and can come after the MVP.
+Chunks 1 to 9 cover MVP Phases 1 to 3. Chunk 10 is Phase 4, which is rollout and can come after the MVP. The [desktop app](#desktop-app-distribution-track) is a distribution track outside the numbered chunks, planned next because installing Plangineer is still a developer checkout.
 
 ## Where things stand
 
@@ -18,6 +18,7 @@ Chunks 1 to 9 cover MVP Phases 1 to 3. Chunk 10 is Phase 4, which is rollout and
 | Repository setup | Chunk 2 built it on Oct 8, 2026, as the [repository setup plan](2026-10-08-repository-setup.md) describes: adding a repository, the scan, the three checklists, and one setup pull request with the four orchestrators and the chosen rule skills. Each repository's workflow settings are on its settings card |
 | Runner on npm | The runner is prepared for publishing to npm as `plangineer-runner`. The engineer publishes it with `pnpm runner:publish` |
 | Browser pairing | Replaced the copied code with `plangineer-runner login --server <url>`, which opens an approval page in the browser, as the [runner browser pairing plan](2026-10-08-runner-browser-pairing.md) describes. The engineer publishes runner 0.2.0 with `pnpm runner:publish` |
+| Desktop app | Next. A desktop app that runs the whole stack on one machine with no Node, Docker or terminal, built so it can grow into a team server. It gets its own plan, described under [Desktop app](#desktop-app-distribution-track) |
 | Cross-repository orchestrators | Not built. They get their own plan |
 
 ## Chunks
@@ -145,6 +146,26 @@ The finding pipeline is built once here, on plans, and chunk 9 reuses it for dif
 - **Evidence.** Request and response logs, screenshots and page snapshots in object storage.
 - **Report.** The verification report screen, with a failure sending the feature back to its author.
 - **Records.** Verification result.
+
+## Desktop app (distribution track)
+
+Installing Plangineer is a developer checkout today: Node 24, Docker Desktop, `pnpm install`, `pnpm setup:env`, `pnpm setup:github-app` and `pnpm dev`, then a runner paired with `npx plangineer-runner login`. This track replaces that with one installer for a solo engineer on one machine. It grows into a team-hosted server later, from the same server code.
+
+**Gate.** A person downloads the app, opens it, clicks through GitHub twice and signs in, and reaches a paired, online runner without a terminal, on Windows, macOS and Linux.
+
+- **Shell.** An Electron or Tauri window on the app. The plan picks one, and says how Node and the server code are bundled.
+- **Postgres without Docker.** Real Postgres binaries, never PGlite, started and stopped by the app, with data under `env-paths`. The plan picks the packaging, for example the `embedded-postgres` package, and says how migrations run on upgrade.
+- **First run.** The app creates `.env` and the auth secret, runs migrations and seed, starts the API and web app, and opens the window.
+- **Runner included.** The app installs, pairs and runs the runner on the same machine with no `npx` and no approval page, and keeps it running at login. A second machine still pairs with `plangineer-runner login`. Shipping the runner as a standalone binary with no Node is part of the plan.
+- **First-run checklist.** One screen with four steps: create the GitHub App, sign in, detect Claude Code, add the first repository.
+- **Steps that stay manual.** The click that creates the GitHub App and the choice of repositories to install it on (GitHub requires a signed-in person), the GitHub sign-in consent, and the Claude Code sign-in. The app only detects whether Claude Code is installed and guides the user. It never reads, stores or relays a vendor login.
+- **Growth path to a team server.** Option 3 is the same server code with a different launcher:
+- **A thin shell.** The desktop app holds no server logic. It starts the same API, web app and Postgres that a team deployment runs, and opens a window on them.
+- **Two settings carry the growth path.** `DATABASE_URL` picks the Postgres, and the public origin (`BETTER_AUTH_URL` and the GitHub App callback URLs) is a setting and never a hard-coded `localhost`.
+- **No single-user shortcut.** Sign-in and the admin and member roles apply as they do on a team server.
+- **New work for a team server later.** A container image and deploy guide, a public HTTPS URL for GitHub webhooks, backups and upgrades, and moving a solo user's data by Postgres dump and restore.
+- **Known limit.** GitHub webhooks need a public URL, so anything that depends on them does not work from a laptop without a tunnel.
+- **Left out of the first version.** Hosted or team deployment, Codex, and the mobile app.
 
 ## Cross-cutting choices
 
