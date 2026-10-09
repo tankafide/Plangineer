@@ -21,7 +21,7 @@ Rule skills are read by path with the file-read tool, never through a skill tool
 
 ## Workflow
 
-Pick the mode. Start the work on a branch as [git workflow](../orchestrator-references/git-workflow.md) describes.
+Pick the mode. Start the work in a worktree as [git workflow](../orchestrator-references/git-workflow.md#worktrees) describes.
 
 ### With a plan
 
@@ -29,7 +29,7 @@ Pick the mode. Start the work on a branch as [git workflow](../orchestrator-refe
 - Work in phase order. Settle contracts before any parallel work.
 - Consult the design skills as rules when a step touches their area, and test each "done when" line.
 - When the work shows the plan needs to change, make the change a senior engineer would make without widening the scope too much, and give the reason in the final report.
-- On a point the plan leaves open, make the choice when a senior engineer would see one clear right answer. When it needs business or use-case context, or is a trade-off between real options, stop and ask. Never guess.
+- On a point the plan leaves open, make the choice when a senior engineer would see one clear right answer. When it needs business or use-case context, or is a trade-off between real options, stop and ask, or take the recommended option and record it for the final report when the `decisions` [workflow setting](../orchestrator-references/review-loop.md#workflow-settings) is `recommended`. Never guess.
 
 ### Without a detailed plan
 
@@ -37,7 +37,7 @@ Pick the mode. Start the work on a branch as [git workflow](../orchestrator-refe
 - Run `codebase-exploration` in a subagent when the area is unfamiliar or large. Name the work branch as the base when it already has commits.
 - Load the design skills the change involves ({{designSkills}}). Settle those decisions as a senior engineer would before writing code, and record each one in the final report.
 - A bug fix loads `debugging`.
-- Stop and ask when the change needs a decision only the engineer can make.
+- Stop and ask when the change needs a decision only the engineer can make, or take the recommended option and record it when `decisions` is `recommended`.
 
 ### Checks
 

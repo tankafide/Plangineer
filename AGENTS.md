@@ -31,6 +31,8 @@ Four orchestrator skills run the plan-driven workflow. Use the one that matches 
 - `implementation-orchestrator`: write or change code, tests, config, scripts or skills, fix bugs, and finish a branch.
 - `implementation-review-orchestrator`: review a diff, branch, commit or pull request, then fix the findings you pick.
 
+`auto-orchestrator` runs `plan-orchestrator` and then `implementation-orchestrator` unattended, fixes every kept finding and merges into `main`. Use it only when the engineer asks for auto mode or names it.
+
 Answering questions, reading docs and editing docs that are not feature plans need none of them.
 
 Every other skill is a rule skill. Orchestrators load them by path, and you load one only when the user names it.
