@@ -4,7 +4,7 @@ Oct 7, 2026
 
 This roadmap splits the [MVP](../product/mvp.md) into ten chunks, and each chunk gets its own plan. It is not a plan in the plan format and is not reviewed as one. Each chunk ends in a gate that can be demonstrated and checked, and builds only on the chunks before it.
 
-Chunks 1 to 9 cover MVP Phases 1 to 3. Chunk 10 is Phase 4, which is rollout and can come after the MVP. The [desktop app](#desktop-app-distribution-track) is a distribution track outside the numbered chunks, planned next because installing Plangineer is still a developer checkout.
+Chunks 1 to 9 cover MVP Phases 1 to 3. Chunk 10 is Phase 4, which is rollout and can come after the MVP. The [desktop app](#desktop-app) is how Plangineer ships. It is a track outside the numbered chunks and is built next, so chunks 3 to 10 are built and tested inside it.
 
 ## Where things stand
 
@@ -18,7 +18,7 @@ Chunks 1 to 9 cover MVP Phases 1 to 3. Chunk 10 is Phase 4, which is rollout and
 | Repository setup | Chunk 2 built it on Oct 8, 2026, as the [repository setup plan](2026-10-08-repository-setup.md) describes: adding a repository, the scan, the three checklists, and one setup pull request with the four orchestrators and the chosen rule skills. Each repository's workflow settings are on its settings card |
 | Runner on npm | The runner is prepared for publishing to npm as `plangineer-runner`. The engineer publishes it with `pnpm runner:publish` |
 | Browser pairing | Replaced the copied code with `plangineer-runner login --server <url>`, which opens an approval page in the browser, as the [runner browser pairing plan](2026-10-08-runner-browser-pairing.md) describes. The engineer publishes runner 0.2.0 with `pnpm runner:publish` |
-| Desktop app | Next. A desktop app that runs the whole stack on one machine with no Node, Docker or terminal, built so it can grow into a team server. It gets its own plan, described under [Desktop app](#desktop-app-distribution-track) |
+| Desktop app | Planned on Oct 8, 2026 as the [desktop app plan](2026-10-08-desktop-app.md), and next to build. An Electron app that runs the whole stack on one machine with no Node, Docker or terminal, built so it can grow into a team server |
 | Cross-repository orchestrators | Not built. They get their own plan |
 
 ## Chunks
@@ -47,7 +47,7 @@ Every later chunk is checked against real agent runs, so the runner comes first.
 - **Job queue.** The control plane queues one job per agent run and assigns it to a runner.
 - **Claude Code adapter.** Starts the installed `claude` CLI in non-interactive mode under the engineer's own login, and turns its structured output into run events.
 - **Event streaming.** Run events flow back to the app as the run works.
-- **Worktrees.** One worktree per job for each repository the job involves.
+- **Worktrees.** One Git worktree per job for each repository the job involves, under the runner's data folder and never in the engineer's working copy.
 - **Limits.** A concurrency limit, a queue for the rest, and reports when the machine is offline or a plan limit is reached.
 - **Skills mirror.** `skills sync` and `skills check` move from the repository script into `plangineer-runner`, and the runner runs `skills check` before every run.
 - **Records.** Runner and Run.
@@ -120,7 +120,7 @@ The finding pipeline is built once here, on plans, and chunk 9 reuses it for dif
 ### 8. Automated implementation
 
 - **Run dispatch.** Approval queues the implementation run.
-- **Isolated workspaces.** A fresh checkout of the feature branch per run, with the approved plan revision written into the workspace and not committed.
+- **Worktrees.** A Git worktree of the feature branch per run, with the approved plan revision written into the worktree and not committed.
 - **Implementation run.** The implementation orchestrator works from the approved revision and logs each departure with its reason.
 - **Undecided points.** The run stops and the feature goes to the amendment path.
 - **Multiple repositories.** Work runs in the order the plan's phases set.
@@ -147,28 +147,29 @@ The finding pipeline is built once here, on plans, and chunk 9 reuses it for dif
 - **Report.** The verification report screen, with a failure sending the feature back to its author.
 - **Records.** Verification result.
 
-## Desktop app (distribution track)
+## Desktop app
 
-Installing Plangineer is a developer checkout today: Node 24, Docker Desktop, `pnpm install`, `pnpm setup:env`, `pnpm setup:github-app` and `pnpm dev`, then a runner paired with `npx plangineer-runner login`. This track replaces that with one installer for a solo engineer on one machine. It grows into a team-hosted server later, from the same server code.
+Plangineer ships as an Electron desktop app, and the [desktop app plan](2026-10-08-desktop-app.md) holds the design. Installing Plangineer is a developer checkout today: Node 24, Docker Desktop, `pnpm install`, `pnpm setup:env`, `pnpm setup:github-app` and `pnpm dev`, then a runner paired with `npx plangineer-runner login`. The desktop app replaces that with one installer on one machine. It grows into a team-hosted server later, from the same server code.
 
 **Gate.** A person downloads the app, opens it, clicks through GitHub twice and signs in, and reaches a paired, online runner without a terminal, on Windows, macOS and Linux.
 
-- **Shell.** An Electron or Tauri window on the app. The plan picks one, and says how Node and the server code are bundled.
-- **Postgres without Docker.** Real Postgres binaries, never PGlite, started and stopped by the app, with data under `env-paths`. The plan picks the packaging, for example the `embedded-postgres` package, and says how migrations run on upgrade.
-- **First run.** The app creates `.env` and the auth secret, runs migrations and seed, starts the API and web app, and opens the window.
-- **Runner included.** The app installs, pairs and runs the runner on the same machine with no `npx` and no approval page, and keeps it running at login. A second machine still pairs with `plangineer-runner login`. Shipping the runner as a standalone binary with no Node is part of the plan.
+- **Shell.** Electron 44, packaged with electron-builder and updated with electron-updater. The API, the migrations and the runner run as tsdown bundles on Electron's Node 24.
+- **Postgres without Docker.** Postgres 18 binaries from theseus-rs, never PGlite, started and stopped with `pg_ctl`, with data under `env-paths`. Every start runs migrations before the API.
+- **First run.** The app writes `server.env` with its secrets, runs migrations with no seed, starts the API, which serves the web UI, and opens the window.
+- **Runner included.** The app pairs and runs the runner on the same machine with no `npx` and no approval page, and keeps it running at login. A second machine still pairs with `plangineer-runner login`. A standalone runner binary is left out.
 - **First-run checklist.** One screen with four steps: create the GitHub App, sign in, detect Claude Code, add the first repository.
 - **Steps that stay manual.** The click that creates the GitHub App and the choice of repositories to install it on (GitHub requires a signed-in person), the GitHub sign-in consent, and the Claude Code sign-in. The app only detects whether Claude Code is installed and guides the user. It never reads, stores or relays a vendor login.
-- **Growth path to a team server.** Option 3 is the same server code with a different launcher:
-- **A thin shell.** The desktop app holds no server logic. It starts the same API, web app and Postgres that a team deployment runs, and opens a window on them.
+- **A thin shell.** The desktop app holds no server logic. It starts the same API, web UI and Postgres that a team server runs, and opens a window on them.
 - **Two settings carry the growth path.** `DATABASE_URL` picks the Postgres, and the public origin (`BETTER_AUTH_URL` and the GitHub App callback URLs) is a setting and never a hard-coded `localhost`.
 - **No single-user shortcut.** Sign-in and the admin and member roles apply as they do on a team server.
 - **New work for a team server later.** A container image and deploy guide, a public HTTPS URL for GitHub webhooks, backups and upgrades, and moving a solo user's data by Postgres dump and restore.
+- **Phone access later.** A phone app connects to the engineer's desktop. How it reaches an API that listens only on `127.0.0.1` is an open decision in the [MVP](../product/mvp.md#open-decisions).
 - **Known limit.** GitHub webhooks need a public URL, so anything that depends on them does not work from a laptop without a tunnel.
-- **Left out of the first version.** Hosted or team deployment, Codex, and the mobile app.
+- **Left out of the first version.** Hosted or team deployment, Codex, the phone app, signed builds and a standalone runner binary.
 
 ## Cross-cutting choices
 
 - **Multi-repository support.** Built into each chunk from the start, because repository lists on features, base commits per repository and grouped steps shape the data model.
-- **Phone width.** Every screen works as one column from its first chunk.
-- **One API.** Every UI action goes through the API a mobile app will use.
+- **Phone width.** Every screen works as one column from its first chunk, so the later phone app reuses it.
+- **One API.** Every UI action goes through the API a phone app will use.
+- **Worktrees.** Agent runs work in Git worktrees the runner owns, and nothing switches branches in a working copy.

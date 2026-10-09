@@ -34,6 +34,7 @@ Rule skills are read by path with the file-read tool, never through a skill tool
 | `.agents/skills/auth-and-access/SKILL.md` | The diff touches sign-in, roles or runner pairing |
 | `.agents/skills/run-orchestration/SKILL.md` | The diff touches run dispatch or realtime delivery |
 | `.agents/skills/runner-adapters/SKILL.md` | The diff touches `apps/runner` or an agent CLI adapter |
+| `.agents/skills/electron-desktop/SKILL.md` | The diff touches `apps/desktop`, or its packaging, release or update configuration |
 | `.agents/skills/github-integration/SKILL.md` | The diff touches the GitHub App, webhooks or pull requests |
 | `.agents/skills/cross-platform/SKILL.md` | The diff touches paths, processes, line endings or the file system |
 | `.agents/skills/tooling-and-infra/SKILL.md` | The diff touches the workspace, scripts, hooks, CI or check configuration |

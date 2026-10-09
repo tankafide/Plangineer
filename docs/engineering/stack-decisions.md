@@ -4,8 +4,10 @@ The decided stack, for agents working in this repo. The reasoning is in [tech-st
 
 ## Context
 
-- Open source, self-hosted, one deployment per team. No tenancy and no organization model.
+- Plangineer ships as an Electron desktop app. It runs the API, the web UI, Postgres and the runner on the engineer's own computer, as the [desktop app plan](../plans/2026-10-08-desktop-app.md) describes. A team-hosted server built from the same server code, and a phone app that connects to the engineer's desktop, come later.
+- Open source. Each install is one deployment for one team. No tenancy and no organization model.
 - The runner supports Claude Code first, then Codex. No Cursor.
+- Agent runs and Plangineer's own development work in Git worktrees, never by switching branches in a checkout.
 
 ## Versions
 
@@ -15,6 +17,7 @@ Pin these majors. Versions checked against npm on 6 October 2026.
 | --- | --- |
 | Runtime | Node 24 everywhere (server and runner). pnpm 10.34.6 workspaces, Turborepo |
 | Language | TypeScript 7, strictest tsconfig |
+| Desktop | Electron 44, electron-builder 26, electron-updater 6, Postgres 18.6.0 binaries from theseus-rs. The window loads the web UI from the local API |
 | Web | React 19, Vite 8, TanStack Router (not Start), TanStack Query, Tailwind v4, shadcn/ui on Base UI (never Radix) in the Nova style, Lucide icons, Geist and Geist Mono fonts, React Hook Form, dnd-kit, CodeMirror 6, `diff`, react-diff-view, `eventsource-parser` 4 |
 | API | Hono 4, oRPC 1.x (not the 2.0 beta), Zod 4 |
 | Database | Postgres 18, Drizzle ORM 0.45.x at 0.45.2 or later (earlier releases have CVE-2026-39356) and Drizzle Kit (not the v1 release candidate) |
@@ -37,8 +40,9 @@ Pin these majors. Versions checked against npm on 6 October 2026.
 | `packages/domain` | Pure logic: triage, staleness, amendment level, deviation matching | `contracts`, Zod |
 | `packages/api-client` | Typed oRPC client and TanStack Query hooks | `contracts` |
 | `apps/api` | Hono + oRPC control plane, Drizzle schema, run dispatch, webhooks | `contracts`, `domain` |
-| `apps/web` | React SPA | `contracts`, `domain`, `api-client` |
+| `apps/web` | React SPA, shown in the desktop app's window | `contracts`, `domain`, `api-client` |
 | `apps/runner` | Local runner npm package and CLI adapters | `contracts`, `domain` |
+| `apps/desktop` | Electron shell that launches the server, web and runner bundles. Added by the desktop app plan | `contracts` |
 
 Nothing imports from another `apps/*` package.
 

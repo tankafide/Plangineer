@@ -14,12 +14,12 @@ Windows, macOS and Linux are equal targets, and CI runs `pnpm verify` on all thr
 | --- | --- |
 | Paths | Build paths with `node:path`. Convert `import.meta.url` with `fileURLToPath`, and pass an absolute path to dynamic `import()` through `pathToFileURL(...).href`, because `import('C:\\...')` throws on Windows. No hard-coded `/` or `\`, drive letters or `~` |
 | Path identity | Store and compare POSIX-style relative paths: in URLs, database rows, snapshots, plan text and git output. Convert to native paths only at the file system boundary. Never compare native path strings without `path.resolve` first |
-| App data | The runner keeps its data under `env-paths`. Never build a home or temp path by hand |
+| App data | The runner and the desktop app keep their data under `env-paths`. Never build a home or temp path by hand |
 | Line endings | LF everywhere, pinned by `.gitattributes` (`* text=auto eol=lf`). Write `\n`, never `os.EOL`. Split input with `/\r?\n/`, and normalize before comparing content, as `apps/runner/src/skills/skills-mirror.ts` does |
 | Filenames | Kebab-case. An import path matches the file's case exactly, since Windows and macOS ignore case and Linux does not. Rename a file's case with `git mv`. No reserved names (`con`, `nul`, `aux`, `prn`, `com1`), no `:` or trailing dot or space |
 | Spawning | Spawn CLIs with `execa`, passing the command and an argument array. Never `node:child_process` for an npm-installed CLI: Node 24 throws `EINVAL` when spawning a `.cmd` shim without a shell, and `execa` handles the shim safely. Never `shell: true` or a command built from a string |
-| Stopping | One function stops a run. On macOS and Linux it spawns with `detached: true` and signals the group with `process.kill(-pid)`. On Windows it runs `taskkill /pid <pid> /T /F`. Shutdown handlers listen for `SIGINT` too, since Windows never delivers `SIGTERM` |
-| Environment | Read variables through the Zod environment schema. Pass extra child variables through `execa`'s `env`, which extends `process.env`. Never copy `process.env` into a new object, which loses Windows' case-insensitive `Path`. Do not assume `HOME`, `SHELL` or `USER`. The one exception is an agent CLI child, which gets only the allowlist from [auth-and-access](../auth-and-access/SKILL.md#the-vendor-login-rule), built with `extendEnv: false` and names matched case-insensitively so `Path` keeps its key |
+| Stopping | One function stops a run. On macOS and Linux it spawns with `detached: true` and signals the group with `process.kill(-pid)`. On Windows it runs `taskkill /pid <pid> /T /F`. Shutdown handlers listen for `SIGINT` too, since Windows never delivers `SIGTERM`. The desktop app's `utilityProcess` children cannot be detached, so they stop as [electron-desktop](../electron-desktop/SKILL.md#local-stack) sets |
+| Environment | Read variables through the Zod environment schema. Pass extra child variables through `execa`'s `env`, which extends `process.env`. Never copy `process.env` into a new object, which loses Windows' case-insensitive `Path`. Do not assume `HOME`, `SHELL` or `USER`. The one exception is an agent CLI child, which gets only the allowlist from [auth-and-access](../auth-and-access/SKILL.md#the-vendor-login-rule), built with `extendEnv: false` and names matched case-insensitively so `Path` keeps its key. The other exception is Electron's `utilityProcess.fork`, which takes only a whole environment, as [electron-desktop](../electron-desktop/SKILL.md) sets |
 | File handles | Close every handle and wait for a child to exit before deleting or renaming its files, since Windows locks open files. Remove folders with `fs.rm(dir, { recursive: true, force: true, maxRetries: 5 })` |
 | Symlinks | None. Copy files instead. Creating one needs extra permission on Windows |
 | Scripts | Node scripts only. No bash, PowerShell or `cmd`, no Unix tools such as `rm`, `cp`, `grep` or `sed`, and no reliance on an executable bit or shebang. Run them with `node` |
@@ -39,7 +39,7 @@ Check a diff against these rules. Report each breach as a finding in the shared 
 | Rule | Severity if broken |
 | --- | --- |
 | `shell: true`, a command built from a string, an npm-installed CLI spawned with `node:child_process`, or a bash or PowerShell file | blocker |
-| A stop that signals only the child pid, or has no Windows branch | blocker |
+| A stop that signals only the child pid, outside the desktop's `utilityProcess` children, or has no Windows branch | blocker |
 | A symlink created, or a test that depends on one | blocker |
 | A hand-built path, a hard-coded separator, drive letter or `~`, or a file URL and path mixed without `fileURLToPath` or `pathToFileURL` | should fix |
 | A native path stored, sent or compared as an identifier | should fix |

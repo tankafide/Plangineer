@@ -1,6 +1,6 @@
 # Plangineer
 
-Web app that takes a feature from a reviewed plan to verified code. Engineers write and review plans; agents implement, review and test against the plan and the repo's skills.
+Electron desktop app that takes a feature from a reviewed plan to verified code. Engineers write and review plans; agents implement, review and test against the plan and the repo's skills. The app runs the API, the React UI, Postgres and the runner on the engineer's own computer, where the agent CLIs are installed.
 
 The decided stack, package layout, commands and conventions are in `docs/engineering/stack-decisions.md`. Follow it.
 
@@ -41,5 +41,6 @@ Edit skills only under `.agents/skills/`, then run `pnpm skills:sync` and `pnpm 
 
 ## Working rules
 
+- Work in a Git worktree under `../Plangineer.worktrees/<slug>`, on its own branch. Never run `git switch` or `git checkout` in the main checkout. `.agents/skills/orchestrator-references/git-workflow.md` has the details.
 - Add tests for new behavior.
 - Ask only when blocked on a decision the code and spec can't answer; otherwise choose the best-practice option and note it.

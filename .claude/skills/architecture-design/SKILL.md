@@ -28,6 +28,7 @@ The [package layout](../../../docs/engineering/stack-decisions.md#package-layout
 | A query hook or SSE subscription | `packages/api-client` |
 | A component, route or form | `apps/web` |
 | A CLI adapter, worktree or process handling | `apps/runner` |
+| Window, tray, login item, update, or starting and stopping the local stack | `apps/desktop`, which imports only `contracts` |
 | Any other helper, such as formatting a duration | The placement ladder below |
 
 ## Known cases

@@ -42,6 +42,7 @@ Tests prove the "done when" lines. Choose the smallest layer that proves each on
 | `domain` | Exhaustive unit tests: every branch, boundary and variant, table-driven |
 | `api` | Integration tests on real Postgres through template databases, never PGlite or a mocked database. Call procedures through the oRPC router. Assert on rows, not only on responses |
 | `runner` | The fake agent and recorded JSONL fixtures. Never a real `claude` or `codex` process or model call |
+| `desktop` | As [electron-desktop](../electron-desktop/SKILL.md#tests) sets: Electron APIs passed in as fakes for unit tests, `*.stack.test.ts` for the real stack, and Playwright `_electron` for the packaged app |
 | GitHub and other HTTP | MSW handlers, with each response typed from the real shape. Keep mocked-network tests apart from any test that calls a real API, and never run the real-API ones in `pnpm verify` |
 | `web` | Vitest components queried by role and label, not by class or test id first. Cover each of the five states in [frontend-react](../frontend-react/SKILL.md). Mock the network with MSW |
 | Journeys | Playwright Test on seeded data from `pnpm db:reset`, one file per journey, run with `pnpm test:e2e` |

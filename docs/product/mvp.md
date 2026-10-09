@@ -2,7 +2,7 @@
 
 Oct 6, 2026 · @Shane
 
-This proposes a web app that takes a feature from a reviewed plan to verified code. Engineers write and review plans; agents implement, review and test against the plan and the team's skills. It is an open-source project that each team self-hosts. Testing mobile apps and auditing skills are out of scope for this version. A mobile app for the product itself comes later, and the UI is designed now so it carries over.
+This proposes a desktop app that takes a feature from a reviewed plan to verified code. Engineers write and review plans; agents implement, review and test against the plan and the team's skills. It is an open-source Electron app that each engineer installs on the computer where their agent CLIs run, and a team can later host the same server code. Testing mobile apps and auditing skills are out of scope for this version. A phone app for the product itself comes later and connects to the engineer's desktop, and the UI is designed now so it carries over.
 
 ## At a glance
 
@@ -31,12 +31,13 @@ The goal is a workflow where the plan is the unit of engineering review, and cod
 - Let triage rules decide what to act on, starting with engineer sign-off and moving to `fix_all` as trust grows.
 - Test the deployed result against the plan's acceptance criteria, through API calls and the web app.
 - Keep the whole product point-and-click: checkboxes, buttons and choices over typed commands.
-- Design every screen to work at phone width, so a mobile app can follow without a redesign.
+- Design every screen to work at phone width, so a phone app that connects to the engineer's desktop can follow without a redesign.
 - Show every place the implementation departs from the approved plan, and have the engineer decide each one.
 - Run on each engineer's existing Claude or ChatGPT subscription, with API keys as an option and not a requirement.
-- Ship as open source that any team can self-host with one container and a Postgres database.
-- Work the same on Windows, macOS and Linux: the local runner, the self-hosted deployment and development of Plangineer itself.
-- Install like an ordinary app on one machine, with no Node, Docker or terminal, through a desktop app that grows into a team-hosted server from the same server code.
+- Ship as an open-source Electron desktop app that installs like an ordinary app, with no Node, Docker or terminal, and runs the whole stack on the engineer's computer.
+- Keep the server code ready to grow into a team-hosted server, with no change beyond a different launcher.
+- Work the same on Windows, macOS and Linux: the desktop app, the runner and development of Plangineer itself.
+- Never switch branches in a working copy: every agent run and every piece of Plangineer's own development works in its own Git worktree.
 
 **Non-goals for this version**
 
@@ -44,7 +45,8 @@ The goal is a workflow where the plan is the unit of engineering review, and cod
 - Auditing skill performance, or tracing which skill produced which line.
 - Keeping plans as long-lived documentation. A plan is a harness for one change and is discarded after merge.
 - Replacing the Git host, CI or deployment pipeline.
-- Shipping a mobile app. The UI is designed for one, and the app itself comes later.
+- Shipping a phone app. The UI is designed for one, and the app itself comes later.
+- Shipping a team-hosted server. The desktop app runs the same server code, so one can follow.
 - Supporting the Cursor CLI. The adapter design allows it later.
 - Running a hosted, multi-tenant service. Each deployment serves one team.
 
@@ -58,7 +60,7 @@ A feature moves through eight stages, and each has one gate that must clear befo
 | 2. Plan | Engineer with the plan orchestrator | Works through a guided planning session: the agent asks questions until nothing is undecided, then drafts the plan from the ticked context files and the team template | No open questions, and the author marks it ready |
 | 3. Plan review | Plan review orchestrator, ideally on a different model, then the planning model, then triage rules | Findings are raised, confirmed and sorted; the plan is revised | No open findings |
 | 4. Peer approval | Other engineers | Read the plan, ask questions in the plan thread, then approve or request changes. Skipped for trivial changes | Approval |
-| 5. Implement | Implementation orchestrator | Builds on a branch in an isolated workspace from the approved plan revision | Build and tests pass |
+| 5. Implement | Implementation orchestrator | Builds on the feature branch, in a Git worktree the runner owns, from the approved plan revision | Build and tests pass |
 | 6. Implementation review | Implementation review orchestrator, ideally on a different model, then the implementing model, then triage rules | The diff is checked against the plan and the rule skills. Findings, including every deviation from the plan and every extra, are raised, confirmed and sorted; fixes are applied, and an agent recommends whether to review again | No open findings, and every deviation decided |
 | 7. Merge | Engineer | Pull request opens with the plan summary, findings history and deviation list attached | Merge |
 | 8. Verify | Test agent | On deploy, checks each acceptance criterion through the API and the web app and records evidence | Every criterion passes |
@@ -231,7 +233,7 @@ No repository leads: each contributes its own part. These orchestrators belong t
 
 **How a stage runs**
 
-1. The runner checks out the feature branch, and the skills come with it. For a multi-repository feature it checks out every involved repository.
+1. The runner creates a worktree of the feature branch, and the skills come with it. For a multi-repository feature it creates one in every involved repository.
 2. The stage's orchestrator skill is loaded as the agent's instructions.
 3. The orchestrator decides which rule skills to invoke and when.
 4. The run logs the commit and each skill that loaded.
@@ -244,7 +246,7 @@ Because skills sit in the repo, a skill change is reviewed like code, and every 
 
 - **`skills sync`** copies every file from the canonical folder to the mirror, normalizes line endings to LF, deletes mirror files with no source, refuses symlinks and writes only files that changed. An agent that writes or edits a skill writes only the canonical copy and then runs it. It never reads or writes the mirror, so the copy costs no tokens.
 - **`skills check`** writes nothing. It fails on any missing, changed or stray mirror file, naming each one and the fix: edit the canonical copy, then sync. Differences only in line endings are not drift. Setup's pull request adds it to the repository's CI and marks the mirror as generated in `.gitattributes`, so it collapses in pull request diffs.
-- **Before every run** the runner runs `skills check` on its checkout. A drifted checkout fails the run instead of giving the two CLIs different skills.
+- **Before every run** the runner runs `skills check` in its worktree. A drifted checkout fails the run instead of giving the two CLIs different skills.
 
 The check exists because Claude Code shows the mirror's path when it loads a skill, so the likeliest mistake is an agent or engineer editing the mirror. Without the check, the next sync would silently overwrite that edit. The same one-way mirror with a check mode is a pattern other projects already use ([example](https://github.com/RossGraeber/OAC/pull/237)).
 
@@ -367,28 +369,30 @@ This is one-off checking of a feature. Generating a lasting regression suite is 
 
 &#91;embedded content: system architecture · 3 components, 4 external systems\]
 
-The web app talks only to the control plane. The control plane queues one job per agent run, and each runner streams events back as it works.
+The desktop app runs every component on the engineer's computer: the control plane, its Postgres, the UI in the app's window, and the runner. The UI talks only to the control plane. The control plane queues one job per agent run, and each runner streams events back as it works.
 
-- **Runners hold no state.** Each one starts from a fresh checkout of the feature branch, which brings the skills with it, and is thrown away when the run ends.
+- **Runners hold no state.** Each run works in a Git worktree of the feature branch, which brings the skills with it. The runner creates it from its own clone of the repository, never in the engineer's working copy, and removes it when the work is done.
 - **A runner can sit in two places.** A local runner on the engineer's machine can serve every stage with their own CLI login, which is how the product runs on a subscription. Hosted runners serve implementation, review and verification in the background for teams that want runs to continue with the laptop closed.
 - **One adapter per agent CLI.** Claude Code and Codex each run non-interactively and emit structured output. The adapter turns that into run events for the feature tab and the timeline. The Claude Code adapter comes first; Codex is added once the workflow runs end to end on Claude Code.
 - **Webhooks drive the gates.** The Git host reports build results, merges and pushes to main; the deploy pipeline reports which build is live, which starts verification.
 - **The first hosted runners can be CI jobs.** That avoids building sandbox infrastructure before the workflow is proven.
-- **The web app is one client of the API.** Everything the UI does goes through the same API a mobile app will use, and the control plane emits the events that become notifications.
+- **The UI is one client of the API.** Everything the UI does goes through the same API a phone app will use, and the control plane emits the events that become notifications.
 
-**The local runner.** The local runner is a small Node program the engineer installs from npm, and it is a deliverable of its own in Phase 1.
+**The local runner.** The local runner is a small Node program and a deliverable of its own in Phase 1. The desktop app bundles it and runs it on the same machine. A second machine installs it from npm as `plangineer-runner`.
 
-- **Pairing.** The engineer signs it in to the app once. It then keeps an outbound connection to the control plane, so no inbound port is opened on the machine.
-- **Running a job.** It receives a job, creates a worktree for that feature of each repository the job involves, starts the installed CLI in non-interactive mode, and streams the events back.
+- **Pairing.** The desktop app pairs its own runner with the signed-in engineer. A runner on a second machine is signed in to the app once with `plangineer-runner login`. Either way it keeps an outbound connection to the control plane, so no inbound port is opened on the machine.
+- **Running a job.** It receives a job, creates a Git worktree of the feature branch in each repository the job involves, under its own data folder, starts the installed CLI in non-interactive mode, and streams the events back.
 - **Sign-in.** It runs the CLI exactly as the vendor ships it, under the login the engineer already has. It never reads, copies or uploads that login.
 - **Platforms.** It runs on Windows, macOS and Linux, and is tested on all three for every release.
 - **Limits.** It runs a set number of jobs at once, queues the rest, and reports when the machine is offline or a plan limit is reached.
-- **Updates.** It updates through npm like any other package, and reports which CLI versions are installed.
+- **Updates.** It updates with the desktop app, or through npm on a second machine, and reports which CLI versions are installed.
 - **Skills mirror.** It provides `skills sync` and `skills check`, which keep `.claude/skills/` an exact copy of `.agents/skills/` (see Skill orchestration).
 
-**The desktop app.** A solo engineer installs a desktop app instead of cloning the repository. It is a thin shell: it starts the same API, web app and Postgres that a team server runs, opens a window on them, and installs, pairs and runs the runner on the same machine.
+**The desktop app.** Engineers install Plangineer as an Electron desktop app, downloaded from GitHub Releases. It is a thin shell: it starts the API, the UI and Postgres, opens a window on them, and pairs and runs the runner on the same machine. The [desktop app plan](../plans/2026-10-08-desktop-app.md) holds the details.
 
 - **No Docker.** Postgres runs from real Postgres binaries started by the app, never PGlite.
+- **Always on.** The app opens at login and keeps the stack and runner running from the tray with no window, so runs continue while the window is closed.
+- **Phone access later.** A phone app connects to the engineer's desktop, which keeps running the CLIs. The desktop API listens only on `127.0.0.1`, so how the phone reaches it is an open decision.
 - **Manual steps stay.** Creating the GitHub App, installing it on repositories, signing in with GitHub and signing in to Claude Code each need the person. The app never reads, stores or relays the Claude Code login.
 - **Growth path.** `DATABASE_URL` and the public origin stay settings, there is no single-user shortcut, and the shell holds no server logic. A team server then needs only a container image, a public HTTPS URL for webhooks, backups and upgrades.
 - **Known limit.** GitHub webhooks need a public URL, which a laptop does not have without a tunnel.
@@ -409,7 +413,7 @@ What this means for the design:
 - **No silent fallback.** A run never switches from a subscription login to an API key on its own. Each run records which sign-in it used, and the timeline shows it.
 - **Plan limits are shared.** Parallel pre-planning tasks and several roles draw on one engineer's plan, so the runner queues work when a limit is reached. Review on a different model needs the engineer to hold a plan with a second vendor, or the team to supply a key for that role.
 - **Terms change.** Sign-in mode is set per role, so a vendor change means changing a setting, not the architecture.
-- **Open source keeps the app out of the login path.** Each team self-hosts its own deployment, and the app never offers, holds or relays a vendor login; it only starts the CLI the engineer installed and signed in to. Anyone who runs a deployment as a service for others takes on the vendors' commercial terms themselves. Two points still need Anthropic's confirmation before the hosted path is built: hosted Claude Code under an engineer's own plan, and whether a third-party runner starting the engineer's installed `claude` counts as third-party app usage of their plan.
+- **Open source keeps the app out of the login path.** Each engineer or team runs its own deployment, and the app never offers, holds or relays a vendor login; it only starts the CLI the engineer installed and signed in to. Anyone who runs a deployment as a service for others takes on the vendors' commercial terms themselves. Two points still need Anthropic's confirmation before the hosted path is built: hosted Claude Code under an engineer's own plan, and whether a third-party runner starting the engineer's installed `claude` counts as third-party app usage of their plan.
 
 ## Data model
 
@@ -456,7 +460,7 @@ Engineers work in eight views, and the plan workspace is where most of the time 
 | Run timeline | Watches a feature move through the stages live: current stage, round number, skills loaded, cost so far |
 | Verification report | Reads each acceptance criterion with its verdict and opens the screenshots or request logs behind it |
 
-**Designing for mobile.** A mobile app is planned for later, so every screen is designed to work at phone width from the first version.
+**Designing for mobile.** A phone app that connects to the engineer's desktop is planned for later, so every screen is designed to work at phone width from the first version.
 
 &#91;embedded content: plan workspace layout · desktop and phone\]
 
@@ -466,7 +470,7 @@ On desktop the findings sit beside the plan. On a phone the same finding cards r
 - **One decision per card.** Triage, approvals and clarifying questions are cards with two or three buttons, which suits a thumb as well as a mouse.
 - **Plans are blocks, not one long page.** Sections and steps are cards the engineer expands, reorders and acts on one at a time.
 - **Every action has a button.** Nothing depends on hover, right-click or a keyboard shortcut.
-- **Work never depends on an open tab.** Runs continue in the background, and notifications bring the engineer back when a decision is needed.
+- **Work never depends on an open window.** Runs continue in the background while the desktop app sits in the tray, and notifications bring the engineer back when a decision is needed.
 
 | Screen | On a phone | Notes |
 | --- | --- | --- |
@@ -476,11 +480,11 @@ On desktop the findings sit beside the plan. On a phone the same finding cards r
 | Plan thread and peer approval | Full | Reads like a chat |
 | Run timeline | Full | Live stage, round and cost |
 | Verification report | Full | Screenshots open full screen |
-| Feature tabs and pre-planning tasks | Full, with a hosted runner | Tabs become a list of features; a phone has no local runner |
+| Feature tabs and pre-planning tasks | Full | Tabs become a list of features. Tasks run on the desktop's runner or a hosted runner, since a phone has no runner |
 | Plan workspace | Read, comment and section actions | Long drafting stays easier on desktop |
 | Repository setup | Works, rarely needed | Checklists fit a phone |
 
-The web app is responsive from Phase 1, so engineers can approve and triage from a phone browser before any app exists. One consequence for the architecture: a phone has no local runner, so exploring or planning from mobile needs a hosted runner.
+The UI is responsive from Phase 1, so the phone app reuses its layouts. A phone has no runner, so work started from a phone runs on the engineer's desktop, which stays on in the tray, or on a hosted runner.
 
 ## Build plan
 
@@ -498,9 +502,9 @@ Each diamond is an exit gate: the next phase starts only when its condition is m
 
 Sizes are rough estimates for one or two engineers, 19 to 27 weeks in total, and should be re-cut after Phase 0.
 
-**Distribution track, outside the phases:** the desktop app described under Architecture, planned next so that installing Plangineer stops being a developer checkout.
+**Desktop app, outside the phases:** the desktop app described under Architecture is how Plangineer ships. It is built next, so the remaining Phase 1 work is built and tested inside it.
 
-**Left for later:** skill auditing and line-level provenance, testing of mobile apps, alternative approaches in the plan workspace, the Cursor CLI, and the mobile app itself.
+**Left for later:** skill auditing and line-level provenance, testing of mobile apps, alternative approaches in the plan workspace, the Cursor CLI, the team-hosted server, and the phone app itself.
 
 ## Risks
 
@@ -515,7 +519,7 @@ The two risks most likely to sink adoption are noisy reviews and slow plan appro
 | Platform differences break the runner | Engineers run Windows, macOS and Linux, and paths, shells, line endings, process control and CLI install shapes differ between them. Plangineer is developed on Windows, so Windows-only assumptions are the likeliest to slip in | No shell scripts; platform-neutral paths and line endings; every check runs in CI on all three systems |
 | Two agent CLIs behave differently | Output formats, permissions and skill folders differ between Claude Code and Codex | One adapter per CLI; one canonical skills folder mirrored to the other; start with Claude Code and add Codex once the workflow runs end to end |
 | Verification has nothing to test against | Without test accounts and safe seed data, every check comes back blocked | Environment checklist completed before Phase 3; start with one project |
-| Runners hold real access | An agent that runs code has repository and environment credentials | Isolated workspace per run, short-lived scoped credentials, no production secrets |
+| Runners hold real access | An agent that runs code has repository and environment credentials | A Git worktree per run, outside the engineer's working copy, short-lived scoped credentials, no production secrets |
 | Cost per feature | Each feature uses several model runs across four roles, and the confirm step adds more | Cost recorded per run and shown on the timeline; under the `ask` rounds setting the engineer approves each extra review, and `adaptive` stops at its maximum of at most 5 rounds |
 | The runner outgrows the product | Companies such as Stripe and Ramp [built whole platforms](https://newsletter.pragmaticengineer.com/p/why-ramp-built-inspect) for background agents | Start on CI runners and defer dedicated infrastructure until usage demands it |
 | Multi-repository work drifts apart | Changes in separate repositories can each pass review and still not fit together, such as an API and its client | One plan with cross-repository phases and contracts recorded under Decisions; verification waits until every repository's change is live |
@@ -535,14 +539,16 @@ These choices are still open, and the first one shapes the architecture more tha
 - [ ] **What counts as trivial.** Recommended: the author proposes it, and named paths such as migrations always need peer approval.
 - [ ] **Runner base.** Recommended: CI runners first. The alternative is an open-source background agent framework such as [Open-Inspect](https://github.com/ColeMurray/background-agents/wiki) or [Open SWE](https://github.com/langchain-ai/open-swe).
 - [x] **Review round limit.** Decided: the `adaptive` rounds setting stops at a maximum the engineer sets from 1 to 5. At the default `ask` setting the engineer decides each time.
-- [x] **Internal tool or product.** Decided: an open-source project that each team self-hosts, one deployment per team. There is no tenancy, the runner ships through npm, and the app never holds a vendor login.
-- [ ] **Desktop shell and packaging.** Electron or Tauri, how Postgres binaries are packaged, and which of code signing, notarization and auto-update are in the first version. The desktop app plan decides.
+- [x] **Internal tool or product.** Decided: an open-source desktop app that each engineer installs, with a team-hosted server from the same code later. There is no tenancy, the runner is bundled in the app and also ships through npm for second machines, and the app never holds a vendor login.
+- [x] **Desktop shell and packaging.** Decided on Oct 8, 2026 in the [desktop app plan](../plans/2026-10-08-desktop-app.md): Electron 44 with electron-builder, Postgres 18 binaries from theseus-rs run with `pg_ctl`, and unsigned installers on GitHub Releases. Updates install themselves on Windows and Linux and are offered as a download on macOS.
+- [ ] **Phone access to a desktop.** The phone app connects to the engineer's desktop, whose API listens only on `127.0.0.1`. Whether it goes through a relay, a tunnel or a team server is open, and the engineer decides before the phone app is planned.
+- [x] **Git worktrees.** Decided: every agent run works in a Git worktree the runner owns, and Plangineer's own development works in a worktree per branch. Nothing switches branches in a working copy.
 - [ ] **Licence.** Recommended: Apache-2.0, which adds an explicit patent grant over MIT.
 - [ ] **Plan review pipeline.** This proposal assumes plan review uses the same confirm step and triage rules as implementation review.
 - [ ] **Verification orchestrator.** Recommended: add a fifth orchestrator for verification, so testing conventions live in the repo too.
 - [x] **Canonical skills folder.** Decided: `.agents/skills/`, mirrored one way to `.claude/skills/` by the runner's `skills sync`, with `skills check` in each repository's CI.
 - [x] **Baseline catalog.** Decided: the 21 skills in the [baseline catalog](baseline-catalog.md), 10 of them required whenever an orchestrator is chosen, each recommended by its signal in the repository.
-- [ ] **Mobile app approach.** Recommended: responsive web first, then choose between a native and a cross-platform app once usage shows which screens matter on a phone.
+- [ ] **Mobile app approach.** Recommended: a responsive UI first, then choose between a native and a cross-platform app once usage shows which screens matter on a phone.
 - [ ] **One plan per feature tab.** This proposal assumes a tab yields one plan, and one pull request per repository involved. Epics that group several features come later.
 - [ ] **Cross-repository orchestrators' home.** Proposed: the app keeps them, since they belong to no single repository. The alternative is a dedicated workspace repository.
 - [ ] **Roles for multi-repository work.** Proposed: the cross-repository orchestrators use roles set once for them, and each repository's own orchestrator runs with that repository's settings.

@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Runner adapters
 
-Rules for `apps/runner`, the npm package an engineer installs to run agents on their own machine. It imports `contracts` and `domain` only. Its protocol with the control plane is in [run-orchestration](../run-orchestration/SKILL.md), pairing with `plangineer-runner login` and the vendor login rule in [auth-and-access](../auth-and-access/SKILL.md), and spawning, stopping, paths and line endings in [cross-platform](../cross-platform/SKILL.md).
+Rules for `apps/runner`, which runs agents on the engineer's own machine. The desktop app runs its bundle, and a second machine installs it from npm. It imports `contracts` and `domain` only. Its protocol with the control plane is in [run-orchestration](../run-orchestration/SKILL.md), pairing with `plangineer-runner login` and the vendor login rule in [auth-and-access](../auth-and-access/SKILL.md), and spawning, stopping, paths and line endings in [cross-platform](../cross-platform/SKILL.md).
 
 ## Implement mode
 
@@ -32,9 +32,9 @@ Rules for `apps/runner`, the npm package an engineer installs to run agents on t
 - Git refuses a branch checked out in another worktree. Fail the job with that message. Never pass `--force` or `--ignore-other-worktrees`.
 - Serialize git commands per repository. Parallel `worktree add` calls race on the repository's lock files.
 - A job over several repositories gets one worktree for each.
-- The runner writes the approved plan revision into the workspace, outside Git's tracked files, so it is never committed.
+- The runner writes the approved plan revision into the worktree, outside Git's tracked files, so it is never committed.
 - One function removes a worktree, with `git worktree remove` then `git worktree prune`, for a passed, failed and cancelled run alike. The plan decides when a feature's worktrees are removed.
-- Before every run except setup, run `skills check` on the checkout. A drifted mirror fails the run with the file and the fix. A setup run skips it, since setup is what repairs the mirror.
+- Before every run except setup, run `skills check` in the worktree. A drifted mirror fails the run with the file and the fix. A setup run skips it, since setup is what repairs the mirror.
 
 ### Job queue
 

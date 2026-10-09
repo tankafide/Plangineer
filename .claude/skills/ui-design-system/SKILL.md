@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # UI design system
 
-How `apps/web` lays out and builds its components. How it looks belongs to [visual-style](../visual-style/SKILL.md). Component behavior and the five remote states belong to [frontend-react](../frontend-react/SKILL.md). Every screen works at phone width from the first version, because engineers approve and triage from a phone browser and a mobile app follows.
+How `apps/web` lays out and builds its components. How it looks belongs to [visual-style](../visual-style/SKILL.md). Component behavior and the five remote states belong to [frontend-react](../frontend-react/SKILL.md). The screens show in the desktop app's window, and every screen also works at phone width from the first version, because a phone app that connects to the engineer's desktop follows.
 
 ## Plan mode
 

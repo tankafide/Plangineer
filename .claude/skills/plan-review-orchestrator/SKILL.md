@@ -28,6 +28,7 @@ Rule skills are read by path with the file-read tool, never through a skill tool
 | `.agents/skills/ui-design-system/SKILL.md` | The plan touches screens or components |
 | `.agents/skills/visual-style/SKILL.md` | The plan touches anything visible in `apps/web`: colour, type, icons, spacing, motion or themes |
 | `.agents/skills/agent-instructions/SKILL.md` | The plan touches the prompts, orchestrator templates or skill files the product generates, not this repository's own skills |
+| `.agents/skills/electron-desktop/SKILL.md` | The plan touches `apps/desktop`, or its packaging, release or update configuration. A step that breaks its rules is a defect |
 | `.agents/skills/security/SKILL.md` | The plan adds a trust boundary, such as authentication, a webhook, runner pairing or untrusted input |
 | `.agents/skills/performance/SKILL.md` | The plan adds queries, lists, realtime delivery or heavy frontend work |
 

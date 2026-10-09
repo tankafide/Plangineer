@@ -8,9 +8,9 @@ disable-model-invocation: true
 
 Finds concrete security defects, in a plan or in a diff. It raises findings in the [finding format](../orchestrator-references/finding-format.md) with source skill `security`, as `defect` only. Read the [stack decisions](../../../docs/engineering/stack-decisions.md) first.
 
-The area rules live in `auth-and-access` (sessions, roles, pairing, vendor logins), `github-integration` (webhooks, App tokens) and `runner-adapters` (spawning). This skill checks the trust boundaries across them and holds the rules no area skill owns. A breach of an area rule found here is still raised, citing that rule.
+The area rules live in `auth-and-access` (sessions, roles, pairing, vendor logins), `github-integration` (webhooks, App tokens), `runner-adapters` (spawning) and `electron-desktop` (the app window, navigation and the local stack). This skill checks the trust boundaries across them and holds the rules no area skill owns. A breach of an area rule found here is still raised, citing that rule.
 
-Plangineer is self-hosted, one deployment per team, with no tenancy. Users are admin or member. The control plane is `apps/api`. A runner on an engineer's machine executes agent CLIs, so it is the most dangerous component: injected text that reaches it can run code on a developer machine.
+Plangineer is a desktop app, one deployment per install, with no tenancy. Users are admin or member. The control plane is `apps/api`, which the desktop app runs on `127.0.0.1` beside Postgres. A team server runs the same code later, so loopback is never a reason to skip a check. A runner on an engineer's machine executes agent CLIs, so it is the most dangerous component: injected text that reaches it can run code on a developer machine.
 
 ## Boundaries to check
 
@@ -24,6 +24,7 @@ Plangineer is self-hosted, one deployment per team, with no tenancy. Users are a
 | GitHub tokens | Installation tokens are minted per use, kept in memory, and never logged, stored, put in plan text or sent to the browser. A runner gets one only for the run that needs it |
 | Vendor logins | Check [the vendor login rule](../auth-and-access/SKILL.md#the-vendor-login-rule). Any breach is a `blocker` |
 | Secrets | Secrets come from the validated environment, are listed in `.env.example` with placeholder values, and are never committed, bundled into `apps/web` (no secret behind a `VITE_` prefix) or returned from an API |
+| Desktop window | The window has no Node access, preload or IPC, denies every permission request, and keeps only the app origin and `https://github.com` in the window, as `electron-desktop` sets. Any other URL opens in the default browser only if it is `http` or `https` |
 | Storage | S3 evidence is served through a checked procedure or a short-lived presigned URL, never a public bucket. Keys are generated, never built from a user's file name |
 
 ## Untrusted input
