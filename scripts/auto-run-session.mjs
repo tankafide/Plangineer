@@ -5,6 +5,12 @@ import { z } from 'zod';
 /** Only the engineer's own session lands work, so the headless sessions cannot push or merge. */
 const DISALLOWED_TOOLS = ['Bash(git push:*)', 'Bash(gh:*)'];
 
+/**
+ * `claude -p` stops waiting for background subagents after 600 s and makes the session report
+ * early. A phase can run for over an hour, so the session waits for every subagent to finish.
+ */
+const SESSION_ENV = { CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS: '0' };
+
 const lines = (description) => z.array(z.string()).describe(description);
 
 const reportFields = {
@@ -119,6 +125,7 @@ export async function runSession({ command, cwd, prompt, settingsFile, schema, l
   ];
   const run = await execa(file, args, {
     cwd,
+    env: SESSION_ENV,
     input: prompt,
     stdout: { file: logFile },
     stderr: 'inherit',

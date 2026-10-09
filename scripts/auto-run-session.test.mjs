@@ -51,9 +51,13 @@ describe('runSession', () => {
     });
   }
 
-  async function args() {
+  async function firstCall() {
     const [firstLine] = (await readFile(recordFile, 'utf8')).split('\n');
-    return JSON.parse(firstLine).args;
+    return JSON.parse(firstLine);
+  }
+
+  async function args() {
+    return (await firstCall()).args;
   }
 
   it('returns the validated report', async () => {
@@ -76,6 +80,12 @@ describe('runSession', () => {
       'Bash(git push:*)',
       'Bash(gh:*)',
     ]);
+  });
+
+  it('waits for every background subagent, with no time limit', async () => {
+    await session(success(planReport));
+
+    expect((await firstCall()).bgWaitCeiling).toBe('0');
   });
 
   it('passes a draft-07 schema with the report union nested under one key', async () => {

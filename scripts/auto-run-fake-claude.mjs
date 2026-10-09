@@ -11,7 +11,10 @@ const config = JSON.parse(await readFile(configFile, 'utf8'));
 const prompt = await text(process.stdin);
 const settingsFile = args[args.indexOf('--append-system-prompt-file') + 1];
 const settings = await readFile(settingsFile, 'utf8');
-await appendFile(config.recordFile, `${JSON.stringify({ args, prompt, settings })}\n`);
+await appendFile(
+  config.recordFile,
+  `${JSON.stringify({ args, prompt, settings, bgWaitCeiling: process.env.CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS })}\n`,
+);
 
 const session = prompt.includes('plan-orchestrator') ? 'plan' : 'implementation';
 console.log(JSON.stringify({ type: 'system', subtype: 'init' }));
