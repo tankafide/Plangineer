@@ -39,8 +39,8 @@ Rules for the workspace, scripts, hooks, CI and check configuration. The stack a
 
 - `lefthook.yml` holds every hook, and each command is a Node script, `node scripts/<name>.mjs`, or the runner's CLI, `node apps/runner/src/cli.ts`. Scope a command to its files with `glob`, as `skills-lint` does.
 - A hook never mutates files and never uses `stage_fixed`, because it can overwrite an unstaged edit.
-- Git runs hooks with `GIT_DIR`, `GIT_INDEX_FILE` and its other repository-local variables set, and every child inherits them. A hook command that runs git elsewhere, as tests do, deletes them first. `git rev-parse --local-env-vars` lists them.
-- A new worktree has no `.env`, which Git ignores. Create worktrees with `pnpm worktree:new`, which copies it.
+- Hooks inherit git's repository-local variables, such as `GIT_DIR`, listed by `git rev-parse --local-env-vars`. A hook command that runs git in another repository, as tests do, deletes them first.
+- Create worktrees with `pnpm worktree:new`, which copies the ignored `.env`.
 - Pre-commit checks the staged files (`skills check --staged`), not the working tree.
 - Pre-push runs `node scripts/verify.mjs`, so a failing `pnpm verify` stops the push.
 - `prepare` runs `lefthook install`. Hooks can be skipped with `--no-verify`, so CI is the gate.

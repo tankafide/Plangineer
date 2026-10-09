@@ -25,7 +25,7 @@ Rule skills are read by path with the file-read tool, never through a skill tool
 | `.agents/skills/testing/SKILL.md` | Writing tests, once per phase |
 | `.agents/skills/ui-design-system/SKILL.md` | The change touches screens or components |
 | `.agents/skills/visual-style/SKILL.md` | The change touches anything visible in `apps/web`: colour, type, icons, spacing, motion or themes |
-| `.agents/skills/agent-instructions/SKILL.md` | The change touches the prompts, orchestrator templates or skill files the product generates, not this repository's own skills |
+| `.agents/skills/agent-instructions/SKILL.md` | The change touches a skill under `.agents/skills/`, or the prompts, orchestrator templates or skill files the product generates |
 | `.agents/skills/debugging/SKILL.md` | The request is a bug fix |
 | `.agents/skills/api-server/SKILL.md` | The change is in `apps/api` handlers, middleware or environment parsing |
 | `.agents/skills/persistence/SKILL.md` | The change writes queries, transactions or seed data |

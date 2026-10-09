@@ -37,7 +37,7 @@ Answering questions, reading docs and editing docs that are not feature plans ne
 
 Every other skill is a rule skill. Orchestrators load them by path, and you load one only when the user names it.
 
-Edit skills only under `.agents/skills/`, then run `pnpm skills:sync` and `pnpm skills:lint`, which runs the runner's skill lint and then this repository's own checks. Never edit `.claude/skills/`; it is a generated copy.
+Edit skills only under `.agents/skills/`, to `.agents/skills/agent-instructions/SKILL.md`: short and effective, every line earning its tokens. Then run `pnpm skills:sync` and `pnpm skills:lint`, which runs the runner's skill lint and then this repository's own checks. Never edit `.claude/skills/`; it is a generated copy.
 
 ## Working rules
 

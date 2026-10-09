@@ -26,7 +26,7 @@ Runs the whole workflow unattended: plan, plan review, build, implementation rev
 
 ## Workflow
 
-1. **Worktree.** Create a worktree for the work with `pnpm worktree:new <branch>`, as [git workflow](../orchestrator-references/git-workflow.md#worktrees) describes, with a branch named for the request. To build an existing plan, use the plan's branch: reuse its worktree if one exists, or pass that branch to `pnpm worktree:new`. Run every later step from the worktree.
+1. **Worktree.** Run `pnpm worktree:new <branch>`, as [git workflow](../orchestrator-references/git-workflow.md#worktrees) describes, with a branch named for the request. To build an existing plan, reuse the plan branch's worktree, or pass that branch. Run every later step from the worktree.
 2. **Run.** Write the request to `logs/auto/request.md`, which Git ignores. Run `pnpm auto:run --request-file logs/auto/request.md --plan-rounds <n> --implementation-rounds <n>`, or pass `--plan <path>` in place of `--request-file` to build an existing plan. Run it in the background and wait for it to exit, because both phases together can take over an hour. Give the engineer the log paths it prints, so they can follow each session. The script keeps the logs, the settings and a copy of the request under the main checkout's `logs/auto/`, so they outlive the worktree.
 3. **Outcome.** The script prints `ready`, `reasons` and each session's report as JSON. When it exits 1, a session failed: report the error and the log path, and stop.
 4. **Gate.** When `ready` is false, stop before pushing. Tell the engineer each reason and what to do about it. For an open prerequisite, the engineer sets it up, marks its row `resolved` in the plan and commits, then runs this skill again with the plan path.

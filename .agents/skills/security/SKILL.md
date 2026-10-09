@@ -24,7 +24,7 @@ Plangineer is a desktop app, one deployment per install, with no tenancy. Users 
 | GitHub tokens | Installation tokens are minted per use, kept in memory, and never logged, stored, put in plan text or sent to the browser. A runner gets one only for the run that needs it |
 | Vendor logins | Check [the vendor login rule](../auth-and-access/SKILL.md#the-vendor-login-rule). Any breach is a `blocker` |
 | Secrets | Secrets come from the validated environment, are listed in `.env.example` with placeholder values, and are never committed, bundled into `apps/web` (no secret behind a `VITE_` prefix) or returned from an API |
-| Desktop window | The window has no Node access, preload or IPC, denies every permission request, and keeps only the app origin and `https://github.com` in the window, as `electron-desktop` sets. Any other URL opens in the default browser only if it is `http` or `https` |
+| Desktop window | Window settings, permissions and navigation follow `electron-desktop`. A breach is a defect |
 | Storage | S3 evidence is served through a checked procedure or a short-lived presigned URL, never a public bucket. Keys are generated, never built from a user's file name |
 
 ## Untrusted input

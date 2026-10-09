@@ -29,7 +29,7 @@ Tests prove the "done when" lines. Choose the smallest layer that proves each on
 - No test-only methods or exports in production code, and no expected value computed by the code under test.
 - Pin time with Vitest fake timers or an injected clock. Never sleep for real. In Playwright, use web-first assertions such as `expect(locator).toBeVisible()` that retry, never `waitForTimeout`.
 - Tests are independent and run in any order, in parallel, on Windows, macOS and Linux. Paths come from `node:path`.
-- A test that runs `git` does so in its own temp repository, never this one. Workers start without git's hook variables such as `GIT_DIR`, because the root `vitest.config.ts` deletes them. Keep that call, since `pnpm verify` runs inside the pre-push hook.
+- Tests run `git` only in temp repositories. The root `vitest.config.ts` deletes git's hook variables such as `GIT_DIR`, so this holds inside the pre-push hook. Keep that call.
 - Keep the suite fast: unit tests in milliseconds, no network, no database below the integration layer.
 - A skipped or `todo` test is not coverage. Do not commit one.
 - There is no coverage percentage target. The "done when" lines are the measure, so never add a test only to raise coverage.

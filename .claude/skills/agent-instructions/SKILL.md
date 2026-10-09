@@ -1,17 +1,18 @@
 ---
 name: agent-instructions
-description: Rules for the prompts, orchestrator templates and skill files the product sends to or writes for agents, kept short, testable and identical for Claude Code and Codex. Use when planning, implementing or reviewing runner prompts, generated orchestrators or rule skills, or the setup that writes them.
+description: Rules for text agents read, kept short, testable and identical for Claude Code and Codex. Covers this repository's own skills and the prompts, orchestrator templates and skill files the product writes. Use when planning, implementing or reviewing any of them.
 disable-model-invocation: true
 ---
 
 # Agent instructions
 
-Rules for text that agents read: the prompts the runner sends, the orchestrator templates the product writes into a repository, and the skill files setup generates. This skill covers the product's output, not this repository's own skills, which are edited under `.agents/skills/` as `AGENTS.md` says. [writing-style](../writing-style/SKILL.md) governs the prose.
+Rules for text that agents read: this repository's skills under `.agents/skills/`, the prompts the runner sends, the orchestrator templates the product writes into a repository, and the skill files setup generates. [writing-style](../writing-style/SKILL.md) governs the prose.
 
 ## Rules for every instruction
 
 | Rule | In practice |
 | --- | --- |
+| Short | Every line earns its tokens. Use the fewest words that make the agent act correctly. Prefer a table row to a paragraph, and keep a reason only when it changes what the agent does. Add to an existing line before adding a new one |
 | Only what the agent lacks | Lead with the job. Cut anything a capable model does unprompted, such as "write clean code" or "be thorough" |
 | Testable | Each rule can be checked on a diff or an output. Keep "no function over 40 lines" only if the repo enforces it |
 | Concrete | Name files, commands, fields and values from the repository's own code and docs. Give one default, not a list of options. One term per concept throughout |
@@ -83,4 +84,5 @@ Raise findings in the [finding format](../orchestrator-references/finding-format
 | A rule that cannot be checked on a diff or an output | `should fix` |
 | A parsed output with no Zod schema in `contracts`, or an unvalidated reply | `should fix` |
 | No stop rule for an undecided point, or no deviation-log instruction in an implementation prompt | `should fix` |
+| Words that change no behavior: a restated rule, a reason the agent never acts on, or a paragraph that fits a table row | `should fix` |
 | Generic advice the agent follows unprompted, mixed terms for one concept, or a skill that covers two concerns | `nit` |

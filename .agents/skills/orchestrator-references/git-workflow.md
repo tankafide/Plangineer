@@ -8,7 +8,7 @@ Each piece of work gets its own branch in its own Git worktree. The main checkou
 
 - Name the branch `<type>/<short-slug>`. Type is one of `feat`, `fix`, `refactor`, `test`, `docs` or `chore`. The slug is short, lowercase and hyphenated.
 - A session already in a linked worktree works there. `git rev-parse --git-dir` differs from `git rev-parse --git-common-dir` in a linked worktree. On a detached HEAD there, create the branch in place with `git switch -c <branch>`.
-- Otherwise create the worktree when planning starts, or when implementation starts if there is no plan, with `pnpm worktree:new <branch>`. It fetches `origin`, starts a new branch from the default branch on `origin` or checks out an existing one, creates the worktree at `../<checkout folder>.worktrees/<slug>` beside the main checkout, copies the main checkout's `.env` and installs the dependencies. It prints the worktree's path.
+- Otherwise, when planning starts, or implementation without a plan, run `pnpm worktree:new <branch>`. It creates `../<checkout folder>.worktrees/<slug>` on a new branch from `origin`'s default branch, or on an existing branch, copies `.env`, installs dependencies and prints the path.
 - Run every later step in the worktree. A subagent starts in the session's first directory, so give each one the worktree's absolute path, as [execution](execution.md#what-a-handoff-holds) describes. Never run `git switch` or `git checkout` in the main checkout.
 - Once the branch is merged, remove the worktree with `git worktree remove <path>` and delete the branch.
 
@@ -40,7 +40,7 @@ When the engineer asks to land the work on `main` without a pull request, run th
 
 1. Run `git fetch origin` and `git rebase origin/main`. On a conflict, run `git rebase --abort`, then stop and report the conflicting files.
 2. Push with `git push origin HEAD:main`. The pre-push hook runs `pnpm verify`. When it fails, stop and report the failing check. Never pass `--no-verify`. Git refuses the push when `main` moved in the meantime: repeat from step 1. Never pass `--force`.
-3. From the main checkout, run `git worktree remove <path>` and `git branch -D <branch>`. The branch is on `main` but was never merged locally, so `-d` refuses it.
+3. From the main checkout, run `git worktree remove <path>` and `git branch -D <branch>`. `-d` refuses a branch never merged locally.
 
 ## Permission
 

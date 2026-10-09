@@ -26,7 +26,7 @@ Rule skills are read by path with the file-read tool, never through a skill tool
 | `.agents/skills/testing/SKILL.md` | The diff adds or changes tests, or changes behavior |
 | `.agents/skills/ui-design-system/SKILL.md` | The diff touches screens or components |
 | `.agents/skills/visual-style/SKILL.md` | The diff touches anything visible in `apps/web`: colour, type, icons, spacing, motion or themes |
-| `.agents/skills/agent-instructions/SKILL.md` | The diff touches the prompts, orchestrator templates or skill files the product generates, not this repository's own skills |
+| `.agents/skills/agent-instructions/SKILL.md` | The diff touches a skill under `.agents/skills/`, or the prompts, orchestrator templates or skill files the product generates |
 | `.agents/skills/api-server/SKILL.md` | The diff touches `apps/api` handlers, middleware or environment parsing |
 | `.agents/skills/persistence/SKILL.md` | The diff touches queries, transactions or seed data |
 | `.agents/skills/frontend-react/SKILL.md` | The diff touches `apps/web` components or routes |
