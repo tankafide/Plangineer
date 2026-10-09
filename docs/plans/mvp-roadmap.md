@@ -163,6 +163,11 @@ Plangineer ships as an Electron desktop app, and the [desktop app plan](2026-10-
 - **Two settings carry the growth path.** `DATABASE_URL` picks the Postgres, and the public origin (`BETTER_AUTH_URL` and the GitHub App callback URLs) is a setting and never a hard-coded `localhost`.
 - **No single-user shortcut.** Sign-in and the admin and member roles apply as they do on a team server.
 - **New work for a team server later.** A container image and deploy guide, a public HTTPS URL for GitHub webhooks, backups and upgrades, and moving a solo user's data by Postgres dump and restore.
+- **Open questions for a team server.** Raised while building the desktop app and left open, since team support is not a priority yet. Settle them when team server work is planned.
+  - How a second machine pairs its runner while the desktop API listens only on `127.0.0.1`. The plan's D13 says `plangineer-runner login` still works there, which C1 rules out.
+  - Whether changing only **Callback URL** and **Setup URL** on GitHub is enough after a port or origin change, as the [desktop app guide](../engineering/desktop-app.md#change-a-port) says. GitHub shows no redirect URL to edit after the App is created.
+  - Whether a team server can rely on keeping the desktop's `BETTER_AUTH_SECRET` to decrypt the stored GitHub App, or needs a way to re-encrypt it.
+  - How to reach `pg_dump` inside the Linux AppImage. The guide's `--appimage-extract` route is untested.
 - **Phone access later.** A phone app connects to the engineer's desktop. How it reaches an API that listens only on `127.0.0.1` is an open decision in the [MVP](../product/mvp.md#open-decisions).
 - **Known limit.** GitHub webhooks need a public URL, so anything that depends on them does not work from a laptop without a tunnel.
 - **Left out of the first version.** Hosted or team deployment, Codex, the phone app, signed builds and a standalone runner binary.
