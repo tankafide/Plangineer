@@ -6,7 +6,6 @@ import {
   type SectionAction,
 } from '@plangineer/contracts';
 import { and, asc, desc, eq, inArray, isNotNull } from 'drizzle-orm';
-import { alias } from 'drizzle-orm/pg-core';
 import type { Executor, Transaction } from '../db/client.ts';
 import {
   contextFiles,
@@ -223,23 +222,4 @@ export async function findPlanningInputsForRunner(
       ),
     );
   return row?.inputs;
-}
-
-const queuedTurns = alias(planningTurns, 'queued_turns');
-const queuedRuns = alias(runs, 'queued_runs');
-
-/** The runner of a queued planning run of the same feature as the given planning run. */
-export async function findQueuedPlanningRunner(
-  executor: Executor,
-  runId: string,
-): Promise<string | undefined> {
-  const [row] = await executor
-    .select({ runnerId: queuedRuns.runnerId })
-    .from(planningTurns)
-    .innerJoin(queuedTurns, eq(queuedTurns.featureId, planningTurns.featureId))
-    .innerJoin(queuedRuns, eq(queuedRuns.id, queuedTurns.runId))
-    .where(and(eq(planningTurns.runId, runId), eq(queuedRuns.status, 'queued')))
-    .orderBy(desc(queuedTurns.id))
-    .limit(1);
-  return row?.runnerId;
 }

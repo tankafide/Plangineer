@@ -1,10 +1,10 @@
 import { ORPCError } from '@orpc/client';
 import {
+  isRunActive,
   type PlanBody,
   PlanConflictData,
   type PlanConflictReason,
   type PlanWorkspace,
-  type RunStatus,
 } from '@plangineer/contracts';
 import {
   type QueryClient,
@@ -17,9 +17,6 @@ import {
 import { useEffect } from 'react';
 import { type ApiUtils, useApiUtils } from './api-provider.tsx';
 import { useRunEvents } from './run-events.ts';
-
-/** A turn runs while its run is queued, leased or running, as the API decides `turn_running`. */
-const RUNNING_STATUSES: ReadonlySet<RunStatus> = new Set(['queued', 'leased', 'running']);
 
 /** Refetches what a turn or a plan write may have changed: the feature and the feature list. */
 async function invalidateFeature(utils: ApiUtils, queryClient: QueryClient, featureId: string) {
@@ -57,7 +54,7 @@ export function usePlanTurnEvents(workspace: PlanWorkspace | undefined) {
   const utils = useApiUtils();
   const queryClient = useQueryClient();
   const turn = workspace?.turn ?? null;
-  const runId = turn !== null && RUNNING_STATUSES.has(turn.status) ? turn.runId : skipToken;
+  const runId = turn !== null && isRunActive(turn.status) ? turn.runId : skipToken;
   const stream = useRunEvents(runId);
   const featureId = workspace?.featureId;
   const ended = stream.state.status === 'ended';

@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { features, planningTurns, runners } from '../db/schema.ts';
 import type { ServiceDeps } from '../lib/service-deps.ts';
 import { claimRuns } from '../runs/dispatch.ts';
+import { onRunEnded } from '../runs/run-ended.ts';
 import { storeFeature } from '../test/features.ts';
 import { storeRunner, storeUser, testAuth, testDeps } from '../test/fixtures.ts';
 import { finishTurn, latestTurn, planDraft, revisionsOf, storeTurn } from '../test/planning.ts';
@@ -145,6 +146,31 @@ describe('the Auto loop after a guided draft', () => {
     expect([await stateOf(featureId), await turnCount(featureId)]).toEqual(['planning', 3]);
   });
 
+  it('waits for a runner row another transaction holds, then queues the next turn', async () => {
+    const { featureId, runnerId, runId } = await autoLoop();
+    await claimRuns(deps, runnerId);
+
+    let ended: Promise<void> | undefined;
+    await database.db.transaction(async (tx) => {
+      // The row lock a runner's pong takes while the run ends.
+      await tx.select().from(runners).where(eq(runners.id, runnerId)).for('no key update');
+      await appendRunnerEvents(deps, runId, [
+        startedEvent,
+        planningOutputEvent({ kind: 'plan', plan: unreadyDraft() }),
+        succeededEvent,
+      ]);
+      ended = onRunEnded(deps, runId);
+      // Long enough for the continuation to reach the runner lock and wait on it.
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      expect(await turnCount(featureId)).toBe(1);
+    });
+    await ended;
+
+    const next = await latestTurn(database.db, featureId);
+    expect(next.runId).not.toBe(runId);
+    expect(await runRow(database.db, next.runId)).toMatchObject({ status: 'queued', runnerId });
+  });
+
   it('queues no turn when the runner was revoked, and the feature waits in planning', async () => {
     const { featureId, runnerId, runId } = await autoLoop();
     await claimRuns(deps, runnerId);
@@ -160,6 +186,7 @@ describe('the Auto loop after a guided draft', () => {
       [planningOutputEvent({ kind: 'plan', plan: unreadyDraft() }), succeededEvent],
       2,
     );
+    await onRunEnded(deps, runId);
 
     expect((await runRow(database.db, runId)).status).toBe('succeeded');
     expect([await stateOf(featureId), await turnCount(featureId)]).toEqual(['planning', 1]);

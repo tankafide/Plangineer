@@ -1,6 +1,6 @@
 import { isApiError, useFeature, usePlan, usePlanTurnEvents } from '@plangineer/api-client';
 import type { PlanBody, PlanSection, PlanWorkspace, RunEvent } from '@plangineer/contracts';
-import { planOpen } from '@plangineer/domain';
+import { openQuestions, planOpen } from '@plangineer/domain';
 import { Link } from '@tanstack/react-router';
 import { LoadFailed } from '@/components/load-failed';
 import { StaleNotice } from '@/components/stale-notice';
@@ -21,7 +21,7 @@ import { QuestionCard } from './question-card';
 import { ReadinessChecklist } from './readiness-checklist';
 import { SectionCard } from './section-card';
 import { SectionRail } from './section-rail';
-import { DecisionList, SectionView } from './section-views';
+import { DecisionList, SectionBlockers, SectionView } from './section-views';
 import { StepList } from './step-list';
 import { isTurnRunning, TurnStatus } from './turn-status';
 
@@ -145,6 +145,9 @@ function DraftedPlan({
             section={section}
             blockedReason={blockedReason}
           >
+            <SectionBlockers
+              blockers={revision.body.blockers.filter((blocker) => blocker.section === section)}
+            />
             <SectionContent
               section={section}
               featureId={workspace.featureId}
@@ -209,10 +212,10 @@ export function PlanWorkspaceScreen({ featureId }: { featureId: string }) {
   if (!planOpen(workspace.featureState)) return <PlanningNotStarted featureId={featureId} />;
 
   const streamStale = ['reconnecting', 'failed'].includes(turnEvents.state.status);
-  const openQuestions = workspace.questions.filter((question) => question.answeredAt === null);
   let blockedReason: string | null = null;
   if (isTurnRunning(workspace.turn)) blockedReason = PLAN_CONFLICT_MESSAGES.turn_running;
-  else if (openQuestions.length > 0) blockedReason = PLAN_CONFLICT_MESSAGES.questions_open;
+  else if (openQuestions(workspace.questions).length > 0)
+    blockedReason = PLAN_CONFLICT_MESSAGES.questions_open;
 
   return (
     <div className="flex flex-col gap-4">

@@ -1,10 +1,15 @@
 import {
   type PlanBody,
+  type PlanQuestion,
   PlanSection,
   type PlanWorkspace,
   ReadinessKey,
   type ReadinessItem,
 } from '@plangineer/contracts';
+
+/** The questions the engineer has not answered yet. */
+export const openQuestions = (questions: readonly PlanQuestion[]): PlanQuestion[] =>
+  questions.filter((question) => question.answeredAt === null);
 
 type BodyKey = Exclude<ReadinessKey, 'open_questions'>;
 
@@ -37,9 +42,9 @@ const counted = (key: ReadinessKey, count: number): ReadinessItem => ({
  * The readiness checklist, one item per key. With no body yet, every item but the open
  * questions fails, since there is nothing to check.
  */
-export function planReadiness(body: PlanBody | null, openQuestions: number): ReadinessItem[] {
+export function planReadiness(body: PlanBody | null, openCount: number): ReadinessItem[] {
   return ReadinessKey.options.map((key) => {
-    if (key === 'open_questions') return counted(key, openQuestions);
+    if (key === 'open_questions') return counted(key, openCount);
     if (body === null) return { key, ok: false, count: 0 };
     return counted(key, bodyCount(key, body));
   });

@@ -115,7 +115,7 @@ function verificationSection(verification: PlanVerification): string[] {
 
 /**
  * The body as Markdown in the plan-format order, for reading and for the revision diff.
- * Blockers are left out, since the readiness checklist shows them.
+ * Blockers are left out, since each section's card in the workspace lists its own.
  */
 export function planMarkdown(body: PlanBody): string {
   const blocks = [

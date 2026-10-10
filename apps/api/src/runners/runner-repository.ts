@@ -125,22 +125,6 @@ export async function lockRunnerForUser(
   return row;
 }
 
-/**
- * Share-locks the runner row unless another transaction holds it, such as a revoke, so work
- * queued under the lock orders before that transaction or is not queued at all.
- */
-export async function shareRunnerUnlessLocked(
-  tx: Transaction,
-  runnerId: string,
-): Promise<{ status: Runner['status'] } | undefined> {
-  const [row] = await tx
-    .select({ status: runners.status })
-    .from(runners)
-    .where(eq(runners.id, runnerId))
-    .for('share', { skipLocked: true });
-  return row;
-}
-
 export async function markRunnerRevoked(tx: Transaction, runnerId: string): Promise<void> {
   await tx
     .update(runners)

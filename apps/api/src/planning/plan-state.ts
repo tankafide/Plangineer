@@ -1,4 +1,5 @@
-import type { PlanDecision, PlanQuestion, RunStatus } from '@plangineer/contracts';
+import { isRunActive, type PlanDecision, type PlanQuestion } from '@plangineer/contracts';
+import { openQuestions as unanswered } from '@plangineer/domain';
 import type { Executor } from '../db/client.ts';
 import { findLatestTurn, type LatestTurn } from './planning-repository.ts';
 import { findLatestQuestionsTurn, listTurnQuestions } from './question-repository.ts';
@@ -37,11 +38,8 @@ export async function readPlanState(executor: Executor, featureId: string): Prom
   };
 }
 
-export const openQuestions = (state: PlanState): PlanQuestion[] =>
-  state.questions.filter((question) => question.answeredAt === null);
-
-const RUNNING_STATUSES: RunStatus[] = ['queued', 'leased', 'running'];
+export const openQuestions = (state: PlanState): PlanQuestion[] => unanswered(state.questions);
 
 /** Whether the latest turn's run is queued, leased or running. */
 export const turnRunning = (state: PlanState): boolean =>
-  state.turn !== undefined && RUNNING_STATUSES.includes(state.turn.status);
+  state.turn !== undefined && isRunActive(state.turn.status);

@@ -18,6 +18,10 @@ export const TERMINAL_RUN_STATUSES = [
   'cancelled',
 ] as const satisfies readonly RunStatus[];
 
+/** Whether a run is still queued, leased or running, so it has not ended. */
+export const isRunActive = (status: RunStatus): boolean =>
+  !TERMINAL_RUN_STATUSES.some((terminal) => terminal === status);
+
 export const RunFailureReason = z.enum([
   'agent_error',
   'exit_code',

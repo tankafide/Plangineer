@@ -79,8 +79,7 @@ export async function acceptRunEvents(
       })),
       {
         ...options,
-        onPlanningSucceeded: (hookTx, runId, output) =>
-          applyPlanningOutput(hookTx, runId, output, options),
+        onPlanningSucceeded: applyPlanningOutput,
       },
     );
   });

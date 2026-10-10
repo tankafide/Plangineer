@@ -17,6 +17,7 @@ import type { ServiceDeps } from '../lib/service-deps.ts';
 import type { TurnSpec } from '../planning/planning-inputs.ts';
 import { claimRuns } from '../runs/dispatch.ts';
 import { appendRunEvents } from '../runs/run-events-repository.ts';
+import { onRunEnded } from '../runs/run-ended.ts';
 import { insertRun } from '../runs/run-repository.ts';
 import { appendRunnerEvents, planningOutputEvent, startedEvent, succeededEvent } from './runs.ts';
 
@@ -229,7 +230,10 @@ export async function latestTurn(db: Database, featureId: string) {
   return row;
 }
 
-/** Claims the runner's queued runs and has the run start, write the output and succeed. */
+/**
+ * Claims the runner's queued runs and has the run start, write the output and succeed, then ends
+ * it as the runner socket does.
+ */
 export async function finishTurn(
   deps: ServiceDeps,
   runnerId: string,
@@ -237,9 +241,11 @@ export async function finishTurn(
   output: PlanningOutput,
 ) {
   await claimRuns(deps, runnerId);
-  return appendRunnerEvents(deps, runId, [
+  const result = await appendRunnerEvents(deps, runId, [
     startedEvent,
     planningOutputEvent(output),
     succeededEvent,
   ]);
+  await onRunEnded(deps, runId);
+  return result;
 }

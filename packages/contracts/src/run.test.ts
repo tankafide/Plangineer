@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { GitRef, Repository, Run, RunCreateInput, RunSummary } from './run.ts';
+import {
+  GitRef,
+  isRunActive,
+  Repository,
+  Run,
+  RunCreateInput,
+  RunStatus,
+  RunSummary,
+} from './run.ts';
 
 const ID = '0199c1a2-7b3c-7d4e-8f90-a1b2c3d4e5f6';
 const AT = '2026-10-07T12:00:00.000Z';
@@ -34,6 +42,12 @@ function summary(overrides: Record<string, unknown> = {}) {
 
 const run = (overrides: Record<string, unknown> = {}) =>
   summary({ prompt: 'List the files.', ...overrides });
+
+describe('isRunActive', () => {
+  it('holds for a queued, leased or running run and not for an ended one', () => {
+    expect(RunStatus.options.filter(isRunActive)).toEqual(['queued', 'leased', 'running']);
+  });
+});
 
 describe('Repository', () => {
   it.each([

@@ -16,7 +16,9 @@ import {
 } from '@/test/fixtures';
 import {
   answerPlanWorkspace,
+  planBodyFixture,
   planningTurnFixture,
+  planRevisionFixture,
   planWorkspaceFixture,
 } from '@/test/plan-fixtures';
 import { PlanWorkspaceScreen } from './plan-workspace-screen';
@@ -35,6 +37,13 @@ const READY: ReadinessItem[] = [
   { key: 'stale_rows', ok: true, count: 0 },
   { key: 'blockers', ok: true, count: 0 },
 ];
+
+/** The card of one plan section, by the anchor the rail links to. */
+function sectionCard(section: string) {
+  const element = document.getElementById(`section-${section}`);
+  if (element === null) throw new Error(`No card for ${section}`);
+  return within(element);
+}
 
 const RUNNING_TURN = planningTurnFixture({ status: 'running' });
 
@@ -199,6 +208,35 @@ describe('PlanWorkspaceScreen readiness', () => {
     expect(within(rail).getByRole('link', { name: /^Steps\s*Open question$/ })).toBeTruthy();
     expect(within(rail).getByRole('link', { name: /^Test plan\s*Needs work$/ })).toBeTruthy();
     expect(document.getElementById('section-test_plan')).toBeTruthy();
+  });
+
+  it("lists each blocker's text in the card of its section", async () => {
+    const body = planBodyFixture();
+    const blocker = {
+      id: '0199c1a9-7777-7d4e-8f90-000000000901',
+      section: 'steps' as const,
+      stepId: null,
+      text: 'Which queue sends the export?',
+    };
+    answerPlanWorkspace(
+      answerJson(
+        planWorkspaceFixture({
+          revision: planRevisionFixture({ body: { ...body, blockers: [blocker] } }),
+          sections: [
+            { section: 'goal', status: 'complete' },
+            { section: 'steps', status: 'needs_work' },
+          ],
+        }),
+      ),
+    );
+
+    await renderScreen();
+
+    await screen.findByRole('heading', { level: 2, name: 'Steps' });
+    expect(sectionCard('steps').getByRole('list', { name: 'Blockers' }).textContent).toBe(
+      blocker.text,
+    );
+    expect(sectionCard('goal').queryByRole('list', { name: 'Blockers' })).toBeNull();
   });
 
   it('offers Continue planning, not Mark ready, for a plan that is not ready', async () => {

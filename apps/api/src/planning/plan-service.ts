@@ -21,11 +21,8 @@ import { toPage } from '../lib/page.ts';
 import { fail, ok, type Result } from '../lib/result.ts';
 import type { ServiceDeps } from '../lib/service-deps.ts';
 import { wakeRunner } from '../runners/runner-repository.ts';
-import {
-  findFeatureForAuthor,
-  findPlanningInputsForRunner,
-  findQueuedPlanningRunner,
-} from './planning-repository.ts';
+import { queueAutoLoopTurn } from './planning-apply.ts';
+import { findFeatureForAuthor, findPlanningInputsForRunner } from './planning-repository.ts';
 import { openQuestions, readPlanState, turnRunning } from './plan-state.ts';
 import {
   findRevisionByNumber,
@@ -135,14 +132,18 @@ export function getPlanningInputsForRunner({ db }: ServiceDeps, runnerId: string
 }
 
 /**
- * Wakes the runner of a turn queued while a planning run ended, such as an Auto loop's next
- * draft. It never throws, since every run end calls it.
+ * Queues an Auto loop's next draft after a planning run ended, and wakes its runner. It never
+ * throws, since every run end calls it.
  */
-export async function advancePlanningOfRun(deps: ServiceDeps, runId: string): Promise<void> {
+export async function advancePlanningOfRun(
+  { db, env, logger }: ServiceDeps,
+  runId: string,
+): Promise<void> {
   try {
-    const runnerId = await findQueuedPlanningRunner(deps.db, runId);
-    if (runnerId !== undefined) await wakeRunner(deps.db, runnerId);
+    const options = { leaseDurationMs: env.RUN_LEASE_DURATION_MS, logger };
+    const runnerId = await db.transaction((tx) => queueAutoLoopTurn(tx, options, runId));
+    if (runnerId !== undefined) await wakeRunner(db, runnerId);
   } catch (error) {
-    deps.logger.error({ err: error, runId }, 'Planning could not advance after its run ended');
+    logger.error({ err: error, runId }, 'Planning could not advance after its run ended');
   }
 }

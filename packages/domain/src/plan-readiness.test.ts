@@ -1,6 +1,6 @@
-import type { ReadinessItem, ReadinessKey } from '@plangineer/contracts';
+import type { PlanQuestion, ReadinessItem, ReadinessKey } from '@plangineer/contracts';
 import { describe, expect, it } from 'vitest';
-import { isReady, planReadiness, sectionStatuses } from './plan-readiness.ts';
+import { isReady, openQuestions, planReadiness, sectionStatuses } from './plan-readiness.ts';
 import { planBodyFixture, stepFixture, uuid } from './test-fixtures.ts';
 
 const counts = (items: ReadinessItem[]) =>
@@ -51,6 +51,32 @@ describe('planReadiness', () => {
       { key: 'stale_rows', ok: false, count: 0 },
       { key: 'blockers', ok: false, count: 0 },
     ]);
+  });
+});
+
+const question = (n: number, answeredAt: string | null): PlanQuestion => ({
+  id: uuid(n),
+  section: 'goal',
+  prompt: `Question ${n}?`,
+  choices: [
+    { label: 'Yes', detail: '' },
+    { label: 'No', detail: '' },
+  ],
+  recommended: 0,
+  answerChoice: answeredAt === null ? null : 0,
+  answerText: null,
+  answeredAt,
+});
+
+describe('openQuestions', () => {
+  it('keeps only the unanswered questions, in order', () => {
+    const questions = [
+      question(1, null),
+      question(2, '2026-10-10T10:00:00.000Z'),
+      question(3, null),
+    ];
+
+    expect(openQuestions(questions).map((open) => open.id)).toEqual([uuid(1), uuid(3)]);
   });
 });
 

@@ -87,8 +87,7 @@ export async function appendRunnerEvents(
       bodies.map((body, index) => ({ body, attempt, runnerSeq: firstSeq + index })),
       {
         ...options,
-        onPlanningSucceeded: (hookTx, id, output) =>
-          applyPlanningOutput(hookTx, id, output, options),
+        onPlanningSucceeded: applyPlanningOutput,
       },
     ),
   );

@@ -25,6 +25,8 @@ export interface StoredRevision {
   id: string;
   number: number;
   source: PlanRevisionSource;
+  /** The turn whose output made the revision, or null for an engineer's edit. */
+  turnId: string | null;
   body: PlanBody;
   createdAt: Date;
 }
@@ -33,6 +35,7 @@ const revisionColumns = {
   id: planRevisions.id,
   number: planRevisions.number,
   source: planRevisions.source,
+  turnId: planRevisions.turnId,
   body: planRevisions.body,
   createdAt: planRevisions.createdAt,
 };

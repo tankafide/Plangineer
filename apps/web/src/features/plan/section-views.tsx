@@ -1,4 +1,6 @@
-import type { PlanBody, PlanDecision, PlanSection } from '@plangineer/contracts';
+import type { PlanBlocker, PlanBody, PlanDecision, PlanSection } from '@plangineer/contracts';
+import { CircleAlert } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { REVISION_SOURCE_LABELS } from './plan-labels';
 
@@ -19,6 +21,26 @@ function Lines({ label, lines }: { label: string; lines: readonly string[] }) {
         ))}
       </ul>
     </div>
+  );
+}
+
+/** What the agent could not settle in a section, which keeps the plan from being ready. */
+export function SectionBlockers({ blockers }: { blockers: readonly PlanBlocker[] }) {
+  if (blockers.length === 0) return null;
+  return (
+    <Alert variant="warning">
+      <CircleAlert aria-hidden />
+      <AlertTitle>Blockers</AlertTitle>
+      <AlertDescription>
+        <ul aria-label="Blockers" className="flex list-disc flex-col gap-1 pl-5">
+          {blockers.map((blocker) => (
+            <li key={blocker.id} className="break-words">
+              {blocker.text}
+            </li>
+          ))}
+        </ul>
+      </AlertDescription>
+    </Alert>
   );
 }
 

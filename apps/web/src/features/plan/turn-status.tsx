@@ -1,5 +1,5 @@
 import { useRetryTurn } from '@plangineer/api-client';
-import { type PlanningTurn, TERMINAL_RUN_STATUSES } from '@plangineer/contracts';
+import { isRunActive, type PlanningTurn } from '@plangineer/contracts';
 import { Link } from '@tanstack/react-router';
 import { CircleAlert } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -11,7 +11,7 @@ import { TURN_KIND_LABELS } from './plan-labels';
 
 /** A turn runs while its run has not ended: queued, leased or running. */
 export function isTurnRunning(turn: PlanningTurn | null): turn is PlanningTurn {
-  return turn !== null && !TERMINAL_RUN_STATUSES.some((status) => status === turn.status);
+  return turn !== null && isRunActive(turn.status);
 }
 
 function ViewRun({ runId }: { runId: string }) {
