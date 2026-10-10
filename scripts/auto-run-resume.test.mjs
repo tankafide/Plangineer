@@ -129,6 +129,23 @@ describe('autoRun resuming a cut-off session', { timeout: 60_000 }, () => {
     );
   });
 
+  it('counts the findings the review returned when a cut-off fix trimmed the file', async () => {
+    const trimmed = { ...reviewReport(['First']), review: 'plan', planPath: PLAN_PATH };
+    const results = quietResults({
+      'plan-review': [answer(reviewReport(['First', 'Second', 'Third']))],
+      'plan-fix': [
+        answer(null, {
+          writes: { '$ADD_DIR/plan-review-1.findings.json': JSON.stringify(trimmed) },
+        }),
+      ],
+      resume: [answer(planFixReport({ valid: 1 }), { commit: true })],
+    });
+
+    await expect(cutOffThenResume(results, 'plan.jsonl')).rejects.toThrow(
+      'The plan-fix-1 session judged 1 findings, the file holds 3',
+    );
+  });
+
   it('replaces the earlier outcome when the resumed run ends', async () => {
     const results = quietResults({
       'plan-review': [answer(null)],

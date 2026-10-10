@@ -128,6 +128,7 @@ async function reviewRound(run, phase, round) {
     schema: ReviewReport,
   });
   await assertNoCommits(run.cwd, head, step);
+  await saveReport(run.logDir, run.runFile, step, report);
   if (report.outcome === 'stopped' || report.findings.length === 0) return { report };
   const findingsFile = findingsFileOf(run.logDir, phase, round);
   const contents = FindingsFile.parse({
@@ -144,11 +145,11 @@ async function reviewRound(run, phase, round) {
 
 /**
  * Resumes the author session with a round's findings file and checks it judged every finding. The
- * count comes from the file as it was before the session, which can edit the findings folder.
+ * count comes from the review's saved report, because the session can edit the findings folder.
  */
 async function fixRound(run, phase, round, findingsFile) {
   const step = fixStep(phase, round);
-  const { findings } = FindingsFile.parse(JSON.parse(await readFile(findingsFile, 'utf8')));
+  const { findings } = savedReport(run.runFile, reviewStep(phase, round), ReviewReport);
   const { report, head } = await runStep(run, step, {
     log: `${phase}.jsonl`,
     prompt: async () => fixPrompt({ phase, round, findingsFile }),

@@ -82,10 +82,13 @@ export const findingsFileOf = (logDir, phase, round) =>
   path.join(logDir, FINDINGS_DIR, `${reviewStep(phase, round)}.findings.json`);
 
 async function exists(file) {
-  return access(file).then(
-    () => true,
-    () => false,
-  );
+  try {
+    await access(file);
+    return true;
+  } catch (error) {
+    if (error.code === 'ENOENT') return false;
+    throw error;
+  }
 }
 
 /** Writes a file whole, so a watcher or a resumed run never reads half of it. */
