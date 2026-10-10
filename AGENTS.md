@@ -26,12 +26,12 @@ We are building a prototype as fast as possible. Optimize for one clean way of d
 
 Four orchestrator skills run the plan-driven workflow. Use the one that matches the request.
 
-- `plan-orchestrator`: plan a feature or change.
-- `plan-review-orchestrator`: review a plan in `docs/plans/`, then fix the findings you pick.
-- `implementation-orchestrator`: write or change code, tests, config, scripts or skills, fix bugs, and finish a branch.
-- `implementation-review-orchestrator`: review a diff, branch, commit or pull request, then fix the findings you pick.
+- `plan-orchestrator`: plan a feature or change, then judge and fix the findings file a plan review returns.
+- `plan-review-orchestrator`: review a plan in `docs/plans/` in a new session, and return the findings for the session that wrote it.
+- `implementation-orchestrator`: write or change code, tests, config, scripts or skills, fix bugs, judge and fix the findings file an implementation review returns, and finish a branch.
+- `implementation-review-orchestrator`: review a diff, branch, commit or pull request in a new session, and return the findings for the session that wrote it.
 
-`auto-orchestrator` runs `plan-orchestrator` and then `implementation-orchestrator` unattended, fixes every kept finding and pushes to `main`. Use it only when the engineer asks for auto mode or names it.
+`auto-orchestrator` runs `plan-orchestrator` and then `implementation-orchestrator` unattended, runs each review round in its own session, fixes every valid finding and pushes to `main`. Use it only when the engineer asks for auto mode or names it.
 
 Answering questions, reading docs and editing docs that are not feature plans need none of them.
 

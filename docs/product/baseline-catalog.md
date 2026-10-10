@@ -23,7 +23,7 @@ A required skill is chosen whenever any orchestrator is chosen, because the orch
 | `codebase-exploration` | fixed | How to explore the repository before planning, and what a context file holds | Always | ✓ |
 | `plan-format` | fixed | The plan template and its blocker checklist | Always | ✓ |
 | `writing-style` | fixed | How plans, pull request descriptions and docs read | Always | ✓ |
-| `finding-verification` | fixed | How review findings are verified before anyone fixes them | Always | ✓ |
+| `finding-verification` | fixed | How the author judges each review finding before fixing it | Always | ✓ |
 | `plan-conformance` | fixed | Matching a diff to its plan, with deviations and extras | Always | ✓ |
 | `project-stack` | template | The repository's context, stack, layout, commands and conventions | Always | ✓ |
 | `architecture-design` | template | Where code belongs and what may import what | Always | ✓ |
@@ -52,13 +52,14 @@ Each orchestrator routes a chosen skill with the "applies when" text of its row.
 | `codebase-exploration` | plan | No exploration context files were provided. Run explore mode in a subagent unless the exploration is trivial |
 | `codebase-exploration` | plan review | Always, in verify mode, in a subagent unless the check is trivial |
 | `codebase-exploration` | implementation | No plan, and the area is unfamiliar or large. Run explore mode in a subagent, with the work branch as the base when it already has commits |
-| `plan-format` | plan | Drafting the plan and checking it for blockers |
-| `plan-format` | plan review | Checking the plan's structure, "done when" lines and blocker checklist, and updating the plan |
+| `plan-format` | plan | Drafting or revising the plan and checking it for blockers |
+| `plan-format` | plan review | Checking the plan's structure, "done when" lines and blocker checklist |
 | `writing-style` | plan | Drafting and revising the plan's prose |
-| `writing-style` | plan review | Checking the plan's prose, and updating the plan. Style breaks are nits |
+| `writing-style` | plan review | Checking the plan's prose. Style breaks are nits |
 | `writing-style` | implementation | Writing the pull request description |
-| `finding-verification` | plan review, implementation review | Always, in a subagent, before the engineer sees any finding |
+| `finding-verification` | plan, implementation | A review's findings file is given: judge every finding inline before fixing any |
 | `plan-conformance` | implementation review | Always when there is a plan |
+| `code-quality` | implementation | Fixing a valid finding this skill raised |
 | `code-quality` | implementation review | Always |
 | `architecture-design` | plan, plan review | The plan adds or moves code, adds a package or module, or changes dependencies |
 | `architecture-design` | implementation | The change adds or moves code, adds a package or module, or changes dependencies |
@@ -73,12 +74,13 @@ Each orchestrator routes a chosen skill with the "applies when" text of its row.
 | `testing` | plan review | Checking that the test plan covers every "done when" line |
 | `testing` | implementation | Writing tests, once per phase |
 | `testing` | implementation review | The diff adds or changes tests, or changes behavior |
+| `security` | plan, implementation | Fixing a valid finding this skill raised |
 | `security` | plan review | The plan adds a trust boundary, such as authentication, a webhook or untrusted input |
 | `security` | implementation review | The diff touches a trust boundary, secrets or untrusted input |
+| `performance` | plan, implementation | Fixing a valid finding this skill raised |
 | `performance` | plan review | The plan adds queries, lists, realtime delivery or heavy frontend work |
 | `performance` | implementation review | The diff touches queries, lists, realtime delivery or heavy frontend work |
-| `debugging` | implementation | The request is a bug fix |
-| `debugging` | implementation review | Fixing a selected defect that is a bug |
+| `debugging` | implementation | The request is a bug fix, or a valid finding is a bug |
 | `backend` | implementation | The change is in server handlers, middleware, configuration or logging |
 | `backend` | implementation review | The diff touches server handlers, middleware, configuration or logging |
 | `database-access` | implementation | The change writes queries, transactions or seed data |

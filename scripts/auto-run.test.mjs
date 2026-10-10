@@ -1,114 +1,252 @@
-import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
-import os from 'node:os';
+import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { execa } from 'execa';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { autoRun, OUTCOME_FILE } from './auto-run.mjs';
-import { repoRoot } from './script-entry.mjs';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { OUTCOME_FILE } from './auto-run-log.mjs';
+import {
+  answer,
+  createRepos,
+  implementationFixReport,
+  PLAN_PATH,
+  planFixReport,
+  planReport,
+  quietResults,
+  reviewReport,
+} from './auto-run-test-kit.mjs';
 
-const FAKE_CLAUDE = path.join(repoRoot, 'scripts/auto-run-fake-claude.mjs');
+const fix = (report, file) => answer(report, { writes: { [file]: `${file}\n` }, commit: true });
 
-const planReport = {
-  outcome: 'done',
-  branch: 'feat/thing',
-  commits: ['abc1234 Plan the thing'],
-  reviewRounds: ['Round 1: 2 fixed, 0 skipped, 1 dropped'],
-  decisions: [],
-  engineerActions: [],
-  planPath: 'docs/plans/2026-10-08-thing.md',
-};
-
-const implementationReport = {
-  ...planReport,
-  commits: ['def5678 Build the thing'],
-  checks: { passed: ['pnpm verify'], failed: [], notRun: [] },
-  deviations: [],
-};
-delete implementationReport.planPath;
-
-const success = (report) => ({
-  type: 'result',
-  subtype: 'success',
-  is_error: false,
-  structured_output: { report },
-});
-
-describe('autoRun', () => {
-  let root;
-  let main;
-  let worktree;
-  let configFile;
-  let recordFile;
-
-  beforeEach(async () => {
-    root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'auto-run-')));
-    main = path.join(root, 'main');
-    worktree = path.join(root, 'main.worktrees', 'thing');
-    await mkdir(main);
-    await execa('git', ['init', '--quiet'], { cwd: main });
-    await writeFile(path.join(main, '.gitignore'), 'logs/\n');
-    await execa('git', ['add', '.gitignore'], { cwd: main });
-    await execa('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'init'], {
-      cwd: main,
-    });
-    await execa('git', ['worktree', 'add', '--quiet', '-b', 'feat/thing', worktree], { cwd: main });
-    configFile = path.join(root, 'fake', 'config.json');
-    recordFile = path.join(root, 'fake', 'calls.jsonl');
+/** Two plan rounds and one implementation round, each finding something valid. */
+const fullResults = () =>
+  quietResults({
+    'plan-review': [
+      answer(reviewReport(['First'])),
+      answer(reviewReport(['Second', 'Third'], 'Plan audit')),
+    ],
+    'plan-fix': [
+      fix(planFixReport({ valid: 1 }), 'docs/fix-1.md'),
+      fix(planFixReport({ valid: 1, invalid: 1 }), 'docs/fix-2.md'),
+    ],
+    'implementation-review': [answer(reviewReport(['Fourth'], '| Step | Built |'))],
+    'implementation-fix': [fix(implementationFixReport({ valid: 1 }), 'src/fix.ts')],
   });
 
-  afterEach(async () => {
-    await rm(root, { recursive: true, force: true, maxRetries: 5 });
+/** Each run starts a dozen processes per session, which takes seconds on Windows. */
+const RUN_TIMEOUT = { timeout: 60_000 };
+
+describe('autoRun with two plan rounds and one implementation round', () => {
+  let repos;
+  let outcome;
+
+  beforeAll(async () => {
+    repos = await createRepos();
+    outcome = await repos.run(fullResults(), { request: 'Add a thing.', planRounds: 2 });
+  }, RUN_TIMEOUT.timeout);
+
+  afterAll(async () => {
+    await repos.remove();
   });
 
-  async function run(results, options = { request: 'Add a thing.' }) {
-    await mkdir(path.dirname(configFile), { recursive: true });
-    await writeFile(configFile, JSON.stringify({ recordFile, results }));
-    return autoRun({
-      command: [process.execPath, FAKE_CLAUDE, configFile],
-      cwd: worktree,
-      planRounds: 3,
-      implementationRounds: 1,
-      ...options,
+  it('runs each review round in its own session and resumes the author to fix it', () => {
+    expect(outcome.ready).toBe(true);
+    expect(outcome.reasons).toEqual([]);
+    expect(outcome.sessions.map(({ step }) => step)).toEqual([
+      'plan',
+      'plan-review-1',
+      'plan-fix-1',
+      'plan-review-2',
+      'plan-fix-2',
+      'implementation',
+      'implementation-review-1',
+      'implementation-fix-1',
+    ]);
+    expect(outcome.sessions[4].report).toEqual(planFixReport({ valid: 1, invalid: 1 }));
+  });
+
+  it('resumes the author session with only the findings folder added', async () => {
+    const runDir = await repos.runDir();
+    const findingsDir = path.join(runDir, 'findings');
+    const fixes = (await repos.calls()).filter(({ key }) => key.endsWith('-fix'));
+    expect(fixes.map(({ args }) => args.slice(0, 5))).toEqual([
+      ['-p', '--resume', 'plan-session', '--add-dir', findingsDir],
+      ['-p', '--resume', 'plan-session', '--add-dir', findingsDir],
+      ['-p', '--resume', 'implementation-session', '--add-dir', findingsDir],
+    ]);
+    expect(fixes[1].prompt).toContain(
+      `Plan review round 2 wrote its findings to ${path.join(findingsDir, 'plan-review-2.findings.json')}.`,
+    );
+    expect((await readdir(findingsDir)).toSorted()).toEqual([
+      'implementation-review-1.findings.json',
+      'plan-review-1.findings.json',
+      'plan-review-2.findings.json',
+    ]);
+  });
+
+  it("writes each review's findings and plan audit with the review's target", async () => {
+    const findingsDir = path.join(await repos.runDir(), 'findings');
+    const read = async (name) => JSON.parse(await readFile(path.join(findingsDir, name), 'utf8'));
+    expect(await read('plan-review-2.findings.json')).toEqual({
+      review: 'plan',
+      planPath: PLAN_PATH,
+      baseCommit: null,
+      headCommit: await repos.commitOf('plan-fix 1'),
+      planAudit: 'Plan audit',
+      findings: reviewReport(['Second', 'Third']).findings,
     });
-  }
-
-  async function runDir() {
-    const [dir] = await readdir(path.join(main, 'logs', 'auto'));
-    return path.join(main, 'logs', 'auto', dir);
-  }
-
-  async function calls() {
-    const text = await readFile(recordFile, 'utf8').catch(() => '');
-    return text
-      .split('\n')
-      .filter(Boolean)
-      .map((line) => JSON.parse(line));
-  }
-
-  it('plans, then builds the saved plan, and is ready when nothing is left', async () => {
-    const outcome = await run({
-      plan: success(planReport),
-      implementation: success(implementationReport),
+    expect(await read('implementation-review-1.findings.json')).toEqual({
+      review: 'implementation',
+      planPath: PLAN_PATH,
+      baseCommit: await repos.mergeBase(),
+      headCommit: await repos.commitOf('implementation 1'),
+      planAudit: '| Step | Built |',
+      findings: reviewReport(['Fourth']).findings,
     });
+  });
 
-    expect(outcome).toEqual({
-      ready: true,
-      reasons: [],
-      plan: planReport,
-      implementation: implementationReport,
-    });
-    const [plan, implementation] = await calls();
-    expect(plan.prompt).toMatch(/plan-orchestrator skill[^]*This session only plans it/);
-    expect(plan.prompt).toContain('<request>\nAdd a thing.\n</request>');
-    expect(implementation.prompt).toMatch(
-      /build the plan at docs\/plans\/2026-10-08-thing\.md[^]*`git merge-base HEAD origin\/HEAD`/,
+  it('gives each review its target', async () => {
+    const calls = await repos.calls();
+    const planReview = calls.find(({ key }) => key === 'plan-review');
+    const implementationReview = calls.find(({ key }) => key === 'implementation-review');
+    expect(planReview.prompt).toContain(`review the plan at ${PLAN_PATH}.`);
+    expect(implementationReview.prompt).toContain(
+      `review the diff from ${await repos.mergeBase()} to ${await repos.commitOf('implementation 1')} against the plan at ${PLAN_PATH}.`,
     );
   });
 
-  it('gives each session the auto settings', async () => {
-    await run({ plan: success(planReport), implementation: success(implementationReport) });
+  it('logs each session under its step, and appends each fix to its author log', async () => {
+    const runDir = await repos.runDir();
+    expect((await readdir(runDir)).toSorted()).toEqual([
+      'findings',
+      'implementation-review-1.jsonl',
+      'implementation.jsonl',
+      'outcome.json',
+      'plan-review-1.jsonl',
+      'plan-review-2.jsonl',
+      'plan.jsonl',
+      'request.md',
+      'run.json',
+      'settings.md',
+    ]);
+    const planLog = await readFile(path.join(runDir, 'plan.jsonl'), 'utf8');
+    expect(planLog.match(/"subtype":"init"/g)).toHaveLength(3);
+  });
 
-    const [plan] = await calls();
+  it('records the plan path and each step’s starting commit in the run file', async () => {
+    const run = JSON.parse(await readFile(path.join(await repos.runDir(), 'run.json'), 'utf8'));
+    expect(run.planPath).toBe(PLAN_PATH);
+    expect(run.stepHeads['plan-review-2']).toBe(await repos.commitOf('plan-fix 1'));
+    expect(Object.keys(run.stepHeads)).toHaveLength(8);
+  });
+
+  it('answers each call with a key from the next entry of that key’s list', async () => {
+    const reviews = (await repos.calls()).filter(({ key }) => key === 'plan-review');
+    expect(reviews).toHaveLength(2);
+    expect(outcome.sessions[3].report).toEqual(reviewReport(['Second', 'Third'], 'Plan audit'));
+  });
+});
+
+describe('autoRun', RUN_TIMEOUT, () => {
+  let repos;
+
+  beforeEach(async () => {
+    repos = await createRepos();
+  });
+
+  afterEach(async () => {
+    await repos.remove();
+  });
+
+  it('stops a phase’s rounds after a fix that judged nothing valid', async () => {
+    const outcome = await repos.run(
+      quietResults({
+        'plan-review': [answer(reviewReport(['Wrong']))],
+        'plan-fix': [answer(planFixReport({ valid: 0, invalid: 1 }), { commit: true })],
+      }),
+      { request: 'Add a thing.', planRounds: 3 },
+    );
+
+    expect(outcome.sessions.map(({ step }) => step)).toEqual([
+      'plan',
+      'plan-review-1',
+      'plan-fix-1',
+      'implementation',
+      'implementation-review-1',
+    ]);
+  });
+
+  it('stops a phase’s rounds after a review with no findings, resuming no author', async () => {
+    const outcome = await repos.run(quietResults(), { request: 'Add a thing.', planRounds: 3 });
+
+    expect(outcome.sessions.map(({ step }) => step)).toEqual([
+      'plan',
+      'plan-review-1',
+      'implementation',
+      'implementation-review-1',
+    ]);
+    expect(await readdir(path.join(await repos.runDir(), 'findings'))).toEqual([]);
+  });
+
+  it('ends the run when a review stops', async () => {
+    const outcome = await repos.run(
+      quietResults({
+        'plan-review': [answer({ outcome: 'stopped', stopReason: 'No plan found' })],
+      }),
+    );
+
+    expect(outcome).toMatchObject({ ready: false, reasons: ['Stopped: No plan found'] });
+    expect(outcome.sessions).toHaveLength(2);
+  });
+
+  it('reviews and fixes a plan with an engineer action, then ends before building', async () => {
+    const outcome = await repos.run(
+      quietResults({
+        plan: [
+          answer(planReport({ engineerActions: ['Add GITHUB_TOKEN to .env'] }), { commit: true }),
+        ],
+        'plan-review': [answer(reviewReport(['First']))],
+        'plan-fix': [fix(planFixReport({ valid: 1 }), 'docs/fix.md')],
+      }),
+    );
+
+    expect(outcome.ready).toBe(false);
+    expect(outcome.reasons).toEqual(['Engineer action: Add GITHUB_TOKEN to .env']);
+    expect(outcome.sessions.map(({ step }) => step)).toEqual([
+      'plan',
+      'plan-review-1',
+      'plan-fix-1',
+    ]);
+  });
+
+  it('is not ready when the last implementation fix failed a check', async () => {
+    const outcome = await repos.run(
+      quietResults({
+        'implementation-review': [answer(reviewReport(['First']))],
+        'implementation-fix': [
+          fix(implementationFixReport({ valid: 1, failed: ['Vitest'] }), 'src/fix.ts'),
+        ],
+      }),
+    );
+
+    expect(outcome.ready).toBe(false);
+    expect(outcome.reasons).toEqual(['Failed check: Vitest']);
+  });
+
+  it('builds a given plan without planning or reviewing it', async () => {
+    const outcome = await repos.run(quietResults({ plan: [] }), {
+      planPath: 'docs/plans/given.md',
+    });
+
+    expect(outcome.sessions.map(({ step }) => step)).toEqual([
+      'implementation',
+      'implementation-review-1',
+    ]);
+    const [implementation] = await repos.calls();
+    expect(implementation.prompt).toContain('the plan at docs/plans/given.md');
+  });
+
+  it('gives each session the auto settings', async () => {
+    await repos.run(quietResults(), { request: 'Add a thing.', planRounds: 3 });
+
+    const [plan] = await repos.calls();
     expect(plan.settings).toBe(
       'Workflow settings:\n' +
         '{"planCheckIn":"skip",' +
@@ -118,183 +256,19 @@ describe('autoRun', () => {
     );
   });
 
-  it('stops after planning when the plan leaves an action for the engineer', async () => {
-    const outcome = await run({
-      plan: success({ ...planReport, engineerActions: ['Add GITHUB_TOKEN to .env'] }),
-      implementation: success(implementationReport),
-    });
-
-    expect(outcome.ready).toBe(false);
-    expect(outcome.reasons).toEqual(['Engineer action: Add GITHUB_TOKEN to .env']);
-    expect(outcome.implementation).toBeNull();
-    expect(await calls()).toHaveLength(1);
-  });
-
-  it('stops after planning when the plan session stopped', async () => {
-    const outcome = await run({
-      plan: success({ ...planReport, outcome: 'stopped', stopReason: 'No such area' }),
-      implementation: success(implementationReport),
-    });
-
-    expect(outcome.reasons).toEqual(['Stopped: No such area']);
-    expect(outcome.implementation).toBeNull();
-  });
-
-  it('builds a given plan without planning', async () => {
-    const outcome = await run(
-      { plan: null, implementation: success(implementationReport) },
-      { planPath: 'docs/plans/given.md' },
-    );
-
-    expect(outcome.ready).toBe(true);
-    expect(outcome.plan).toBeNull();
-    const [implementation] = await calls();
-    expect(implementation.prompt).toContain('the plan at docs/plans/given.md');
-  });
-
-  it('is not ready when a check failed', async () => {
-    const checks = { passed: [], failed: ['Vitest'], notRun: [] };
-    const outcome = await run({
-      plan: success(planReport),
-      implementation: success({ ...implementationReport, checks }),
-    });
-
-    expect(outcome.ready).toBe(false);
-    expect(outcome.reasons).toEqual(['Failed check: Vitest']);
-  });
-
-  it('keeps the logs in the main checkout, so removing the worktree keeps them', async () => {
-    await run({ plan: success(planReport), implementation: success(implementationReport) });
-
-    expect((await readdir(await runDir())).toSorted()).toEqual([
-      'implementation.jsonl',
-      'outcome.json',
-      'plan.jsonl',
-      'request.md',
-      'run.json',
-      'settings.md',
-    ]);
-  });
-
-  it('tells each session how to start and stop long-running processes', async () => {
-    await run({ plan: success(planReport), implementation: success(implementationReport) });
-
-    for (const { prompt } of await calls()) {
-      expect(prompt).toContain("only with the Bash tool's run_in_background");
-    }
-  });
-
-  it('tells each session to wait for its subagents inside the turn', async () => {
-    await run({ plan: success(planReport), implementation: success(implementationReport) });
-
-    for (const { prompt } of await calls()) {
-      expect(prompt).toContain('Start every subagent in the foreground');
-    }
-  });
-
   it('writes the outcome beside the logs', async () => {
-    const outcome = await run({
-      plan: success(planReport),
-      implementation: success(implementationReport),
-    });
+    const outcome = await repos.run(quietResults());
 
-    expect(JSON.parse(await readFile(path.join(await runDir(), OUTCOME_FILE), 'utf8'))).toEqual(
-      outcome,
-    );
+    const written = await readFile(path.join(await repos.runDir(), OUTCOME_FILE), 'utf8');
+    expect(JSON.parse(written)).toEqual(outcome);
   });
 
   it('writes the error as the outcome when a session fails', async () => {
-    await expect(run({ plan: null, implementation: null })).rejects.toThrow(
+    await expect(repos.run(quietResults({ plan: [answer(null)] }))).rejects.toThrow(
       'The session ended with no result',
     );
 
-    const outcome = JSON.parse(await readFile(path.join(await runDir(), OUTCOME_FILE), 'utf8'));
-    expect(outcome.error).toMatch(/^The session ended with no result/);
-  });
-
-  describe('resuming a session', () => {
-    const settings = 'Workflow settings:\n{"kept":true}\n';
-
-    async function cutOff(phase) {
-      const logDir = path.join(main, 'logs', 'auto', 'earlier');
-      await mkdir(logDir, { recursive: true });
-      await writeFile(path.join(logDir, 'settings.md'), settings);
-      await writeFile(path.join(logDir, OUTCOME_FILE), '{"ready":false}');
-      const init = { type: 'system', subtype: 'init', session_id: `${phase}-cut-off` };
-      const logFile = path.join(logDir, `${phase}.jsonl`);
-      await writeFile(logFile, `${JSON.stringify(init)}\n`);
-      return logFile;
-    }
-
-    it('continues the cut-off session in a dirty worktree, with its settings', async () => {
-      const resumeLog = await cutOff('implementation');
-      await writeFile(path.join(worktree, 'partial.txt'), 'x');
-
-      const outcome = await run(
-        { plan: null, implementation: null, resume: success(implementationReport) },
-        { resumeLog },
-      );
-
-      expect(outcome.ready).toBe(true);
-      const [resumed] = await calls();
-      expect(resumed.args.slice(0, 3)).toEqual(['-p', '--resume', 'implementation-cut-off']);
-      expect(resumed.prompt).toContain('You were cut off before your workflow finished.');
-      expect(resumed.settings).toBe(settings);
-      expect(await calls()).toHaveLength(1);
-    });
-
-    it('builds the plan after a resumed plan session finishes', async () => {
-      const resumeLog = await cutOff('plan');
-
-      const outcome = await run(
-        { plan: null, implementation: success(implementationReport), resume: success(planReport) },
-        { resumeLog },
-      );
-
-      expect(outcome.ready).toBe(true);
-      const [, implementation] = await calls();
-      expect(implementation.prompt).toContain('the plan at docs/plans/2026-10-08-thing.md');
-    });
-
-    it('replaces the earlier outcome when the resumed run ends', async () => {
-      const resumeLog = await cutOff('implementation');
-
-      const outcome = await run(
-        { plan: null, implementation: null, resume: success(implementationReport) },
-        { resumeLog },
-      );
-
-      const written = await readFile(path.join(path.dirname(resumeLog), OUTCOME_FILE), 'utf8');
-      expect(JSON.parse(written)).toEqual(outcome);
-    });
-
-    it('refuses a file that is not a session log', async () => {
-      const resumeLog = path.join(path.dirname(await cutOff('plan')), 'settings.md');
-
-      await expect(run({}, { resumeLog })).rejects.toThrow(
-        `${resumeLog} is not a plan.jsonl or implementation.jsonl session log`,
-      );
-    });
-  });
-
-  it('refuses to start in the main checkout', async () => {
-    await expect(
-      run({ plan: null, implementation: null }, { request: 'x', cwd: main }),
-    ).rejects.toThrow('Run auto-run from a linked worktree');
-  });
-
-  it('refuses to start on a detached HEAD', async () => {
-    await execa('git', ['switch', '--quiet', '--detach'], { cwd: worktree });
-    await expect(run({ plan: null, implementation: null })).rejects.toThrow(
-      'The worktree has a detached HEAD',
-    );
-  });
-
-  it('refuses to start with uncommitted changes', async () => {
-    await writeFile(path.join(worktree, 'stray.txt'), 'x');
-    await expect(run({ plan: null, implementation: null })).rejects.toThrow(
-      'The working tree has uncommitted changes',
-    );
-    expect(await calls()).toEqual([]);
+    const written = await readFile(path.join(await repos.runDir(), OUTCOME_FILE), 'utf8');
+    expect(JSON.parse(written).error).toMatch(/^The session ended with no result/);
   });
 });

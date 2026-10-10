@@ -67,7 +67,7 @@ export const BASELINE_CATALOG: readonly CatalogEntry[] = [
   entry(
     'finding-verification',
     'fixed',
-    'How review findings are verified before anyone fixes them',
+    'How the author judges each review finding before fixing it',
     true,
     ALWAYS,
   ),

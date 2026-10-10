@@ -27,6 +27,7 @@ A subagent inherits nothing. Every handoff states:
 - Code changes stay single-threaded by default.
 - Use parallel writers only after shared contracts are settled, and give each a disjoint set of files. The orchestrator owns shared files: `packages/contracts`, the lockfile, generated files and `package.json` edits.
 - Serialize edits to any file two writers might touch. Never revert work you did not do.
+- A review round runs as a top-level session, not a subagent, so it can start its review areas as parallel subagents in one message.
 
 ## What a subagent returns
 

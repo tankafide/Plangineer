@@ -2,7 +2,7 @@ import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { PlanReport, runSession, sessionIdOf } from './auto-run-session.mjs';
+import { PlanReport, ReviewReport, runSession, sessionIdOf } from './auto-run-session.mjs';
 import { repoRoot } from './script-entry.mjs';
 
 const FAKE_CLAUDE = path.join(repoRoot, 'scripts/auto-run-fake-claude.mjs');
@@ -11,7 +11,6 @@ const planReport = {
   outcome: 'done',
   branch: 'feat/thing',
   commits: ['abc1234 Plan the thing'],
-  reviewRounds: ['Round 1: 2 fixed, 0 skipped, 1 dropped'],
   decisions: [],
   engineerActions: [],
   planPath: 'docs/plans/2026-10-08-thing.md',
@@ -56,7 +55,7 @@ describe('runSession', () => {
 
   async function session(plan, { command, config, ...options } = {}) {
     const configFile = path.join(root, 'config.json');
-    const results = { plan, resume: plan };
+    const results = { plan: [{ event: plan }] };
     await writeFile(configFile, JSON.stringify({ recordFile, results, ...config }));
     return runSession({
       command: command ?? [process.execPath, FAKE_CLAUDE, configFile],
@@ -202,6 +201,21 @@ describe('runSession', () => {
     );
   });
 
+  it('lets the session read a folder outside its working directory', async () => {
+    const findingsDir = path.join(root, 'findings');
+
+    await session(success(planReport), { addDir: findingsDir });
+
+    const passed = await args();
+    expect(passed[passed.indexOf('--add-dir') + 1]).toBe(findingsDir);
+  });
+
+  it('passes no extra folder when none is given', async () => {
+    await session(success(planReport));
+
+    expect(await args()).not.toContain('--add-dir');
+  });
+
   it('stops a process the session left running', async () => {
     await session(success(planReport), {
       config: { leaveProcess: true, lingerMs: 1_500 },
@@ -238,5 +252,44 @@ describe('sessionIdOf', () => {
     await writeFile(logFile, '{"type":"result"}\n');
 
     await expect(sessionIdOf(logFile)).rejects.toThrow(`${logFile} holds no session to resume`);
+  });
+});
+
+const finding = (overrides = {}) => ({
+  location: 'scripts/auto-run.mjs:12',
+  claim: 'The run never stops.',
+  suggestedChange: 'Stop after the last round.',
+  sourceSkill: 'code-quality',
+  kind: 'defect',
+  severity: 'should fix',
+  ...overrides,
+});
+
+describe('ReviewReport', () => {
+  it('accepts a finding with every field and a plan audit', () => {
+    const report = { outcome: 'done', findings: [finding()], planAudit: '| Step | Built |' };
+
+    expect(ReviewReport.parse(report)).toEqual(report);
+  });
+
+  it.each(['minor', 'Blocker', ''])('rejects a finding with severity %j', (severity) => {
+    const report = { outcome: 'done', findings: [finding({ severity })], planAudit: null };
+
+    expect(ReviewReport.safeParse(report).error?.issues[0]?.path).toEqual([
+      'findings',
+      0,
+      'severity',
+    ]);
+  });
+});
+
+describe('PlanReport', () => {
+  it('rejects a report that still holds reviewRounds', () => {
+    const result = PlanReport.safeParse({ ...planReport, reviewRounds: [] });
+
+    expect(result.error?.issues[0]).toMatchObject({
+      code: 'unrecognized_keys',
+      keys: ['reviewRounds'],
+    });
   });
 });

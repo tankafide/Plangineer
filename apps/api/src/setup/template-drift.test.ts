@@ -167,9 +167,12 @@ describe('workflow settings in this repository', () => {
     expect(reviewLoop).not.toContain('There is no auto-loop and no fixed number of rounds.');
   });
 
-  it.each(ORCHESTRATORS)('%s links to the workflow settings', (file) => {
-    expect(read(repositorySkills, file)).toContain(
-      '](../orchestrator-references/review-loop.md#workflow-settings)',
-    );
-  });
+  it.each(['plan-orchestrator/SKILL.md', 'implementation-orchestrator/SKILL.md'])(
+    '%s links to the workflow settings',
+    (file) => {
+      expect(read(repositorySkills, file)).toContain(
+        '](../orchestrator-references/review-loop.md#workflow-settings)',
+      );
+    },
+  );
 });

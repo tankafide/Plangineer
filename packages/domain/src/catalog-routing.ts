@@ -14,6 +14,9 @@ function routes(orchestrators: Orchestrator[], appliesWhen: string): Routing[] {
   return orchestrators.map((orchestrator) => ({ orchestrator, appliesWhen }));
 }
 
+/** The author's row for a review skill, read only to fix what that skill raised. */
+const FIXING_FINDING = 'Fixing a valid finding this skill raised';
+
 /** The plan and implementation rows most stack skills share. */
 function designRouting(subject: string): Routing[] {
   return [
@@ -45,23 +48,20 @@ export const CATALOG_ROUTING: Readonly<Record<string, Routing[]>> = {
     ),
   ],
   'plan-format': [
-    ...routes([PLAN], 'Drafting the plan and checking it for blockers'),
+    ...routes([PLAN], 'Drafting or revising the plan and checking it for blockers'),
     ...routes(
       [PLAN_REVIEW],
-      'Checking the plan\'s structure, "done when" lines and blocker checklist, and updating the plan',
+      'Checking the plan\'s structure, "done when" lines and blocker checklist',
     ),
   ],
   'writing-style': [
     ...routes([PLAN], "Drafting and revising the plan's prose"),
-    ...routes(
-      [PLAN_REVIEW],
-      "Checking the plan's prose, and updating the plan. Style breaks are nits",
-    ),
+    ...routes([PLAN_REVIEW], "Checking the plan's prose. Style breaks are nits"),
     ...routes([IMPLEMENTATION], 'Writing the pull request description'),
   ],
   'finding-verification': routes(
-    [PLAN_REVIEW, IMPLEMENTATION_REVIEW],
-    'Always, in a subagent, before the engineer sees any finding',
+    [PLAN, IMPLEMENTATION],
+    "A review's findings file is given: judge every finding inline before fixing any",
   ),
   'plan-conformance': routes([IMPLEMENTATION_REVIEW], 'Always when there is a plan'),
   'project-stack': routes(
@@ -77,12 +77,13 @@ export const CATALOG_ROUTING: Readonly<Record<string, Routing[]>> = {
     ...routes([IMPLEMENTATION], 'Writing tests, once per phase'),
     ...routes([IMPLEMENTATION_REVIEW], 'The diff adds or changes tests, or changes behavior'),
   ],
-  'code-quality': routes([IMPLEMENTATION_REVIEW], 'Always'),
-  debugging: [
-    ...routes([IMPLEMENTATION], 'The request is a bug fix'),
-    ...routes([IMPLEMENTATION_REVIEW], 'Fixing a selected defect that is a bug'),
+  'code-quality': [
+    ...routes([IMPLEMENTATION], FIXING_FINDING),
+    ...routes([IMPLEMENTATION_REVIEW], 'Always'),
   ],
+  debugging: routes([IMPLEMENTATION], 'The request is a bug fix, or a valid finding is a bug'),
   security: [
+    ...routes([PLAN, IMPLEMENTATION], FIXING_FINDING),
     ...routes(
       [PLAN_REVIEW],
       'The plan adds a trust boundary, such as authentication, a webhook or untrusted input',
@@ -93,6 +94,7 @@ export const CATALOG_ROUTING: Readonly<Record<string, Routing[]>> = {
     ),
   ],
   performance: [
+    ...routes([PLAN, IMPLEMENTATION], FIXING_FINDING),
     ...routes(
       [PLAN_REVIEW],
       'The plan adds queries, lists, realtime delivery or heavy frontend work',

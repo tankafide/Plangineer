@@ -1,11 +1,11 @@
 ---
 name: plan-review-orchestrator
-description: Reviews a plan in docs/plans/ written in the plan format, verifies the findings, lets the engineer pick which to fix, and updates the plan. Use for reviewing a plan. Not for reviewing code, diffs or branches, not for reviewing product docs, research or other documents, and not for answering a question about a plan without reviewing it.
+description: Reviews a plan in docs/plans/ written in the plan format in one round and returns the findings for the session that wrote the plan to judge and fix. Use for reviewing a plan. Not for reviewing code, diffs or branches, not for reviewing product docs, research or other documents, and not for answering a question about a plan without reviewing it.
 ---
 
 # Plan review orchestrator
 
-Reviews a plan, has the findings verified, lets the engineer pick which to fix, and updates the plan. Shared rules: [execution](../orchestrator-references/execution.md), [finding format](../orchestrator-references/finding-format.md), [review loop](../orchestrator-references/review-loop.md) and [git workflow](../orchestrator-references/git-workflow.md).
+Runs one plan review round as a top-level session and returns the candidate findings. It edits, verifies, fixes and commits nothing. Shared rules: [execution](../orchestrator-references/execution.md), [finding format](../orchestrator-references/finding-format.md) and [review loop](../orchestrator-references/review-loop.md).
 
 ## Delegation rule
 
@@ -18,9 +18,8 @@ Rule skills are read by path with the file-read tool, never through a skill tool
 | Skill | Applies when |
 | --- | --- |
 | `.agents/skills/codebase-exploration/SKILL.md` | Always, in verify mode, in a subagent unless the check is trivial |
-| `.agents/skills/finding-verification/SKILL.md` | Always, in a subagent, before the engineer sees any finding |
-| `.agents/skills/plan-format/SKILL.md` | Checking the plan's structure, "done when" lines and blocker checklist, and updating the plan |
-| `.agents/skills/writing-style/SKILL.md` | Checking the plan's prose, and updating the plan. Style breaks are nits |
+| `.agents/skills/plan-format/SKILL.md` | Checking the plan's structure, "done when" lines and blocker checklist |
+| `.agents/skills/writing-style/SKILL.md` | Checking the plan's prose. Style breaks are nits |
 | `.agents/skills/architecture-design/SKILL.md` | The plan adds or moves code, adds a package or module, or changes dependencies |
 | `.agents/skills/api-contract-design/SKILL.md` | The plan adds or changes a contract, procedure or event |
 | `.agents/skills/data-model-design/SKILL.md` | The plan adds or changes a table, constraint, index or migration |
@@ -42,10 +41,6 @@ Rule skills are read by path with the file-read tool, never through a skill tool
    - steps with no "done when" line, and "done when" lines no test covers
    - areas the code touches that the plan does not mention
    - design choices that break the stack decisions or the architecture
-4. **Select skills.** From the routing table, pick the design and review skills for the areas the plan touches, and apply each in its plan review mode. Group related skills in one subagent when the review is large.
-5. **Collect candidates.** Write each candidate finding with the reviewer's fields from the [finding format](../orchestrator-references/finding-format.md). Plan reviews raise defects only. Keep the candidates in the conversation. Nothing is written to `.reviews/`.
-6. **Verify.** Hand every candidate to one subagent that reads `finding-verification`, with the plan path, the base commit and the paths of the skills the findings cite. Show the engineer only what it returns.
-7. **Select.** Present the findings as the [finding format](../orchestrator-references/finding-format.md#presenting-findings) describes, then ask the engineer which to fix, unless the `planReview` [workflow settings](../orchestrator-references/review-loop.md#workflow-settings) fix them all.
-8. **Update.** Fix the selected findings in the plan, following `plan-format` and `writing-style`. When a fix needs business or use-case context, or a choice between real trade-offs, ask the engineer as a choice with a recommended option, or take that option when the `decisions` [workflow setting](../orchestrator-references/review-loop.md#workflow-settings) is `recommended`. Then check the plan against the blocker checklist again.
-9. **Commit.** Commit the plan as [git workflow](../orchestrator-references/git-workflow.md) describes. The commit body lists the findings fixed, skipped and dropped, so the history stays in Git.
-10. **Report.** Say what changed, then run or offer another round as the `planReview` [workflow settings](../orchestrator-references/review-loop.md#workflow-settings) decide. On yes, run it through subagents, because this session never reviews its own fixes. List the skills used, per [execution](../orchestrator-references/execution.md). Say when no actionable findings were found without implying the review was exhaustive.
+4. **Select skills.** From the routing table, pick the design and review skills for the areas the plan touches, and apply each in its plan review mode. Run them as parallel subagents started in one message, grouped by the context they share.
+5. **Collect candidates.** Write each candidate finding with the reviewer's fields from the [finding format](../orchestrator-references/finding-format.md). Plan reviews raise defects only.
+6. **Return.** When the session's prompt asks for a report, return the findings in it. Otherwise write the findings file as the [finding format](../orchestrator-references/finding-format.md#findings-file) describes, give its path, and tell the engineer to give it to the session that wrote the plan. List the skills used, per [execution](../orchestrator-references/execution.md). Say when no actionable findings were found without implying the review was exhaustive.

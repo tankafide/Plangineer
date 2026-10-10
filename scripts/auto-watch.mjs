@@ -3,21 +3,47 @@ import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { execa } from 'execa';
 import { z } from 'zod';
-import { Outcome, OUTCOME_FILE, RUN_FILE, RunFile } from './auto-run.mjs';
+import { Outcome, OUTCOME_FILE, RUN_FILE, RunFile } from './auto-run-log.mjs';
 import {
+  ImplementationFixReport,
   ImplementationReport,
   InitEvent,
+  PlanFixReport,
   PlanReport,
   ResultEvent,
+  ReviewReport,
   reportOutput,
 } from './auto-run-session.mjs';
 import { isEntryPoint, reportFailure, repoRoot } from './script-entry.mjs';
 
 const POLL_MS = 15_000;
-const SESSION_LOG = /^(plan|implementation)\.jsonl$/;
+const SESSION_LOG = /^(plan|implementation)(-review-\d+)?\.jsonl$/;
 /** Where the watcher keeps its place, so a restarted watcher repeats and misses nothing. */
 const CURSOR_FILE = 'watch.json';
-const REPORTS = { plan: PlanReport, implementation: ImplementationReport };
+/** The reports a session log may end with: a review's, or an author's authoring or fix report. */
+const REPORTS = {
+  plan: [PlanReport, PlanFixReport],
+  implementation: [ImplementationReport, ImplementationFixReport],
+};
+const reportsOf = (session) => REPORTS[session] ?? [ReviewReport];
+
+function parseReport(session, structuredOutput) {
+  for (const schema of reportsOf(session)) {
+    const output = reportOutput(schema).safeParse(structuredOutput);
+    if (output.success) return output.data.report;
+  }
+  return undefined;
+}
+
+/** What a session's report adds to its end milestone: a stop's reason, or a round's counts. */
+function reportDetail(report) {
+  if (report.outcome === 'stopped') return `: ${report.stopReason}`;
+  if ('findings' in report) return `: ${report.findings.length} findings`;
+  if ('valid' in report) {
+    return `: ${report.valid} valid, ${report.invalid} invalid, ${report.fixed} fixed`;
+  }
+  return '';
+}
 
 const Cursor = z.strictObject({
   commit: z.string().min(1),
@@ -43,11 +69,11 @@ export function sessionMilestone(session, event) {
   if (isError || subtype !== 'success') {
     return `Session failed: ${session}: ${[subtype, message].filter(Boolean).join(': ')}`;
   }
-  const output = reportOutput(REPORTS[session]).safeParse(structured_output);
-  if (!output.success) return `Session failed: ${session}: its report does not match its schema`;
-  const { report } = output.data;
-  const reason = report.outcome === 'stopped' ? `: ${report.stopReason}` : '';
-  return `Session ended: ${session}: ${report.outcome}${reason}`;
+  const report = parseReport(session, structured_output);
+  if (report === undefined) {
+    return `Session failed: ${session}: its report does not match its schema`;
+  }
+  return `Session ended: ${session}: ${report.outcome}${reportDetail(report)}`;
 }
 
 /** The last line, for the run's outcome as auto-run writes it. */

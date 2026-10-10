@@ -79,9 +79,11 @@ describe('renderSetupFiles', () => {
     expect(routedSkills(content(files, '.agents/skills/plan-orchestrator/SKILL.md'))).toEqual([
       'architecture-design',
       'codebase-exploration',
+      'finding-verification',
       'legacy-rules',
       'plan-format',
       'project-stack',
+      'security',
       'testing',
       'writing-style',
     ]);
@@ -90,8 +92,6 @@ describe('renderSetupFiles', () => {
     ).toEqual([
       'architecture-design',
       'code-quality',
-      'debugging',
-      'finding-verification',
       'legacy-rules',
       'plan-conformance',
       'project-stack',

@@ -17,9 +17,6 @@ const lines = (description) => z.array(z.string()).describe(description);
 const reportFields = {
   branch: z.string().min(1).describe('The work branch'),
   commits: lines('Each commit this session made, as its short hash and summary line'),
-  reviewRounds: lines(
-    'One line per review round: its number and how many findings were fixed, skipped and dropped',
-  ),
   decisions: lines(
     'Each choice taken as the recommended option instead of asking the engineer, with its reason',
   ),
@@ -57,6 +54,62 @@ const implementationFields = {
 export const ImplementationReport = z.discriminatedUnion('outcome', [
   z.strictObject({ ...done, ...implementationFields }),
   z.strictObject({ ...stopped, ...implementationFields }),
+]);
+
+const nonEmpty = z.string().min(1);
+
+export const Finding = z.strictObject({
+  location: nonEmpty.describe('A line range in the plan, or a file and lines in the diff'),
+  claim: nonEmpty.describe('What is wrong, in one or two sentences'),
+  suggestedChange: nonEmpty.describe('What the reviewer would do instead'),
+  sourceSkill: nonEmpty.describe('The rule skill the reviewer applied, or none'),
+  kind: z.enum(['defect', 'deviation', 'extra']).describe('The kind, as finding-format.md defines'),
+  severity: z
+    .enum(['blocker', 'should fix', 'nit'])
+    .describe('The severity, as finding-format.md defines'),
+});
+
+const findings = z.array(Finding).describe('Every candidate finding the review collected');
+const planAudit = z
+  .string()
+  .nullable()
+  .describe('The plan audit from plan-conformance as Markdown, or null when the review had none');
+
+export const ReviewReport = z.discriminatedUnion('outcome', [
+  z.strictObject({ ...done, findings, planAudit }),
+  z.strictObject(stopped),
+]);
+
+/** The file a review's findings reach the author session in. */
+export const FindingsFile = z.strictObject({
+  review: z.enum(['plan', 'implementation']),
+  planPath: z.string().nullable(),
+  baseCommit: z.string().nullable(),
+  headCommit: z.string(),
+  planAudit: z.string().nullable(),
+  findings: z.array(Finding),
+});
+
+const count = (description) => z.number().int().nonnegative().describe(description);
+
+const fixFields = {
+  valid: count('How many findings the author judged valid'),
+  invalid: count('How many findings the author judged invalid'),
+  fixed: count('How many valid findings this round fixed or reverted'),
+  decisions: reportFields.decisions,
+  engineerActions: reportFields.engineerActions,
+};
+
+export const PlanFixReport = z.discriminatedUnion('outcome', [
+  z.strictObject({ ...done, ...fixFields }),
+  z.strictObject({ ...stopped, ...fixFields }),
+]);
+
+const implementationFixFields = { ...fixFields, checks: implementationFields.checks };
+
+export const ImplementationFixReport = z.discriminatedUnion('outcome', [
+  z.strictObject({ ...done, ...implementationFixFields }),
+  z.strictObject({ ...stopped, ...implementationFixFields }),
 ]);
 
 /** The fields Claude Code's stream-json result event carries that this script reads. */
@@ -140,8 +193,8 @@ async function logSince(logFile, offset) {
 /**
  * Runs one headless session, logs its stream to logFile, and returns its validated report. Auto
  * mode lets its classifier approve each action, and anything that would prompt is denied. With
- * resumeId, it continues that session and appends to its log. Once the session ends, every process
- * it left running is stopped.
+ * resumeId, it continues that session and appends to its log. With addDir, the session may also
+ * read that folder. Once the session ends, every process it left running is stopped.
  */
 export async function runSession({
   command,
@@ -151,6 +204,7 @@ export async function runSession({
   schema,
   logFile,
   resumeId,
+  addDir,
   processPollMs,
 }) {
   const [file, ...prefix] = command;
@@ -160,6 +214,7 @@ export async function runSession({
     ...prefix,
     '-p',
     ...(resumeId === undefined ? [] : ['--resume', resumeId]),
+    ...(addDir === undefined ? [] : ['--add-dir', addDir]),
     '--output-format',
     'stream-json',
     '--verbose',

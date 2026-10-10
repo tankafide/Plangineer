@@ -20,7 +20,7 @@ Commit once per pass, not after every change:
 | --- | --- |
 | Planning | The plan, once the engineer confirms its summary |
 | Implementation | All of the pass's work, once the checks have run |
-| Review round | The round's fixes, named for the round, such as `Fix implementation review round 1`, so the round can be reverted alone |
+| Review round | The author session's fixes, named `Fix <plan\|implementation> review round <n>`, so the round can be reverted alone. The body lists every finding with its verdict, its reason and what was done, then the plan audit for an implementation review. A round with nothing to fix is still committed, with `--allow-empty`, so the verdicts stay in Git. By hand, `<n>` is one more than the branch's earlier commits with that summary |
 
 - The summary line is imperative and under 72 characters. The body says why, not what.
 - No commit waits to be asked for.
@@ -30,8 +30,8 @@ Commit once per pass, not after every change:
 Written to `writing-style`. It holds:
 
 - The plan summary, with a link to the plan. Without a plan, the request and the decisions the implementer recorded.
-- The findings history: each review round's outcomes, as its fix commit records them.
-- Every departure from the plan, with its reason, and the engineer's keep or revert for any that review raised.
+- The findings history: each review round's verdicts and outcomes, as its fix commit records them.
+- Every departure from the plan, with its reason, and the author's verdict on any that review raised.
 - Which checks ran and which did not. A check that did not run is listed as not run, never as passed.
 
 ## Landing on {{defaultBranch}}
