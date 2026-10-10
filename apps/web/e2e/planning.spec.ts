@@ -70,11 +70,13 @@ test.describe('planning on a paired runner', () => {
     await expect(page.getByRole('heading', { name: `1. ${EDITED_TITLE}` })).toBeVisible();
 
     const testPlan = page.locator('#section-test_plan');
-    await expect(testPlan.getByText('Stale', { exact: true })).toBeVisible();
+    // The grid renders a table and a phone list, and CSS hides the one that does not fit.
+    const staleMarker = testPlan.getByText('Stale', { exact: true }).filter({ visible: true });
+    await expect(staleMarker).toBeVisible();
     await testPlan.getByRole('button', { name: 'Mark checked' }).click();
     await testPlan.getByRole('button', { name: 'Save coverage' }).click();
     await expectRevision(page, 3);
-    await expect(testPlan.getByText('Stale', { exact: true })).toHaveCount(0);
+    await expect(staleMarker).toHaveCount(0);
 
     await page.getByRole('button', { name: 'Expand Goal' }).click();
     await expectRevision(page, 4);

@@ -51,13 +51,13 @@ export function StartPlanning({ feature }: { feature: FeatureDetail }) {
       <Button
         className="w-full md:w-auto md:self-start"
         disabled={start.isPending}
+        // Success stores the feature as planning, which unmounts this button before callbacks
+        // passed to mutate would run, so the plan opens from mutateAsync. A failure shows in
+        // StartFailed through start.error.
         onClick={() =>
-          start.mutate(
-            { featureId: feature.id },
-            {
-              onSuccess: () =>
-                navigate({ to: '/features/$featureId/plan', params: { featureId: feature.id } }),
-            },
+          start.mutateAsync({ featureId: feature.id }).then(
+            () => navigate({ to: '/features/$featureId/plan', params: { featureId: feature.id } }),
+            () => undefined,
           )
         }
       >
