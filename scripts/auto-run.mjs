@@ -56,6 +56,8 @@ function planPrompt(request) {
 function implementationPrompt(planPath) {
   return [
     `Use the implementation-orchestrator skill to build the plan at ${planPath} on the current branch.`,
+    'The branch may already hold part of this build from an earlier session. Keep that work, build only the steps it lacks, and treat it as your own.',
+    'Each implementation review round reviews the whole branch: its base commit is `git merge-base HEAD origin/HEAD`, never a commit this session made.',
     'Do not push.',
     ...FINISH,
   ].join('\n');

@@ -100,8 +100,8 @@ describe('autoRun', () => {
     const [plan, implementation] = await calls();
     expect(plan.prompt).toMatch(/plan-orchestrator skill[^]*This session only plans it/);
     expect(plan.prompt).toContain('<request>\nAdd a thing.\n</request>');
-    expect(implementation.prompt).toContain(
-      'implementation-orchestrator skill to build the plan at docs/plans/2026-10-08-thing.md',
+    expect(implementation.prompt).toMatch(
+      /build the plan at docs\/plans\/2026-10-08-thing\.md[^]*`git merge-base HEAD origin\/HEAD`/,
     );
   });
 
