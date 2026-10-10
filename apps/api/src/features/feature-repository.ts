@@ -10,9 +10,10 @@ import {
   RESEARCH_TOPICS_MAX,
   type RunMode,
   type RunStatus,
+  TERMINAL_RUN_STATUSES,
 } from '@plangineer/contracts';
 import { workflowSettingsFor } from '@plangineer/domain';
-import { and, asc, desc, eq, lt } from 'drizzle-orm';
+import { and, asc, desc, eq, lt, notExists, notInArray } from 'drizzle-orm';
 import type { Executor, Transaction } from '../db/client.ts';
 import {
   contextFiles,
@@ -255,15 +256,29 @@ export async function findFeatureIdOfRun(
   return row?.featureId;
 }
 
-/** Up to limit features still in pre_planning, oldest first, for the sweeper's repair. */
-export async function findPrePlanningFeatures(
+/**
+ * Up to limit features still in pre_planning whose task runs have all ended, oldest first, for
+ * the sweeper's repair. Features still waiting on a run are left out, so they never crowd out a
+ * stuck one.
+ */
+export async function findStuckPrePlanningFeatures(
   executor: Executor,
   limit: number,
 ): Promise<string[]> {
+  const unfinishedTask = executor
+    .select({ id: prePlanningTasks.id })
+    .from(prePlanningTasks)
+    .innerJoin(runs, eq(runs.id, prePlanningTasks.runId))
+    .where(
+      and(
+        eq(prePlanningTasks.featureId, features.id),
+        notInArray(runs.status, [...TERMINAL_RUN_STATUSES]),
+      ),
+    );
   const rows = await executor
     .select({ id: features.id })
     .from(features)
-    .where(eq(features.state, 'pre_planning'))
+    .where(and(eq(features.state, 'pre_planning'), notExists(unfinishedTask)))
     .orderBy(asc(features.id))
     .limit(limit);
   return rows.map((row) => row.id);

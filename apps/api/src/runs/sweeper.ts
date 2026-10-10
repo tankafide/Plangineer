@@ -1,7 +1,7 @@
 import { leaseLostOutcome } from '@plangineer/domain';
 import type { ServiceDeps } from '../lib/service-deps.ts';
 import { advanceFeature } from '../features/feature-advance.ts';
-import { findPrePlanningFeatures } from '../features/feature-repository.ts';
+import { findStuckPrePlanningFeatures } from '../features/feature-repository.ts';
 import { wakeRunner } from '../runners/runner-repository.ts';
 import { listLapsedRunIds, lockLapsedRun } from './run-dispatch-repository.ts';
 import { onRunEnded } from './run-ended.ts';
@@ -59,7 +59,7 @@ export async function sweepLapsedLeases(deps: ServiceDeps): Promise<number> {
     handled += 1;
     if (swept.ended) await onRunEnded(deps, runId);
   }
-  for (const featureId of await findPrePlanningFeatures(db, REPAIR_BATCH)) {
+  for (const featureId of await findStuckPrePlanningFeatures(db, REPAIR_BATCH)) {
     await advanceFeature(deps, featureId);
   }
   return handled;

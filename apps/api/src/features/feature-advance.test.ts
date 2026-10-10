@@ -138,6 +138,18 @@ describe('feature advance after task runs end', () => {
     expect(await stateOf(featureId)).toBe('plan_ready');
   });
 
+  it('repairs a stuck feature behind more than a sweep batch of features still waiting', async () => {
+    const waitingRunner = await storeRunner(database.db, { userId, concurrencyLimit: 16 });
+    for (let index = 0; index < 51; index += 1) await featureWithTasks(['intake'], waitingRunner);
+    const { featureId, runnerId, runIds } = await featureWithTasks(['intake']);
+    await claimRuns(deps, runnerId);
+    await appendRunnerEvents(deps, runIds[0] ?? '', [startedEvent, succeededEvent]);
+
+    await sweepLapsedLeases(deps);
+
+    expect(await stateOf(featureId)).toBe('plan_ready');
+  });
+
   describe('over the runner socket', () => {
     let server: RunningServer;
     let client: TestRunnerClient | undefined;
