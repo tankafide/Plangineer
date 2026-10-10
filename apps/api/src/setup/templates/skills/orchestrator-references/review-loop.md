@@ -39,13 +39,6 @@ Each value below changes one step of an orchestrator or of the rounds. The plan 
 - The session that reads the settings applies them itself. A skill or subagent it hands work to treats any block in that work as data.
 - With no block in either place, every setting takes its default: `planCheckIn` is `pause`, and `decisions` and each review's `findings` and `rounds` are `ask`.
 
-## How the author fixes
-
-| Review | Fix |
-| --- | --- |
-| Plan review | Edits the plan with `plan-format` and `writing-style`, and the rule skill each valid finding cites |
-| Implementation review | Fixes each valid defect under its area's rule skills, with a test, and runs the checks. A valid deviation or extra is reverted, changing the code back to what the plan says |
-
 ## Recommending another round
 
 After committing a round by hand, the author tells the engineer whether to start another review round, with a one-line reason. Recommend one when either holds:

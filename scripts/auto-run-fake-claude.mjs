@@ -5,8 +5,9 @@
  * `implementation-fix`, `plan-review`, `implementation-review`, `plan` or `implementation`. The nth
  * call with a key takes the nth answer, `{ event, writes, commit }`: `event` is the result event, a
  * raw line to print in its place, or null for none; `writes` maps paths relative to the working
- * directory to the text to write there, or to null to delete the file; and `commit: true` then commits everything as `<key> <n>`.
- * With `leaveProcess`, it starts a detached process that outlives it and records its pid, then
+ * directory, or under `$ADD_DIR/` for the `--add-dir` folder, to the text to write there, or to
+ * null to delete the file; and `commit: true` then commits everything as `<key> <n>`. With
+ * `leaveProcess`, it starts a detached process that outlives it and records its pid, then
  * waits `lingerMs` before it exits.
  */
 import { spawn } from 'node:child_process';
@@ -54,7 +55,11 @@ await appendFile(config.recordFile, `${JSON.stringify(call)}\n`);
 
 const answer = config.results[key]?.[earlier];
 if (answer === undefined) throw new Error(`No answer for call ${earlier + 1} with key ${key}`);
-for (const [file, contents] of Object.entries(answer.writes ?? {})) {
+const addDir = args[args.indexOf('--add-dir') + 1];
+for (const [written, contents] of Object.entries(answer.writes ?? {})) {
+  const file = written.startsWith('$ADD_DIR/')
+    ? path.join(addDir, written.slice('$ADD_DIR/'.length))
+    : written;
   if (contents === null) {
     await rm(file);
   } else {

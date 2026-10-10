@@ -193,8 +193,8 @@ async function logSince(logFile, offset) {
 /**
  * Runs one headless session, logs its stream to logFile, and returns its validated report. Auto
  * mode lets its classifier approve each action, and anything that would prompt is denied. With
- * resumeId, it continues that session and appends to its log. With addDir, the session may also
- * read that folder. Once the session ends, every process it left running is stopped.
+ * resumeId, it continues that session and appends to its log. With addDir, the session can also
+ * read and edit that folder. Once the session ends, every process it left running is stopped.
  */
 export async function runSession({
   command,

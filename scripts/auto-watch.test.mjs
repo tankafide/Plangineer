@@ -122,7 +122,7 @@ describe('startWatch', () => {
     const { stdout: baseCommit } = await git('rev-parse', 'HEAD');
     await writeFile(
       path.join(logDir, 'run.json'),
-      JSON.stringify({ baseCommit, planPath: null, stepHeads: {} }),
+      JSON.stringify({ baseCommit, planPath: null, stepHeads: {}, stepReports: {} }),
     );
   });
 

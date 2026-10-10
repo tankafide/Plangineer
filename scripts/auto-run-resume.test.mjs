@@ -1,9 +1,10 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   answer,
   createRepos,
+  implementationFixReport,
   PLAN_PATH,
   planFixReport,
   planReport,
@@ -25,9 +26,18 @@ describe('autoRun resuming a cut-off session', { timeout: 60_000 }, () => {
     await repos.remove();
   });
 
-  /** Runs until a session ends with no result, then resumes the log named. */
-  async function cutOffThenResume(results, log, options = { request: 'Add a thing.' }) {
+  /**
+   * Runs until a session ends with no result, lets between change the run's log folder, then
+   * resumes the log named.
+   */
+  async function cutOffThenResume(
+    results,
+    log,
+    options = { request: 'Add a thing.' },
+    between = async () => {},
+  ) {
     await expect(repos.run(results, options)).rejects.toThrow(CUT_OFF);
+    await between(await repos.runDir());
     const resumeLog = path.join(await repos.runDir(), log);
     const before = (await repos.calls()).length;
     const outcome = await repos.run(results, { resumeLog });
@@ -129,6 +139,74 @@ describe('autoRun resuming a cut-off session', { timeout: 60_000 }, () => {
 
     const written = await readFile(path.join(path.dirname(resumeLog), 'outcome.json'), 'utf8');
     expect(JSON.parse(written)).toEqual(outcome);
+  });
+
+  it('gates on an engineer action the plan reported before the cut-off', async () => {
+    const results = quietResults({
+      plan: [answer(planReport({ engineerActions: ['Add GITHUB_TOKEN to .env'] }))],
+      'plan-review': [answer(null)],
+      resume: [answer(reviewReport([]))],
+    });
+
+    const { outcome } = await cutOffThenResume(results, 'plan-review-1.jsonl');
+
+    expect(outcome).toMatchObject({
+      ready: false,
+      reasons: ['Engineer action: Add GITHUB_TOKEN to .env'],
+    });
+    expect(outcome.sessions.map(({ step }) => step)).toEqual(['plan-review-1']);
+  });
+
+  it('gates on a check the last fix failed before the cut-off', async () => {
+    const results = quietResults({
+      'implementation-review': [answer(reviewReport(['First'])), answer(null)],
+      'implementation-fix': [
+        answer(implementationFixReport({ valid: 1, failed: ['Vitest'] }), { commit: true }),
+      ],
+      resume: [answer(reviewReport([]))],
+    });
+
+    const { outcome } = await cutOffThenResume(results, 'implementation-review-2.jsonl', {
+      request: 'Add a thing.',
+      implementationRounds: 2,
+    });
+
+    expect(outcome).toMatchObject({ ready: false, reasons: ['Failed check: Vitest'] });
+  });
+
+  it.each([
+    [
+      'a starting commit',
+      (run) => delete run.stepHeads['plan-review-1'],
+      'run.json holds no starting commit for plan-review-1',
+    ],
+    [
+      'a plan',
+      (run) => Object.assign(run, { planPath: null }),
+      'run.json holds no plan for plan-review-1 to review',
+    ],
+  ])('refuses to resume when the run file lost %s', async (_, lose, message) => {
+    const results = quietResults({ 'plan-review': [answer(null)] });
+    const loseFromRunFile = async (runDir) => {
+      const file = path.join(runDir, 'run.json');
+      const run = JSON.parse(await readFile(file, 'utf8'));
+      lose(run);
+      await writeFile(file, JSON.stringify(run));
+    };
+
+    await expect(
+      cutOffThenResume(results, 'plan-review-1.jsonl', undefined, loseFromRunFile),
+    ).rejects.toThrow(message);
+  });
+
+  it('refuses to resume a run whose settings file holds no settings block', async () => {
+    const results = quietResults({ 'plan-review': [answer(null)] });
+
+    await expect(
+      cutOffThenResume(results, 'plan-review-1.jsonl', undefined, (runDir) =>
+        writeFile(path.join(runDir, 'settings.md'), '{}\n'),
+      ),
+    ).rejects.toThrow(/settings\.md holds no settings block$/);
   });
 
   it('refuses a file that is not a session log', async () => {

@@ -67,7 +67,7 @@ Extras follow in a second table.
 | --- | --- | --- | --- | --- |
 | What was added | Locations | Step number | `yes` with the reason, or `no` | Location of the finding, or `none` when sound |
 
-Write `none` under the table when there are no extras. Then list constraints and agent or human checks not proven by the diff, one line each. The engineer keeps or reverts each raised row, so leave that decision to them.
+Write `none` under the table when there are no extras. Then list constraints and agent or human checks not proven by the diff, one line each. The author judges each raised row, as the [review loop](../orchestrator-references/review-loop.md) describes, so leave that decision to them.
 
 ## Without a plan
 

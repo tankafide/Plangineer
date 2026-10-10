@@ -3,6 +3,7 @@ import { access, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises
 import path from 'node:path';
 import { execa } from 'execa';
 import { z } from 'zod';
+import { git } from './auto-run-checks.mjs';
 
 const LOG_DIR = 'logs/auto';
 const SETTINGS_FILE = 'settings.md';
@@ -19,13 +20,15 @@ export const Outcome = z.union([
 
 /**
  * Facts about the run that a watcher and a resumed run need: the commit it started from, the plan
- * it builds, and the commit each step started from, which the checks after a resumed step trust.
+ * it builds, the commit each step started from, which the checks after a resumed step trust, and
+ * each authoring and fix step's report, which a resumed run's gate reads.
  */
 export const RUN_FILE = 'run.json';
 export const RunFile = z.strictObject({
   baseCommit: z.string().min(1),
   planPath: z.string().min(1).nullable(),
   stepHeads: z.record(z.string(), z.string().min(1)),
+  stepReports: z.record(z.string(), z.unknown()),
 });
 
 export const RoundCount = z.coerce.number().int().min(1);
@@ -78,10 +81,6 @@ export const fixStep = (phase, round) => `${phase}-fix-${round}`;
 export const findingsFileOf = (logDir, phase, round) =>
   path.join(logDir, FINDINGS_DIR, `${reviewStep(phase, round)}.findings.json`);
 
-async function git(cwd, ...args) {
-  return (await execa('git', args, { cwd })).stdout.trim();
-}
-
 async function exists(file) {
   return access(file).then(
     () => true,
@@ -101,6 +100,26 @@ export async function readRunFile(logDir) {
 
 export async function saveRunFile(logDir, runFile) {
   await writeWhole(path.join(logDir, RUN_FILE), JSON.stringify(RunFile.parse(runFile)));
+}
+
+/** Saves an authoring or fix step's report, so a run resumed after it still gates on it. */
+export async function saveReport(logDir, runFile, step, report) {
+  runFile.stepReports[step] = report;
+  await saveRunFile(logDir, runFile);
+}
+
+/** The commit a step started from, recorded when it first started. */
+export function recordedHead(runFile, step) {
+  const head = runFile.stepHeads[step];
+  if (head === undefined) throw new Error(`${RUN_FILE} holds no starting commit for ${step}`);
+  return head;
+}
+
+/** A step's saved report, parsed with its schema. */
+export function savedReport(runFile, step, schema) {
+  const saved = runFile.stepReports[step];
+  if (saved === undefined) throw new Error(`${RUN_FILE} holds no report for ${step}`);
+  return schema.parse(saved);
 }
 
 export async function writeOutcome(logDir, outcome) {
@@ -176,6 +195,7 @@ export async function prepareLogDir({
     baseCommit: await git(cwd, 'rev-parse', 'HEAD'),
     planPath: planPath ?? null,
     stepHeads: {},
+    stepReports: {},
   });
   return logDir;
 }

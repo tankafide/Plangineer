@@ -1,7 +1,8 @@
 /** The git checks an auto run makes after each session, each failing the run with its step. */
 import { execa } from 'execa';
 
-async function git(cwd, ...args) {
+/** Runs git in cwd and returns its output, without the final newline. */
+export async function git(cwd, ...args) {
   return (await execa('git', args, { cwd })).stdout;
 }
 
@@ -35,12 +36,12 @@ export async function assertDocsOnly(cwd, since, step) {
 }
 
 export async function assertNoCommits(cwd, since, step) {
-  if ((await git(cwd, 'rev-parse', 'HEAD')).trim() === since) return;
+  if ((await git(cwd, 'rev-parse', 'HEAD')) === since) return;
   const log = await git(cwd, 'log', '--format=%h %s', `${since}..HEAD`);
-  throw new Error(`The ${step} session made commits: ${log.trim().split(/\r?\n/).join(', ')}`);
+  throw new Error(`The ${step} session made commits: ${log.split(/\r?\n/).join(', ')}`);
 }
 
 /** The commit an implementation review starts from: where the branch left the default branch. */
 export async function reviewBase(cwd) {
-  return (await git(cwd, 'merge-base', 'HEAD', 'origin/HEAD')).trim();
+  return git(cwd, 'merge-base', 'HEAD', 'origin/HEAD');
 }

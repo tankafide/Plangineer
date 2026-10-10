@@ -97,6 +97,23 @@ describe('autoRun checks after each session', { timeout: 60_000 }, () => {
       'The plan-fix-1 session judged 2 findings, the file holds 3',
     );
   });
+
+  it('counts the findings the file held before the fix session could edit it', async () => {
+    const trimmed = { ...reviewReport(['First']), review: 'plan', planPath: PLAN_PATH };
+    const results = quietResults({
+      'plan-review': [answer(reviewReport(['First', 'Second', 'Third']))],
+      'plan-fix': [
+        answer(planFixReport({ valid: 1 }), {
+          writes: { '$ADD_DIR/plan-review-1.findings.json': JSON.stringify(trimmed) },
+          commit: true,
+        }),
+      ],
+    });
+
+    await expect(repos.run(results)).rejects.toThrow(
+      'The plan-fix-1 session judged 1 findings, the file holds 3',
+    );
+  });
 });
 
 describe('autoRun refuses to start', () => {

@@ -1,8 +1,13 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
-import { execa } from 'execa';
-import { assertClean, assertDocsOnly, assertNoCommits, reviewBase } from './auto-run-checks.mjs';
+import {
+  assertClean,
+  assertDocsOnly,
+  assertNoCommits,
+  git,
+  reviewBase,
+} from './auto-run-checks.mjs';
 import {
   fixPrompt,
   implementationPrompt,
@@ -26,11 +31,14 @@ import {
   fixStep,
   prepareLogDir,
   readRunFile,
+  recordedHead,
   resumePointOf,
   reviewStep,
   RoundCount,
   roundsOf,
   RUN_FILE,
+  saveReport,
+  savedReport,
   saveRunFile,
   settingsFileOf,
   writeOutcome,
@@ -47,12 +55,8 @@ const PHASES = {
 
 /** The commit a step started from: recorded now for a new step, or when a resumed step began. */
 async function startingCommit(run, step, resumed) {
-  if (resumed) {
-    const head = run.runFile.stepHeads[step];
-    if (head === undefined) throw new Error(`${RUN_FILE} holds no starting commit for ${step}`);
-    return head;
-  }
-  const { stdout: head } = await execa('git', ['rev-parse', 'HEAD'], { cwd: run.cwd });
+  if (resumed) return recordedHead(run.runFile, step);
+  const head = await git(run.cwd, 'rev-parse', 'HEAD');
   run.runFile.stepHeads[step] = head;
   await saveRunFile(run.logDir, run.runFile);
   return head;
@@ -85,6 +89,16 @@ async function runStep(run, step, { log, prompt, schema, resumesAuthor = false, 
   return { report, head };
 }
 
+/** The phase's authoring and fix reports an earlier invocation saved before the resume point. */
+function savedReports(run, phase, resume) {
+  if (resume.step === phase) return [];
+  const fixes = Array.from({ length: resume.round - 1 }, (_, index) => fixStep(phase, index + 1));
+  return [
+    savedReport(run.runFile, phase, PHASES[phase].report),
+    ...fixes.map((step) => savedReport(run.runFile, step, PHASES[phase].fixReport)),
+  ];
+}
+
 async function authorStep(run, phase, prompt) {
   const { report, head } = await runStep(run, phase, {
     log: `${phase}.jsonl`,
@@ -94,8 +108,8 @@ async function authorStep(run, phase, prompt) {
   if (phase === 'plan') {
     await assertDocsOnly(run.cwd, head, phase);
     run.runFile.planPath = report.planPath;
-    await saveRunFile(run.logDir, run.runFile);
   }
+  await saveReport(run.logDir, run.runFile, phase, report);
   return report;
 }
 
@@ -128,9 +142,13 @@ async function reviewRound(run, phase, round) {
   return { report, findingsFile };
 }
 
-/** Resumes the author session with a round's findings file and checks it judged every finding. */
+/**
+ * Resumes the author session with a round's findings file and checks it judged every finding. The
+ * count comes from the file as it was before the session, which can edit the findings folder.
+ */
 async function fixRound(run, phase, round, findingsFile) {
   const step = fixStep(phase, round);
+  const { findings } = FindingsFile.parse(JSON.parse(await readFile(findingsFile, 'utf8')));
   const { report, head } = await runStep(run, step, {
     log: `${phase}.jsonl`,
     prompt: async () => fixPrompt({ phase, round, findingsFile }),
@@ -139,13 +157,13 @@ async function fixRound(run, phase, round, findingsFile) {
     addDir: path.dirname(findingsFile),
   });
   if (phase === 'plan') await assertDocsOnly(run.cwd, head, step);
-  const { findings } = FindingsFile.parse(JSON.parse(await readFile(findingsFile, 'utf8')));
   const judged = report.valid + report.invalid;
   if (report.outcome === 'done' && judged !== findings.length) {
     throw new Error(
       `The ${step} session judged ${judged} findings, the file holds ${findings.length}`,
     );
   }
+  await saveReport(run.logDir, run.runFile, step, report);
   return report;
 }
 
@@ -159,7 +177,7 @@ const engineerActions = (reports) =>
  */
 async function runPhase(run, phase, authorPrompt) {
   const resume = run.resume?.phase === phase ? run.resume : undefined;
-  const reports = [];
+  const reports = resume === undefined ? [] : savedReports(run, phase, resume);
   const stop = (report) => [`Stopped: ${report.stopReason}`, ...engineerActions(reports)];
   if (resume === undefined || resume.step === phase) {
     const report = await authorStep(run, phase, authorPrompt);
@@ -179,10 +197,8 @@ async function runPhase(run, phase, authorPrompt) {
     if (fix.outcome === 'stopped') return stop(fix);
     if (fix.valid === 0) break;
   }
-  const failedChecks = (reports.at(-1)?.checks?.failed ?? []).map(
-    (check) => `Failed check: ${check}`,
-  );
-  return [...engineerActions(reports), ...failedChecks];
+  const failed = reports.at(-1)?.checks?.failed ?? [];
+  return [...engineerActions(reports), ...failed.map((check) => `Failed check: ${check}`)];
 }
 
 async function runPhases(run, { request, planFirst }) {
