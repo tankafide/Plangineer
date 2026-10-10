@@ -23,7 +23,23 @@ type StartPlanning =
 
 /** Whether the engineer may start planning. Under Auto loop, planning starts by itself. */
 export function startPlanning(state: FeatureState, runMode: RunMode): StartPlanning {
-  if (state === 'planning') return { ok: false, reason: 'already_planning' };
+  if (planOpen(state)) return { ok: false, reason: 'already_planning' };
   if (runMode === 'auto_loop') return { ok: false, reason: 'auto_loop' };
   return { ok: true, state: 'planning' };
+}
+
+/** Whether the feature has a plan workspace the engineer can open and work in. */
+export function planOpen(state: FeatureState): boolean {
+  switch (state) {
+    case 'planning':
+    case 'ready_for_review':
+      return true;
+    case 'pre_planning':
+    case 'plan_ready':
+      return false;
+    default: {
+      const unhandled: never = state;
+      throw new Error(`Unhandled feature state: ${String(unhandled)}`);
+    }
+  }
 }

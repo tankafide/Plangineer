@@ -2,7 +2,13 @@ import { randomUUID } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import type { RunnerRunEventBody, RunnerToServerMessage, TestJob } from '@plangineer/contracts';
+import {
+  isTerminalRunEvent,
+  type RunJob,
+  type RunnerRunEventBody,
+  type RunnerToServerMessage,
+  type TestJob,
+} from '@plangineer/contracts';
 import { pino } from 'pino';
 import type { AgentAdapter } from '../adapters/agent-adapter.ts';
 import { createClaudeCodeAdapter } from '../adapters/claude-code/claude-code-adapter.ts';
@@ -105,4 +111,20 @@ export async function waitForFakePids(plane: FakeControlPlane, runId: string): P
 export function isMessage<T extends RunnerToServerMessage['type']>(type: T) {
   return (message: RunnerToServerMessage): message is Extract<RunnerToServerMessage, { type: T }> =>
     message.type === type;
+}
+
+/** Assigns a job as `runId` and returns the events it sent once its terminal event arrives. */
+export async function runToEnd(
+  plane: FakeControlPlane,
+  job: RunJob,
+  runId: string = randomUUID(),
+): Promise<RunnerRunEventBody[]> {
+  plane.assign(job, runId);
+  await plane.waitFor(
+    (message): message is RunnerToServerMessage =>
+      message.type === 'run.events' &&
+      message.runId === runId &&
+      message.events.some((entry) => isTerminalRunEvent(entry.event)),
+  );
+  return plane.events(runId).map((entry) => entry.event);
 }

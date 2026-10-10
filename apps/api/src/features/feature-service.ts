@@ -7,18 +7,15 @@ import {
   PrePlanningJob,
   type PrePlanningTaskKind,
 } from '@plangineer/contracts';
-import { featureTitle, pickRunner, startPlanning } from '@plangineer/domain';
+import { featureTitle, startPlanning } from '@plangineer/domain';
 import type { z } from 'zod';
-import type { Transaction } from '../db/client.ts';
 import { toPage } from '../lib/page.ts';
 import { err, fail, ok, type Result } from '../lib/result.ts';
 import type { ServiceDeps } from '../lib/service-deps.ts';
 import { findRepositoryBranch } from '../repositories/repository-repository.ts';
-import {
-  listActiveRunnersForUser,
-  lockRunnerForUser,
-  wakeRunner,
-} from '../runners/runner-repository.ts';
+import { queueTurn } from '../planning/planning-turns.ts';
+import { lockActiveRunner } from '../runners/runner-pick.ts';
+import { wakeRunner } from '../runners/runner-repository.ts';
 import { appendRunEvents } from '../runs/run-events-repository.ts';
 import { insertRun } from '../runs/run-repository.ts';
 import {
@@ -32,6 +29,7 @@ import {
   insertTask,
   listFeaturesForAuthor,
   lockFeatureForAuthor,
+  lockFeature,
   updateFeatureRunMode,
   updateFeatureState,
 } from './feature-repository.ts';
@@ -75,17 +73,6 @@ async function readAttachments(files: File[]): Promise<NewAttachment[]> {
 }
 
 /**
- * Picks the viewer's most recently seen runner and locks it, rechecking it is not revoked, so a
- * concurrent revoke orders before or after the whole creation.
- */
-async function lockPickedRunner(tx: Transaction, userId: string): Promise<string | undefined> {
-  const runnerId = pickRunner(await listActiveRunnersForUser(tx, userId));
-  if (runnerId === null) return undefined;
-  const runner = await lockRunnerForUser(tx, userId, runnerId);
-  return runner === undefined || runner.status === 'revoked' ? undefined : runnerId;
-}
-
-/**
  * Stores the feature, its attachments and its tasks, each task with its rendered job and a
  * queued pre_planning run on the picked runner at the repository's stored default branch, in
  * one transaction. Only the intake job lists the attachments. It makes no GitHub call.
@@ -102,8 +89,9 @@ export async function createFeature(
     const repository =
       repositoryId === undefined ? undefined : await findRepositoryBranch(tx, repositoryId);
     if (repository === undefined) return fail('NOT_FOUND');
-    const runnerId = await lockPickedRunner(tx, userId);
-    if (runnerId === undefined) return fail('RUNNER_REQUIRED');
+    const runner = await lockActiveRunner(tx, userId);
+    if (!runner.ok) return runner;
+    const runnerId = runner.value;
     const feature = {
       description: input.description,
       ticketUrl: input.ticketUrl ?? null,
@@ -163,32 +151,79 @@ export async function getFeature(
   return detail === undefined ? fail('NOT_FOUND') : ok(detail);
 }
 
-/** Sets the run mode, in any state. */
+/** Sets the run mode, in any state. A change to Auto loop starts a plan_ready feature's planning. */
 export async function changeFeature(
   deps: ServiceDeps,
   userId: string,
   { featureId, runMode }: FeatureUpdateInput,
 ): Promise<Result<FeatureDetail, 'NOT_FOUND'>> {
   if (!(await updateFeatureRunMode(deps.db, userId, featureId, runMode))) return fail('NOT_FOUND');
+  if (runMode === 'auto_loop') await startAutoPlanning(deps, featureId);
   return ok(await readDetail(deps, userId, featureId));
 }
 
-/** Moves the feature to planning under its row lock, or answers why it cannot. */
+/**
+ * Moves the feature to planning under its row lock and queues its first guided turn on the
+ * viewer's runner, or answers why it cannot.
+ */
 export async function startFeaturePlanning(
   deps: ServiceDeps,
   userId: string,
   featureId: string,
-): Promise<Result<FeatureDetail, 'NOT_FOUND' | 'CONFLICT'>> {
-  const started = await deps.db.transaction(async (tx) => {
+): Promise<Result<FeatureDetail, 'NOT_FOUND' | 'CONFLICT' | 'RUNNER_REQUIRED'>> {
+  const { db, env, logger } = deps;
+  const started = await db.transaction(async (tx) => {
     const feature = await lockFeatureForAuthor(tx, userId, featureId);
     if (feature === undefined) return fail('NOT_FOUND');
     const decision = startPlanning(feature.state, feature.runMode);
     if (!decision.ok) return err('CONFLICT', { reason: decision.reason });
+    const runner = await lockActiveRunner(tx, userId);
+    if (!runner.ok) return runner;
     await updateFeatureState(tx, featureId, decision.state);
-    return ok(undefined);
+    await queueTurn(
+      tx,
+      { leaseDurationMs: env.RUN_LEASE_DURATION_MS, logger },
+      { id: featureId, authorId: userId, runMode: feature.runMode },
+      { kind: 'guided' },
+      runner.value,
+    );
+    return runner;
   });
   if (!started.ok) return started;
+  await wakeRunner(db, started.value);
   return ok(await readDetail(deps, userId, featureId));
+}
+
+/**
+ * Starts the planning of an Auto loop feature in plan_ready on its author's runner, as Start
+ * planning does for the engineer. It never throws, since run ends, run mode changes and the
+ * sweeper call it: a missing runner or a failure is logged, and the next sweep retries it.
+ */
+export async function startAutoPlanning(deps: ServiceDeps, featureId: string): Promise<void> {
+  const { db, env, logger } = deps;
+  try {
+    const runnerId = await db.transaction(async (tx) => {
+      const feature = await lockFeature(tx, featureId);
+      if (feature?.state !== 'plan_ready' || feature.runMode !== 'auto_loop') return undefined;
+      const runner = await lockActiveRunner(tx, feature.authorId);
+      if (!runner.ok) {
+        logger.info({ featureId }, 'Auto loop planning waits for a runner');
+        return undefined;
+      }
+      await updateFeatureState(tx, featureId, 'planning');
+      await queueTurn(
+        tx,
+        { leaseDurationMs: env.RUN_LEASE_DURATION_MS, logger },
+        { id: featureId, authorId: feature.authorId, runMode: feature.runMode },
+        { kind: 'guided' },
+        runner.value,
+      );
+      return runner.value;
+    });
+    if (runnerId !== undefined) await wakeRunner(db, runnerId);
+  } catch (error) {
+    logger.error({ err: error, featureId }, 'Auto loop planning could not start');
+  }
 }
 
 /** An attachment's bytes, when the runner holds a leased or running intake run of its feature. */

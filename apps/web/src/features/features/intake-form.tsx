@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { isApiError, useCreateFeature } from '@plangineer/api-client';
 import type { RepositorySummary } from '@plangineer/contracts';
-import { Link, useNavigate } from '@tanstack/react-router';
+import { useNavigate } from '@tanstack/react-router';
 import { CircleAlert } from 'lucide-react';
 import { type Control, Controller, useForm } from 'react-hook-form';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -15,26 +15,17 @@ import { AttachmentsField } from './attachments-field';
 import { IntakeFields, type IntakeInput, type IntakeOutput } from './intake-fields';
 import { RepositoryField } from './repository-field';
 import { RunModeField } from './run-mode-field';
+import { RunnerRequiredAlert } from './runner-required-alert';
 
 type IntakeControl = Control<IntakeInput, unknown, IntakeOutput>;
 
 function StartFailed({ error }: { error: Error }) {
+  if (isApiError(error, 'RUNNER_REQUIRED'))
+    return <RunnerRequiredAlert message="No runner can take this feature." />;
   return (
     <Alert variant="destructive">
       <CircleAlert aria-hidden />
-      <AlertDescription>
-        {isApiError(error, 'RUNNER_REQUIRED') ? (
-          <p>
-            No runner can take this feature. Pair one on the{' '}
-            <Link to="/runners" className="text-link underline underline-offset-4">
-              Runners
-            </Link>{' '}
-            screen, then start the feature again.
-          </p>
-        ) : (
-          `The feature could not be started: ${error.message}`
-        )}
-      </AlertDescription>
+      <AlertDescription>{`The feature could not be started: ${error.message}`}</AlertDescription>
     </Alert>
   );
 }

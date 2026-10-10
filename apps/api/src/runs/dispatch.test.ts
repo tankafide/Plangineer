@@ -1,8 +1,9 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { runners, runs } from '../db/schema.ts';
+import { planningTurns, runners, runs } from '../db/schema.ts';
 import { storeFeature, storeTask, testPrePlanningJob } from '../test/features.ts';
 import { storeRunner, storeUser, testAuth, testDeps } from '../test/fixtures.ts';
+import { storeTurn } from '../test/planning.ts';
 import { storeRepository } from '../test/setup-fixtures.ts';
 import { queueRun, runRow, storedEvents } from '../test/runs.ts';
 import { createTestDatabase, type TestDatabase } from '../test/test-database.ts';
@@ -125,5 +126,34 @@ describe('claimRuns', () => {
     await queueRun(deps(), userId, runnerId);
 
     expect(await claimRuns(deps(), runnerId)).toEqual([]);
+  });
+
+  it('leases a queued planning run with the job stored on its turn', async () => {
+    const runnerId = await storeRunner(database.db, { userId });
+    const repositoryId = await storeRepository(database.db, {
+      createdBy: userId,
+      githubRepositoryId: 3301,
+    });
+    const featureId = await storeFeature(database.db, { authorId: userId, repositoryId });
+    const { runId } = await storeTurn(deps(), {
+      featureId,
+      userId,
+      runnerId,
+      spec: { kind: 'section_action', section: 'goal', action: 'expand' },
+    });
+    const [turn] = await database.db
+      .select({ job: planningTurns.job })
+      .from(planningTurns)
+      .where(eq(planningTurns.runId, runId));
+
+    const [claimed] = await claimRuns(deps(), runnerId);
+
+    expect(claimed).toEqual({ runId, attempt: 1, job: turn?.job });
+    expect(claimed?.job).toMatchObject({
+      kind: 'planning',
+      turn: 'section_action',
+      section: 'goal',
+    });
+    expect((await runRow(database.db, runId)).status).toBe('leased');
   });
 });

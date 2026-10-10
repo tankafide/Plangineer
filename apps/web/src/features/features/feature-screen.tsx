@@ -1,5 +1,6 @@
 import { isApiError, useFeature, useUpdateFeature } from '@plangineer/api-client';
 import type { FeatureDetail } from '@plangineer/contracts';
+import { planOpen } from '@plangineer/domain';
 import { Link } from '@tanstack/react-router';
 import { CircleAlert } from 'lucide-react';
 import { LoadFailed } from '@/components/load-failed';
@@ -101,13 +102,26 @@ function FeatureHeaderCard({ feature }: { feature: FeatureDetail }) {
           </p>
         )}
         <FeatureRunMode feature={feature} />
-        <StartPlanning feature={feature} />
+        {planOpen(feature.state) ? (
+          <Link
+            to="/features/$featureId/plan"
+            params={{ featureId: feature.id }}
+            className={buttonVariants({ className: 'w-full md:w-auto md:self-start' })}
+          >
+            Open plan
+          </Link>
+        ) : (
+          <StartPlanning feature={feature} />
+        )}
       </CardContent>
     </Card>
   );
 }
 
-/** One feature: its header with the run mode and Start planning, its tasks and its context files. */
+/**
+ * One feature: its header with the run mode and Start planning or Open plan, its tasks and its
+ * context files.
+ */
 export function FeatureScreen({ featureId }: { featureId: string }) {
   const feature = useFeature(featureId);
   const retry = () => void feature.refetch();

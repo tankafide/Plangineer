@@ -13,6 +13,9 @@ import {
 } from './repository-setup.ts';
 import { CommitSha, GitRef, Repository, RUN_PROMPT_MAX } from './run.ts';
 import { jsonByteLength } from './json-bytes.ts';
+import { PlanSection } from './plan-body.ts';
+import { PlanningTurnKind } from './planning-output.ts';
+import { WorkflowSettings } from './run-mode.ts';
 import { RunnerRunEventBody } from './run-event.ts';
 import { CliStatus, RunnerPlatform } from './runner.ts';
 
@@ -149,7 +152,32 @@ export const PrePlanningJob = z
   );
 export type PrePlanningJob = z.infer<typeof PrePlanningJob>;
 
-export const RunJob = z.discriminatedUnion('kind', [TestJob, SetupJob, PrePlanningJob]);
+/**
+ * One planning turn, rendered by the API when the turn is queued. The runner downloads the
+ * inputs from `runnerPlanningInputsPath`, and the settings reach the agent's system prompt.
+ */
+export const PlanningJob = z
+  .strictObject({
+    kind: z.literal('planning'),
+    turn: PlanningTurnKind,
+    section: PlanSection.nullable(),
+    repository: Repository,
+    ref: GitRef,
+    prompt: Prompt,
+    settings: WorkflowSettings,
+  })
+  .refine(
+    (job) => (job.turn === 'section_action') === (job.section !== null),
+    'must name a section exactly when the turn is a section action',
+  );
+export type PlanningJob = z.infer<typeof PlanningJob>;
+
+export const RunJob = z.discriminatedUnion('kind', [
+  TestJob,
+  SetupJob,
+  PrePlanningJob,
+  PlanningJob,
+]);
 export type RunJob = z.infer<typeof RunJob>;
 
 const RunAssign = z.strictObject({ type: z.literal('run.assign'), ...RunAttempt, job: RunJob });
@@ -179,4 +207,11 @@ export const RUNNER_ATTACHMENT_PATH = '/api/runners/attachments/:attachmentId';
 
 export function runnerAttachmentPath(attachmentId: string): string {
   return RUNNER_ATTACHMENT_PATH.replace(':attachmentId', encodeURIComponent(attachmentId));
+}
+
+/** Where a runner downloads the inputs of the planning run it holds. */
+export const RUNNER_PLANNING_INPUTS_PATH = '/api/runners/planning-inputs/:runId';
+
+export function runnerPlanningInputsPath(runId: string): string {
+  return RUNNER_PLANNING_INPUTS_PATH.replace(':runId', encodeURIComponent(runId));
 }

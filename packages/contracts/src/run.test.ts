@@ -106,6 +106,10 @@ describe('Run', () => {
     expect(Run.parse(run())).toEqual(run());
   });
 
+  it('accepts a planning run', () => {
+    expect(Run.parse(run({ kind: 'planning' }))).toEqual(run({ kind: 'planning' }));
+  });
+
   it('rejects an unknown status', () => {
     expect(Run.safeParse(run({ status: 'paused' })).success).toBe(false);
   });

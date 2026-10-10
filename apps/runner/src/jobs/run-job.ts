@@ -4,8 +4,9 @@ import {
   type RunnerRunEventBody,
 } from '@plangineer/contracts';
 import type { AgentAccess, AgentAdapter } from '../adapters/agent-adapter.ts';
-import type { Attachments } from '../connection/attachments.ts';
+import type { ServerFiles } from '../connection/server-files.ts';
 import { packageVersion } from '../package-version.ts';
+import { finishPlanning, preparePlanning } from '../planning/planning-job.ts';
 import { finishPrePlanning, preparePrePlanning } from '../pre-planning/pre-planning-job.ts';
 import { finishSetup, prepareSetup } from '../setup/setup-job.ts';
 import type { SkillSnapshot } from '../setup/setup-tree.ts';
@@ -23,7 +24,7 @@ export interface RunJobContext {
   job: RunJobSpec;
   adapter: AgentAdapter;
   worktrees: Worktrees;
-  attachments: Attachments;
+  serverFiles: ServerFiles;
   timeoutMs: number;
   /** Takes the job's next event, or returns false when its buffer is full. */
   emit(event: RunnerRunEventBody): boolean;
@@ -63,11 +64,16 @@ function stopEvent(cause: StopCause, timeoutMs: number): RunnerRunEventBody | nu
   }
 }
 
-/** A setup job writes skills, a research task reaches the web, and every other job only reads. */
+/**
+ * A setup job writes skills, a research task reaches the web, a planning job writes its output
+ * file, and every other job only reads.
+ */
 function accessFor(job: RunJobSpec): AgentAccess {
   switch (job.kind) {
     case 'setup':
       return 'write_skills';
+    case 'planning':
+      return 'write_plan';
     case 'pre_planning':
       return job.task === 'research' ? 'research' : 'read_only';
     case 'test':
@@ -79,12 +85,20 @@ function accessFor(job: RunJobSpec): AgentAccess {
   }
 }
 
+/** What the worktree holds for the agent once its job kind is ready. */
+interface Prepared {
+  /** The skill tree a setup job started from, or null for every other job. */
+  snapshot: SkillSnapshot | null;
+  systemPromptFile: string | null;
+}
+
 /**
- * One assigned run: checkout, the skills check, the setup files or the pre-planning task folder,
- * the CLI check, the agent, the setup push or the answer check, then worktree removal.
+ * One assigned run: checkout, the skills check, the setup files or the task folder, the CLI
+ * check, the agent, the setup push, the answer check or the planning output, then worktree
+ * removal.
  */
 export function createRunJob(context: RunJobContext): RunJob {
-  const { runId, attempt, job, adapter, worktrees, attachments, timeoutMs } = context;
+  const { runId, attempt, job, adapter, worktrees, serverFiles, timeoutMs } = context;
   const controller = new AbortController();
   let stopCause: StopCause | null = null;
   let started = false;
@@ -126,16 +140,16 @@ export function createRunJob(context: RunJobContext): RunJob {
 
   /**
    * Readies the worktree for the job's kind. A setup job skips the mirror check, since setup is
-   * what repairs the mirror, and writes its files before the agent runs. A pre-planning job
-   * writes its task folder after the check.
+   * what repairs the mirror, and writes its files before the agent runs. A pre-planning or
+   * planning job writes its task folder after the check.
    */
   async function prepareKind(worktree: {
     path: string;
     commit: string;
-  }): Promise<SkillSnapshot | null | 'failed'> {
+  }): Promise<Prepared | 'failed'> {
     if (job.kind === 'setup') {
       const prepared = await prepareSetup(worktree.path, job);
-      if (prepared.ok) return prepared.value;
+      if (prepared.ok) return { snapshot: prepared.value, systemPromptFile: null };
       send(prepared.event);
       return 'failed';
     }
@@ -144,27 +158,43 @@ export function createRunJob(context: RunJobContext): RunJob {
       send(runFailed('skills_drift', drift.message));
       return 'failed';
     }
-    if (job.kind !== 'pre_planning') return null;
+    if (job.kind === 'planning') {
+      const prepared = await preparePlanning(
+        worktree.path,
+        job,
+        (destination, signal) => serverFiles.planningInputs(runId, destination, signal),
+        controller.signal,
+      );
+      if (prepared.ok) return { snapshot: null, systemPromptFile: prepared.systemPromptFile };
+      send(prepared.event);
+      return 'failed';
+    }
+    if (job.kind !== 'pre_planning') return { snapshot: null, systemPromptFile: null };
     const failure = await preparePrePlanning(
       worktree.path,
       worktree.commit,
       job,
-      attachments,
+      serverFiles,
       controller.signal,
     );
-    if (failure === null) return null;
+    if (failure === null) return { snapshot: null, systemPromptFile: null };
     send(failure);
     return 'failed';
   }
 
   /**
-   * Runs the agent. A setup job holds back its success until the branch is pushed, and a
-   * pre-planning job until its answer is checked.
+   * Runs the agent. A setup job holds back its success until the branch is pushed, a
+   * pre-planning job until its answer is checked, and a planning job until its output is sent.
    */
-  async function runAgentTo(worktree: string, snapshot: SkillSnapshot | null): Promise<void> {
+  async function runAgentTo(worktree: string, prepared: Prepared): Promise<void> {
     let succeeded: Extract<RunnerRunEventBody, { type: 'run.succeeded' }> | null = null;
     for await (const event of adapter.run(
-      { prompt: job.prompt, cwd: worktree, access: accessFor(job) },
+      {
+        prompt: job.prompt,
+        cwd: worktree,
+        access: accessFor(job),
+        systemPromptFile: prepared.systemPromptFile,
+      },
       controller.signal,
     )) {
       if (job.kind !== 'test' && event.type === 'run.succeeded') succeeded = event;
@@ -172,6 +202,13 @@ export function createRunJob(context: RunJobContext): RunJob {
     }
     if (succeeded === null || controller.signal.aborted) return;
     if (job.kind === 'pre_planning') return send(finishPrePlanning(succeeded));
+    if (job.kind === 'planning') {
+      const output = await finishPlanning(worktree, job);
+      send(output);
+      if (output.type === 'planning.output') send(succeeded);
+      return;
+    }
+    const { snapshot } = prepared;
     if (job.kind !== 'setup' || snapshot === null) return;
     const published = await finishSetup(worktree, job, snapshot, packageVersion());
     if (!published.ok) return send(published.event);
@@ -191,8 +228,8 @@ export function createRunJob(context: RunJobContext): RunJob {
       return;
     }
     if (controller.signal.aborted) return;
-    const snapshot = await prepareKind(worktree);
-    if (snapshot === 'failed') return;
+    const prepared = await prepareKind(worktree);
+    if (prepared === 'failed') return;
     const cli = await adapter.detect();
     if (!cli.available || cli.version === null) {
       const found = cli.version === null ? 'no version' : cli.version;
@@ -209,7 +246,7 @@ export function createRunJob(context: RunJobContext): RunJob {
       commit: worktree.commit,
       cli: { name: cli.name, version: cli.version },
     });
-    await runAgentTo(worktree.path, snapshot);
+    await runAgentTo(worktree.path, prepared);
   }
 
   async function run(): Promise<void> {

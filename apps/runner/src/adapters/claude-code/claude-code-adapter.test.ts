@@ -17,7 +17,10 @@ afterAll(() => rm(cwd, { recursive: true, force: true, maxRetries: 5 }));
 async function collect(prompt: string, signal = new AbortController().signal) {
   const adapter = createClaudeCodeAdapter(FAKE_CLAUDE_COMMAND);
   const events: RunnerRunEventBody[] = [];
-  for await (const event of adapter.run({ prompt, cwd, access: 'read_only' }, signal)) {
+  for await (const event of adapter.run(
+    { prompt, cwd, access: 'read_only', systemPromptFile: null },
+    signal,
+  )) {
     events.push(event);
   }
   return events;
@@ -28,7 +31,7 @@ const SETTINGS =
 
 describe('claudeArgs', () => {
   it('passes exactly the read-only arguments and never --bare', () => {
-    const args = claudeArgs('read_only');
+    const args = claudeArgs('read_only', null);
 
     expect(args).toEqual([
       '-p',
@@ -51,7 +54,7 @@ describe('claudeArgs', () => {
   });
 
   it('lets a research job read, search and fetch only from GitHub, with no shell or writes', () => {
-    expect(claudeArgs('research')).toEqual([
+    expect(claudeArgs('research', null)).toEqual([
       '-p',
       '--output-format',
       'stream-json',
@@ -71,7 +74,7 @@ describe('claudeArgs', () => {
   });
 
   it('lets a setup job write only under .agents/skills, search, fetch from GitHub and start subagents', () => {
-    expect(claudeArgs('write_skills')).toEqual([
+    expect(claudeArgs('write_skills', null)).toEqual([
       '-p',
       '--output-format',
       'stream-json',
@@ -89,6 +92,47 @@ describe('claudeArgs', () => {
       SETTINGS,
     ]);
   });
+
+  it('lets a planning job read, load skills and write only its output file', () => {
+    expect(claudeArgs('write_plan', null)).toEqual([
+      '-p',
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--permission-mode',
+      'dontAsk',
+      '--permission-prompts',
+      'none',
+      '--tools',
+      'Read,Glob,Grep,Skill,Edit,Write',
+      '--allowedTools',
+      'Read Glob Grep Skill Edit(.plangineer-task/output.json)',
+      '--strict-mcp-config',
+      '--settings',
+      SETTINGS,
+    ]);
+  });
+
+  it('appends the system prompt file as the last argument when one is given', () => {
+    const file = path.join(cwd, '.plangineer-task', 'settings.md');
+
+    expect(claudeArgs('write_plan', file).slice(-3)).toEqual([
+      SETTINGS,
+      '--append-system-prompt-file',
+      file,
+    ]);
+  });
+
+  it.each(['read_only', 'research', 'write_skills', 'write_plan'] as const)(
+    'passes no system prompt file and no line break in any %s argument',
+    (access) => {
+      const withFile = claudeArgs(access, path.join(cwd, 'settings.md'));
+      const withoutFile = claudeArgs(access, null);
+
+      expect(withoutFile).not.toContain('--append-system-prompt-file');
+      expect([...withFile, ...withoutFile].filter((arg) => /[\r\n]/.test(arg))).toEqual([]);
+    },
+  );
 });
 
 describe('detect', () => {
@@ -162,7 +206,7 @@ describe('run', () => {
     let pids: number[] | null = null;
 
     for await (const event of adapter.run(
-      { prompt: 'fake:hang', cwd, access: 'read_only' },
+      { prompt: 'fake:hang', cwd, access: 'read_only', systemPromptFile: null },
       controller.signal,
     )) {
       events.push(event);

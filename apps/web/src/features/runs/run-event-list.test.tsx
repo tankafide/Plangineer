@@ -1,4 +1,4 @@
-import type { RunEvent } from '@plangineer/contracts';
+import type { DraftStep, PlanningOutput, RunEvent } from '@plangineer/contracts';
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
@@ -62,7 +62,10 @@ const EVERY_KIND: RunEvent[] = [
   }),
 ];
 
-function failedEvent(id: number, reason: 'setup_invalid_output' | 'setup_publish_failed') {
+function failedEvent(
+  id: number,
+  reason: 'setup_invalid_output' | 'setup_publish_failed' | 'inputs_failed',
+) {
   return runEvent(id, {
     type: 'run.failed',
     reason,
@@ -71,6 +74,53 @@ function failedEvent(id: number, reason: 'setup_invalid_output' | 'setup_publish
     stderrTail: [],
   });
 }
+
+const DRAFT_STEP: DraftStep = {
+  id: 'new-1',
+  title: 'Export the CSV',
+  files: ['src/export.ts'],
+  body: '',
+  doneWhen: [],
+};
+
+const PLANNING_OUTPUTS: [string, PlanningOutput][] = [
+  [
+    'Questions',
+    {
+      kind: 'questions',
+      questions: [
+        {
+          section: 'goal',
+          prompt: 'Which invoices?',
+          choices: [
+            { label: 'Paid', detail: '' },
+            { label: 'All', detail: '' },
+          ],
+          recommended: 0,
+        },
+      ],
+      decisions: [],
+    },
+  ],
+  [
+    'Plan draft',
+    {
+      kind: 'plan',
+      plan: {
+        goal: 'Export invoices.',
+        prerequisites: [],
+        steps: [DRAFT_STEP],
+        decisions: [],
+        constraints: [],
+        coverage: [],
+        blockers: [],
+        verification: { automated: [], agentChecks: [], humanChecks: [] },
+      },
+    },
+  ],
+  ['Section', { kind: 'section', patch: { section: 'goal', goal: 'Export invoices.' } }],
+  ['Step', { kind: 'step', step: DRAFT_STEP }],
+];
 
 function renderEvents(events: readonly RunEvent[]) {
   return renderPage(() => <RunEventList events={events} />);
@@ -109,11 +159,22 @@ describe('RunEventList', () => {
   it.each([
     ['setup_invalid_output', 'Failed: The setup output broke a skill rule'],
     ['setup_publish_failed', 'Failed: The setup branch could not be pushed'],
+    ['inputs_failed', 'Failed: The planning inputs could not be downloaded'],
   ] as const)('labels the %s failure reason', async (reason, label) => {
     await renderEvents([failedEvent(1, reason)]);
 
     expect(await screen.findByText(label)).toBeTruthy();
   });
+
+  it.each(PLANNING_OUTPUTS)(
+    'shows a planning output of kind %s as a Plan output row',
+    async (label, output) => {
+      await renderEvents([runEvent(1, { type: 'planning.output', output })]);
+
+      const list = within(await screen.findByRole('list', { name: 'Run events' }));
+      expect(list.getByRole('listitem').textContent).toBe(`Plan output: ${label}`);
+    },
+  );
 
   it('expands a tool use input with Show input', async () => {
     await renderEvents(EVERY_KIND);

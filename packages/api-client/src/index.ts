@@ -19,6 +19,20 @@ export {
 } from './instance.ts';
 export { useMe } from './me.ts';
 export {
+  planConflictReason,
+  useAnswerQuestion,
+  useContinuePlanning,
+  useEditPlan,
+  useMarkReady,
+  usePlan,
+  usePlanRevision,
+  usePlanRevisions,
+  usePlanTurnEvents,
+  useRetryTurn,
+  useReviseStep,
+  useSectionAction,
+} from './plan.ts';
+export {
   useAddRepository,
   useInstallableRepositoryList,
   useRemoveRepository,

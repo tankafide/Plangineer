@@ -17,6 +17,7 @@
     "@orpc/client": "1.15.5",
     "@orpc/contract": "1.15.5",
     "@plangineer/contracts": "workspace:*",
+    "@plangineer/domain": "workspace:*",
     "@types/node": "24.19.1",
     "@types/ws": "8.18.2",
     "env-paths": "4.0.0",

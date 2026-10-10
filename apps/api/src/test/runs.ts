@@ -1,8 +1,9 @@
-import type { RunnerRunEventBody } from '@plangineer/contracts';
+import type { PlanningOutput, RunnerRunEventBody } from '@plangineer/contracts';
 import { asc, eq, sql } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { runEvents, runs } from '../db/schema.ts';
 import type { ServiceDeps } from '../lib/service-deps.ts';
+import { applyPlanningOutput } from '../planning/planning-apply.ts';
 import { appendRunEvents } from '../runs/run-events-repository.ts';
 import { createRun } from '../runs/run-service.ts';
 
@@ -29,6 +30,11 @@ export const succeededEvent: RunnerRunEventBody = {
   durationMs: 1_000,
   numTurns: 1,
 };
+
+export const planningOutputEvent = (output: PlanningOutput): RunnerRunEventBody => ({
+  type: 'planning.output',
+  output,
+});
 
 /** Queues a run through the service and returns its id. */
 export async function queueRun(deps: ServiceDeps, userId: string, runnerId: string) {
@@ -62,7 +68,10 @@ export async function storedEvents(db: Database, runId: string) {
     .orderBy(asc(runEvents.eventId));
 }
 
-/** Appends runner events at the run's current attempt, numbered from firstSeq. */
+/**
+ * Appends runner events at the run's current attempt, numbered from firstSeq, applying a
+ * planning output as the runner socket does.
+ */
 export async function appendRunnerEvents(
   deps: ServiceDeps,
   runId: string,
@@ -70,12 +79,17 @@ export async function appendRunnerEvents(
   firstSeq = 1,
 ) {
   const { attempt } = await runRow(deps.db, runId);
+  const options = { leaseDurationMs: deps.env.RUN_LEASE_DURATION_MS, logger: deps.logger };
   return deps.db.transaction((tx) =>
     appendRunEvents(
       tx,
       runId,
       bodies.map((body, index) => ({ body, attempt, runnerSeq: firstSeq + index })),
-      { leaseDurationMs: deps.env.RUN_LEASE_DURATION_MS, logger: deps.logger },
+      {
+        ...options,
+        onPlanningSucceeded: (hookTx, id, output) =>
+          applyPlanningOutput(hookTx, id, output, options),
+      },
     ),
   );
 }

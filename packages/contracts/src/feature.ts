@@ -5,7 +5,7 @@ import { PageInput, pageOutput } from './pagination.ts';
 import { CommitSha, RunStatus } from './run.ts';
 import { RunMode, WorkflowSettings } from './run-mode.ts';
 
-export const FeatureState = z.enum(['pre_planning', 'plan_ready', 'planning']);
+export const FeatureState = z.enum(['pre_planning', 'plan_ready', 'planning', 'ready_for_review']);
 export type FeatureState = z.infer<typeof FeatureState>;
 
 export const PrePlanningTaskKind = z.enum(['intake', 'exploration', 'research']);
@@ -142,6 +142,10 @@ export const featureUpdate = base
   .output(FeatureDetail);
 
 export const featureStartPlanning = base
-  .errors({ NOT_FOUND: NotFound, CONFLICT: { status: 409, data: StartPlanningConflictData } })
+  .errors({
+    NOT_FOUND: NotFound,
+    CONFLICT: { status: 409, data: StartPlanningConflictData },
+    RUNNER_REQUIRED: { status: 409 },
+  })
   .input(FeatureIdInput)
   .output(FeatureDetail);

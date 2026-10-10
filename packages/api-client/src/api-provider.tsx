@@ -41,7 +41,8 @@ export function useApiUtils(): ApiUtils {
   return useApi().utils;
 }
 
-/** The absolute URL of an API route outside oRPC, on the same origin as the RPC endpoint. */
-export function useApiRouteUrl(path: string): string {
-  return new URL(path, useApi().url).href;
+/** Resolves an API route outside oRPC to its absolute URL, on the RPC endpoint's origin. */
+export function useApiRoute(): (path: string) => string {
+  const { url } = useApi();
+  return (path) => new URL(path, url).href;
 }

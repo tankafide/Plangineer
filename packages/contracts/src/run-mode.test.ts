@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RunMode, WorkflowSettings } from './run-mode.ts';
+import { PlanCheckIn, RunMode, WorkflowSettings } from './run-mode.ts';
 
 const ASK = { findings: 'ask', rounds: { mode: 'ask' } };
 const MANUAL = {
@@ -14,6 +14,12 @@ const settings = (implementationReview: unknown) => ({ ...MANUAL, implementation
 describe('RunMode', () => {
   it('rejects an unknown mode', () => {
     expect(RunMode.safeParse('auto').success).toBe(false);
+  });
+});
+
+describe('PlanCheckIn', () => {
+  it('rejects an unknown check-in', () => {
+    expect(PlanCheckIn.safeParse('always').success).toBe(false);
   });
 });
 

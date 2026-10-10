@@ -1,7 +1,8 @@
 /**
  * A stand-in for `claude` with the same command shape, for runner tests and `pnpm dev`. It replays
  * recorded stream-json fixtures and never calls a model. The first prompt line `fake:<scenario>`
- * picks the scenario, and `success` is the default.
+ * picks the scenario. Without one, a working folder with planning inputs runs `planning`, and
+ * any other runs `success`.
  */
 import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -10,6 +11,14 @@ import path from 'node:path';
 import { text } from 'node:stream/consumers';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
+import {
+  isPlanningTurn,
+  writeLink,
+  writeNotJson,
+  writePlanningOutput,
+  writeStep,
+  writeTooBig,
+} from './fake-planning.ts';
 
 const FIXTURES = new URL('../__fixtures__/claude-code/2.1.284/', import.meta.url);
 const LINE_GAP_MS = 50;
@@ -114,6 +123,12 @@ async function setup(change: () => Promise<void> = async () => {}): Promise<numb
   return exitAfter(fixture('success-tools.jsonl'), 0);
 }
 
+/** Writes like a planning agent, then reports success. */
+async function plan(writeOutput: () => Promise<void>): Promise<number> {
+  await writeOutput();
+  return exitAfter(fixture('success-tools.jsonl'), 0);
+}
+
 /** Each scenario resolves to its exit code, or null when it waits to be stopped. */
 const scenarios: Record<string, () => Promise<number | null>> = {
   success: () => exitAfter(fixture('success-tools.jsonl'), 0),
@@ -157,6 +172,11 @@ const scenarios: Record<string, () => Promise<number | null>> = {
       await writeBackend();
       await writeFile('notes.txt', 'Notes.\n');
     }),
+  planning: () => plan(writePlanningOutput),
+  'planning-not-json': () => plan(writeNotJson),
+  'planning-too-big': () => plan(writeTooBig),
+  'planning-step': () => plan(writeStep),
+  'planning-link': () => plan(writeLink),
 };
 
 async function main(): Promise<void> {
@@ -165,7 +185,8 @@ async function main(): Promise<void> {
     return;
   }
   const prompt = await text(process.stdin);
-  const scenarioName = /^fake:(\S+)/.exec(prompt)?.[1] ?? 'success';
+  const named = /^fake:(\S+)/.exec(prompt)?.[1];
+  const scenarioName = named ?? ((await isPlanningTurn()) ? 'planning' : 'success');
   const scenario = scenarios[scenarioName];
   if (scenario === undefined) throw new Error(`Unknown fake scenario: ${scenarioName}`);
   const exitCode = await scenario();

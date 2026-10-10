@@ -1,9 +1,7 @@
 import type { FeatureDetail, FeatureSummary } from '@plangineer/contracts';
-import { QueryClient } from '@tanstack/react-query';
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { useApiUtils } from './api-provider.tsx';
 import {
   startPlanningConflictReason,
   useCreateFeature,
@@ -12,25 +10,13 @@ import {
   useStartPlanning,
   useUpdateFeature,
 } from './features.ts';
-import { FEATURE_ID, featureFixture, REPOSITORY_ID } from './test-fixtures.ts';
-import { apiWrapper, RPC_URL, rpcBody, server } from './test-utils.tsx';
-
-function newQueryClient() {
-  return new QueryClient({ defaultOptions: { queries: { retry: false } } });
-}
-
-/** Answers a procedure with each body in turn, repeating the last, and records each input. */
-function answer(path: string, ...bodies: unknown[]) {
-  const inputs: unknown[] = [];
-  server.use(
-    http.post(`${RPC_URL}/${path}`, async ({ request }) => {
-      const body: unknown = await request.json();
-      inputs.push(typeof body === 'object' && body !== null && 'json' in body ? body.json : null);
-      return HttpResponse.json(rpcBody(bodies[Math.min(inputs.length - 1, bodies.length - 1)]));
-    }),
-  );
-  return inputs;
-}
+import {
+  FEATURE_ID,
+  featureFixture,
+  planWorkspaceFixture,
+  REPOSITORY_ID,
+} from './test-fixtures.ts';
+import { answerProcedure, renderHooks, RPC_URL, rpcBody, server } from './test-utils.tsx';
 
 function summaryOf(feature: FeatureDetail): FeatureSummary {
   const { id, title, state, runMode, createdAt } = feature;
@@ -41,20 +27,13 @@ function listOf(...features: FeatureDetail[]) {
   return { items: features.map(summaryOf), nextCursor: null };
 }
 
-function renderHooks<T>(useHooks: () => T, queryClient = newQueryClient()) {
-  const view = renderHook(() => ({ hooks: useHooks(), utils: useApiUtils() }), {
-    wrapper: apiWrapper(queryClient),
-  });
-  return { ...view, queryClient };
-}
-
 afterEach(() => {
   vi.useRealTimers();
 });
 
 describe('useFeatureList', () => {
   it('reads feature.list under the infinite feature.list key', async () => {
-    answer('feature/list', listOf(featureFixture()));
+    answerProcedure('feature/list', listOf(featureFixture()));
 
     const { result, queryClient } = renderHooks(() => useFeatureList());
 
@@ -68,7 +47,7 @@ describe('useFeatureList', () => {
 
   it('reads the list again every 3 s while a feature is in pre-planning, and stops once none is', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    const inputs = answer(
+    const inputs = answerProcedure(
       'feature/list',
       listOf(featureFixture()),
       listOf(featureFixture({ state: 'plan_ready' })),
@@ -88,11 +67,33 @@ describe('useFeatureList', () => {
     await act(() => vi.advanceTimersByTimeAsync(9_000));
     expect(inputs).toHaveLength(2);
   });
+
+  it('reads the list again every 3 s while an Auto loop feature is in plan ready', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const inputs = answerProcedure(
+      'feature/list',
+      listOf(featureFixture({ state: 'plan_ready', runMode: 'auto_loop' })),
+      listOf(featureFixture({ state: 'planning', runMode: 'auto_loop' })),
+    );
+    const { result } = renderHooks(() => useFeatureList());
+    await waitFor(() =>
+      expect(result.current.hooks.data?.pages[0]?.items[0]?.state).toBe('plan_ready'),
+    );
+    expect(inputs).toHaveLength(1);
+
+    await act(() => vi.advanceTimersByTimeAsync(3_000));
+    await waitFor(() =>
+      expect(result.current.hooks.data?.pages[0]?.items[0]?.state).toBe('planning'),
+    );
+
+    await act(() => vi.advanceTimersByTimeAsync(9_000));
+    expect(inputs).toHaveLength(2);
+  });
 });
 
 describe('useFeature', () => {
   it('reads feature.get under the feature.get key for the feature id', async () => {
-    const inputs = answer('feature/get', featureFixture({ state: 'plan_ready' }));
+    const inputs = answerProcedure('feature/get', featureFixture({ state: 'plan_ready' }));
 
     const { result, queryClient } = renderHooks(() => useFeature(FEATURE_ID));
 
@@ -104,7 +105,11 @@ describe('useFeature', () => {
 
   it('reads the feature again every 3 s while it is in pre-planning, and stops once it is plan ready', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    const inputs = answer('feature/get', featureFixture(), featureFixture({ state: 'plan_ready' }));
+    const inputs = answerProcedure(
+      'feature/get',
+      featureFixture(),
+      featureFixture({ state: 'plan_ready' }),
+    );
     const { result } = renderHooks(() => useFeature(FEATURE_ID));
     await waitFor(() => expect(result.current.hooks.data?.state).toBe('pre_planning'));
 
@@ -116,15 +121,44 @@ describe('useFeature', () => {
     expect(inputs).toHaveLength(2);
   });
 
+  it('reads an Auto loop feature in plan ready again every 3 s, and stops once it is planning', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const inputs = answerProcedure(
+      'feature/get',
+      featureFixture({ state: 'plan_ready', runMode: 'auto_loop' }),
+      featureFixture({ state: 'planning', runMode: 'auto_loop' }),
+    );
+    const { result } = renderHooks(() => useFeature(FEATURE_ID));
+    await waitFor(() => expect(result.current.hooks.data?.state).toBe('plan_ready'));
+
+    await act(() => vi.advanceTimersByTimeAsync(3_000));
+    await waitFor(() => expect(result.current.hooks.data?.state).toBe('planning'));
+    expect(inputs).toHaveLength(2);
+
+    await act(() => vi.advanceTimersByTimeAsync(9_000));
+    expect(inputs).toHaveLength(2);
+  });
+
+  it('does not read a Manual feature in plan ready again', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const inputs = answerProcedure('feature/get', featureFixture({ state: 'plan_ready' }));
+    const { result } = renderHooks(() => useFeature(FEATURE_ID));
+    await waitFor(() => expect(result.current.hooks.isSuccess).toBe(true));
+
+    await act(() => vi.advanceTimersByTimeAsync(9_000));
+
+    expect(inputs).toHaveLength(1);
+  });
+
   it('refetches the feature list when a read finds a new state', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    const gets = answer(
+    const gets = answerProcedure(
       'feature/get',
       featureFixture(),
       featureFixture(),
       featureFixture({ state: 'plan_ready' }),
     );
-    const lists = answer('feature/list', listOf(featureFixture({ state: 'plan_ready' })));
+    const lists = answerProcedure('feature/list', listOf(featureFixture({ state: 'plan_ready' })));
     const { result } = renderHooks(() => ({
       feature: useFeature(FEATURE_ID),
       list: useFeatureList(),
@@ -144,8 +178,8 @@ describe('useFeature', () => {
 
 /** Renders a mutation hook beside a loaded feature and feature list. */
 async function renderLoaded<T>(useMutationHook: () => T) {
-  const lists = answer('feature/list', listOf(featureFixture({ state: 'plan_ready' })));
-  answer('feature/get', featureFixture({ state: 'plan_ready' }));
+  const lists = answerProcedure('feature/list', listOf(featureFixture({ state: 'plan_ready' })));
+  answerProcedure('feature/get', featureFixture({ state: 'plan_ready' }));
   const view = renderHooks(() => ({
     mutation: useMutationHook(),
     feature: useFeature(FEATURE_ID),
@@ -159,7 +193,7 @@ async function renderLoaded<T>(useMutationHook: () => T) {
 describe('feature mutations', () => {
   it('useCreateFeature writes the new feature to its detail key and refetches the list', async () => {
     const created = featureFixture({ id: '0199c1a6-9999-7d4e-8f90-a1b2c3d4e5f6' });
-    const creates = answer('feature/create', created);
+    const creates = answerProcedure('feature/create', created);
     const { result, queryClient, lists } = await renderLoaded(() => useCreateFeature());
 
     await act(() =>
@@ -181,7 +215,7 @@ describe('feature mutations', () => {
 
   it('useUpdateFeature writes the returned feature over the cached one and refetches the list', async () => {
     const updated = featureFixture({ state: 'plan_ready', runMode: 'auto_loop' });
-    const updates = answer('feature/update', updated);
+    const updates = answerProcedure('feature/update', updated);
     const { result, lists } = await renderLoaded(() => useUpdateFeature());
 
     await act(() =>
@@ -193,15 +227,21 @@ describe('feature mutations', () => {
     expect(lists).toHaveLength(2);
   });
 
-  it('useStartPlanning writes the returned feature over the cached one and refetches the list', async () => {
-    const starts = answer('feature/startPlanning', featureFixture({ state: 'planning' }));
-    const { result, lists } = await renderLoaded(() => useStartPlanning());
+  it('useStartPlanning writes the returned feature, refetches the list and invalidates the plan', async () => {
+    const starts = answerProcedure('feature/startPlanning', featureFixture({ state: 'planning' }));
+    const { result, lists, queryClient } = await renderLoaded(() => useStartPlanning());
+    queryClient.setQueryData(
+      result.current.utils.plan.get.queryKey({ input: { featureId: FEATURE_ID } }),
+      planWorkspaceFixture({ revision: null, turn: null }),
+    );
 
     await act(() => result.current.hooks.mutation.mutateAsync({ featureId: FEATURE_ID }));
 
     expect(starts).toEqual([{ featureId: FEATURE_ID }]);
     expect(result.current.hooks.feature.data?.state).toBe('planning');
     expect(lists).toHaveLength(2);
+    const planKey = result.current.utils.plan.get.queryKey({ input: { featureId: FEATURE_ID } });
+    expect(queryClient.getQueryState(planKey)?.isInvalidated).toBe(true);
   });
 });
 

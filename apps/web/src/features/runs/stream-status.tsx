@@ -22,6 +22,8 @@ export function StreamStatus({
   onRetry: () => void;
 }) {
   switch (state.status) {
+    case 'idle':
+      return null;
     case 'connecting':
       return <StreamBadge variant="muted">Connecting</StreamBadge>;
     case 'live':

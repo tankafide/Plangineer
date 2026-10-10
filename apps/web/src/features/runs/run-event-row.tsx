@@ -1,4 +1,4 @@
-import type { RunEvent } from '@plangineer/contracts';
+import type { PlanningOutput, RunEvent } from '@plangineer/contracts';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { formatDateTime } from '@/lib/date-time';
@@ -9,6 +9,13 @@ const RATE_LIMIT_LABELS = {
   allowed_warning: 'Close to the Claude plan limit',
   rejected: 'Claude plan limit reached',
 } as const;
+
+const PLANNING_OUTPUT_LABELS: Record<PlanningOutput['kind'], string> = {
+  questions: 'Questions',
+  plan: 'Plan draft',
+  section: 'Section',
+  step: 'Step',
+};
 
 function TruncatedNote({ truncated }: { truncated: boolean }) {
   if (!truncated) return null;
@@ -124,6 +131,8 @@ function EventBody({ event }: { event: RunEvent }) {
           {`Pushed ${event.branch} at ${event.commit.slice(0, 7)}, ${event.changedPathCount} files`}
         </EventLabel>
       );
+    case 'planning.output':
+      return <EventLabel>{`Plan output: ${PLANNING_OUTPUT_LABELS[event.output.kind]}`}</EventLabel>;
     case 'run.succeeded':
       return <EventLabel>Succeeded</EventLabel>;
     case 'run.failed':

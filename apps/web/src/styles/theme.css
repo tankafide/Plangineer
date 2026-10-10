@@ -130,3 +130,29 @@
     @apply bg-background text-foreground font-sans antialiased;
   }
 }
+
+/*
+ * react-diff-view takes every colour from the tokens, over its stylesheet's own: added lines are
+ * success at 15%, removed lines destructive at 15%, and word-level changes each at 30%, as the
+ * bg-success/15 utilities mix them.
+ */
+.diff {
+  --diff-background-color: transparent;
+  --diff-text-color: var(--foreground);
+  --diff-font-family: var(--font-mono);
+  --diff-selection-background-color: color-mix(in oklab, var(--primary) 30%, transparent);
+  --diff-selection-text-color: var(--foreground);
+  --diff-gutter-insert-background-color: color-mix(in oklab, var(--success) 15%, transparent);
+  --diff-gutter-delete-background-color: color-mix(in oklab, var(--destructive) 15%, transparent);
+  --diff-gutter-selected-background-color: var(--accent);
+  --diff-code-insert-background-color: color-mix(in oklab, var(--success) 15%, transparent);
+  --diff-code-delete-background-color: color-mix(in oklab, var(--destructive) 15%, transparent);
+  --diff-code-insert-edit-background-color: color-mix(in oklab, var(--success) 30%, transparent);
+  --diff-code-delete-edit-background-color: color-mix(
+    in oklab,
+    var(--destructive) 30%,
+    transparent
+  );
+  --diff-code-selected-background-color: var(--accent);
+  --diff-omit-gutter-line-color: var(--border);
+}

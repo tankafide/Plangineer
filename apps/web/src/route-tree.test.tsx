@@ -189,6 +189,29 @@ describe('routes', () => {
     expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeTruthy();
   });
 
+  it.each(['/features/not-a-feature/plan', '/features/not-a-feature/plan/revisions'])(
+    'shows Page not found for %s',
+    async (path) => {
+      answerSignedIn();
+      answerProcedure('feature/list', answerJson(page([])));
+
+      await renderRoute(path);
+
+      expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeTruthy();
+    },
+  );
+
+  it('opens the revision history with its revision numbers in the URL, dropping a bad one', async () => {
+    answerSignedIn();
+    answerProcedure('feature/list', answerJson(page([])));
+    answerProcedure('plan/revisions', answerJson(page([])));
+
+    const { router } = await renderRoute(`/features/${FEATURE_ID}/plan/revisions?from=1&to=zero`);
+
+    expect(await screen.findByRole('heading', { name: 'Revision history' })).toBeTruthy();
+    expect(router.state.location.search).toEqual({ from: 1 });
+  });
+
   it('shows Page not found for a repository id that is not a uuid', async () => {
     answerSignedIn();
 

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { PrePlanningTaskKind } from '@plangineer/contracts';
+import { dataBlock } from '../lib/data-block.ts';
 import { PACKAGE_ROOT } from '../package-root.ts';
 
 const TEMPLATES = path.join(PACKAGE_ROOT, 'src', 'features', 'templates');
@@ -18,13 +19,6 @@ export function renderTaskPrompt(kind: PrePlanningTaskKind): string {
     prompts.set(kind, prompt);
   }
   return prompt;
-}
-
-/** A fenced block of data whose fence is longer than any backtick run inside it. */
-function dataBlock(value: string): string {
-  const longest = Math.max(0, ...(value.match(/`+/g) ?? []).map((run) => run.length));
-  const fence = '`'.repeat(Math.max(3, longest + 1));
-  return `${fence}text\n${value}\n${fence}`;
 }
 
 interface TaskFeature {

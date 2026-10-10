@@ -33,6 +33,19 @@ Object.assign(Range.prototype, {
   getBoundingClientRect: () => ({ ...EMPTY_RECT, toJSON: () => EMPTY_RECT }),
 });
 
+// jsdom has no matchMedia. With no layout, no width query matches, so screens render their
+// phone layout.
+Object.assign(window, {
+  matchMedia: (media: string): MediaQueryList =>
+    Object.assign(new EventTarget(), {
+      media,
+      matches: false,
+      onchange: null,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+    }),
+});
+
 afterEach(() => {
   cleanup();
   server.resetHandlers();

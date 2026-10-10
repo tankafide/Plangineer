@@ -14,7 +14,7 @@ const READY_TIMEOUT_MS = 30_000;
 async function stageServer(serverDir) {
   await cp(path.join(API_DIR, 'dist'), path.join(serverDir, 'dist'), { recursive: true });
   await cp(path.join(API_DIR, 'drizzle'), path.join(serverDir, 'drizzle'), { recursive: true });
-  for (const area of ['setup', 'features']) {
+  for (const area of ['setup', 'features', 'planning']) {
     await cp(
       path.join(API_DIR, 'src', area, 'templates'),
       path.join(serverDir, 'src', area, 'templates'),

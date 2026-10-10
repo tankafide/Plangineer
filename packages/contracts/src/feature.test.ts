@@ -106,4 +106,9 @@ describe('FeatureDetail', () => {
   it('strips an unknown key', () => {
     expect(FeatureDetail.parse(detail({ authorId: ID }))).toEqual(detail());
   });
+
+  it('parses a feature ready for review', () => {
+    const ready = detail({ state: 'ready_for_review' });
+    expect(FeatureDetail.parse(ready)).toEqual(ready);
+  });
 });

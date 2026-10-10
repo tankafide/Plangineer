@@ -1,17 +1,29 @@
 import { generateOperationKey } from '@orpc/tanstack-query';
 import { isTerminalRunEvent, type RunEvent, runEventsPath } from '@plangineer/contracts';
-import { queryOptions, skipToken, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  queryOptions,
+  type SkipToken,
+  skipToken,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { useApiRouteUrl, useApiUtils } from './api-provider.tsx';
+import { useApiRoute, useApiUtils } from './api-provider.tsx';
 import { patchRunWithEvent } from './run-event-patch.ts';
 import { followRunEvents, type RunEventStreamState } from './run-event-stream.ts';
 
 const NO_EVENTS: readonly RunEvent[] = [];
 
-/** The applied events of one run's stream. Only the stream writes them, so nothing fetches. */
-function runEventsQuery(runId: string) {
+/**
+ * The applied events of one run's stream. Only the stream writes them, so nothing fetches. A
+ * skipped stream's key carries skipToken as its input, as oRPC's own skipped queries do.
+ */
+function runEventsQuery(runId: string | SkipToken) {
   return queryOptions<readonly RunEvent[]>({
-    queryKey: generateOperationKey(['run', 'events'], { type: 'query', input: { runId } }),
+    queryKey: generateOperationKey(['run', 'events'], {
+      type: 'query',
+      input: runId === skipToken ? skipToken : { runId },
+    }),
     queryFn: skipToken,
     staleTime: Infinity,
   });
@@ -28,8 +40,12 @@ function isEnded(events: readonly RunEvent[]): boolean {
   return last !== undefined && isTerminalRunEvent(last);
 }
 
+function initialState(runId: string | SkipToken): RunEventStreamState {
+  return { status: runId === skipToken ? 'idle' : 'connecting' };
+}
+
 interface Connection {
-  runId: string;
+  runId: string | SkipToken;
   /** Bumped by retry, so the effect opens a fresh stream. */
   attempt: number;
   state: RunEventStreamState;
@@ -37,30 +53,31 @@ interface Connection {
 
 /**
  * Follows a run's events over SSE. Events stay in the query cache, so a remount resumes from the
- * last applied id, and lifecycle events keep the run's cached details current.
+ * last applied id, and lifecycle events keep the run's cached details current. With skipToken it
+ * opens no stream and reports `idle`.
  */
-export function useRunEvents(runId: string) {
+export function useRunEvents(runId: string | SkipToken) {
   const utils = useApiUtils();
   const queryClient = useQueryClient();
-  const url = useApiRouteUrl(runEventsPath(runId));
+  const resolveRoute = useApiRoute();
+  const url = runId === skipToken ? null : resolveRoute(runEventsPath(runId));
   // The log is empty until the stream applies its first event.
   const events = useQuery(runEventsQuery(runId)).data ?? NO_EVENTS;
   const [connection, setConnection] = useState<Connection>({
     runId,
     attempt: 0,
-    state: { status: 'connecting' },
+    state: initialState(runId),
   });
   const current: Connection =
-    connection.runId === runId
-      ? connection
-      : { runId, attempt: 0, state: { status: 'connecting' } };
+    connection.runId === runId ? connection : { runId, attempt: 0, state: initialState(runId) };
   const state: RunEventStreamState = isEnded(events) ? { status: 'ended' } : current.state;
 
   useEffect(() => {
+    const controller = new AbortController();
+    if (runId === skipToken || url === null) return () => controller.abort();
     const eventsKey = runEventsQuery(runId).queryKey;
     const runKey = utils.run.get.queryKey({ input: { runId } });
     const readEvents = () => queryClient.getQueryData(eventsKey) ?? NO_EVENTS;
-    const controller = new AbortController();
     const onEvent = (event: RunEvent) => {
       const before = readEvents();
       const after = applyRunEvent(before, event);
@@ -82,7 +99,7 @@ export function useRunEvents(runId: string) {
   }, [runId, url, utils, queryClient, current.attempt]);
 
   const retry = () =>
-    setConnection({ runId, attempt: current.attempt + 1, state: { status: 'connecting' } });
+    setConnection({ runId, attempt: current.attempt + 1, state: initialState(runId) });
 
   return { events, state, retry };
 }

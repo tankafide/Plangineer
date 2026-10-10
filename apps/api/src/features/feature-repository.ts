@@ -208,17 +208,23 @@ export async function lockFeatureForAuthor(
   return row;
 }
 
-/** Locks a feature row for the run-end advance, whoever its author is. */
+export interface LockedFeature {
+  state: FeatureState;
+  runMode: RunMode;
+  authorId: string;
+}
+
+/** Locks a feature row for work the app starts by itself, whoever its author is. */
 export async function lockFeature(
   tx: Transaction,
   featureId: string,
-): Promise<FeatureState | undefined> {
+): Promise<LockedFeature | undefined> {
   const [row] = await tx
-    .select({ state: features.state })
+    .select({ state: features.state, runMode: features.runMode, authorId: features.authorId })
     .from(features)
     .where(eq(features.id, featureId))
     .for('update');
-  return row?.state;
+  return row;
 }
 
 export async function updateFeatureState(

@@ -152,6 +152,7 @@ describe('feature procedures', () => {
   describe('feature.startPlanning', () => {
     it('moves a Manual feature from plan_ready to planning, then answers CONFLICT already_planning', async () => {
       const { userId, context } = await viewer();
+      await storeRunner(database.db, { userId });
       const featureId = await feature(userId, { state: 'plan_ready' });
 
       const started = await start(featureId, context);

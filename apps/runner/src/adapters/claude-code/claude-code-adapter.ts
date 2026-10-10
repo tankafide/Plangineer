@@ -17,7 +17,8 @@ const DETECT_TIMEOUT_MS = 30_000;
 /**
  * The CLI flags for each access level. `dontAsk` denies anything the allow rules miss, and an
  * `Edit(...)` rule covers every file tool. Web fetches reach only GitHub, so injected text
- * cannot send repository code elsewhere.
+ * cannot send repository code elsewhere. A planning agent writes only its output file, so it
+ * cannot change the settings file beside it.
  */
 const ACCESS: Record<AgentAccess, { permissionMode: string; tools: string; allowedTools: string }> =
   {
@@ -38,6 +39,11 @@ const ACCESS: Record<AgentAccess, { permissionMode: string; tools: string; allow
       allowedTools:
         'Read Glob Grep Edit(.agents/skills/**) WebSearch WebFetch(domain:github.com) WebFetch(domain:raw.githubusercontent.com) Agent',
     },
+    write_plan: {
+      permissionMode: 'dontAsk',
+      tools: 'Read,Glob,Grep,Skill,Edit,Write',
+      allowedTools: 'Read Glob Grep Skill Edit(.plangineer-task/output.json)',
+    },
   };
 /** Repository hooks and credential helpers never run; project skills still load. */
 const SETTINGS = JSON.stringify({
@@ -49,9 +55,15 @@ const SETTINGS = JSON.stringify({
   otelHeadersHelper: '',
 });
 
-/** Claude Code's arguments for a job. Never `--bare`, which skips skills and the user's login. */
-export function claudeArgs(access: AgentAccess): string[] {
+/**
+ * Claude Code's arguments for a job. Never `--bare`, which skips skills and the user's login.
+ * Extra system prompt text comes from a file, since execa refuses an argument with a line break
+ * for a `.cmd` shim such as an npm-installed `claude` on Windows.
+ */
+export function claudeArgs(access: AgentAccess, systemPromptFile: string | null): string[] {
   const { permissionMode, tools, allowedTools } = ACCESS[access];
+  const systemPrompt =
+    systemPromptFile === null ? [] : ['--append-system-prompt-file', systemPromptFile];
   return [
     '-p',
     '--output-format',
@@ -68,6 +80,7 @@ export function claudeArgs(access: AgentAccess): string[] {
     '--strict-mcp-config',
     '--settings',
     SETTINGS,
+    ...systemPrompt,
   ];
 }
 
@@ -115,7 +128,7 @@ export function createClaudeCodeAdapter(command: readonly string[]): AgentAdapte
 
   async function* run(job: AgentJob, signal: AbortSignal): AsyncGenerator<RunnerRunEventBody> {
     if (signal.aborted) return;
-    const child = execa(file, [...prefix, ...claudeArgs(job.access)], {
+    const child = execa(file, [...prefix, ...claudeArgs(job.access, job.systemPromptFile)], {
       ...spawnOptions,
       input: job.prompt,
       cwd: job.cwd,

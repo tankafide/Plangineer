@@ -56,6 +56,10 @@ export const features = pgTable(
     index('features_pre_planning_idx')
       .on(table.id)
       .where(sql`${table.state} = 'pre_planning'`),
+    // Serves the sweeper's start of planning for Auto loop features left in plan_ready.
+    index('features_auto_plan_ready_idx')
+      .on(table.id)
+      .where(sql`${table.state} = 'plan_ready' AND ${table.runMode} = 'auto_loop'`),
   ],
 );
 

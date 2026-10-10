@@ -1,5 +1,6 @@
 import type { RunnerToServerMessage, ServerToRunnerMessage } from '@plangineer/contracts';
 import type { ServiceDeps } from '../lib/service-deps.ts';
+import { applyPlanningOutput } from '../planning/planning-apply.ts';
 import {
   extendLease,
   findActiveRunsOfRunner,
@@ -49,8 +50,8 @@ export async function acceptHello(
 }
 
 /**
- * Stores a batch for this runner's run at its current attempt, under the run's lock, and
- * returns the sequence to acknowledge and whether the run ended. Returns undefined, storing
+ * Stores a batch for this runner's run at its current attempt, under the run's lock, applying
+ * a planning run's output with its run.succeeded, and returns the sequence to acknowledge and whether the run ended. Returns undefined, storing
  * nothing, for a stale attempt, a run that is not leased or running, or another runner's run.
  */
 export async function acceptRunEvents(
@@ -58,6 +59,7 @@ export async function acceptRunEvents(
   runnerId: string,
   message: Message<'run.events'>,
 ): Promise<AppendResult | undefined> {
+  const options = { leaseDurationMs: env.RUN_LEASE_DURATION_MS, logger };
   return db.transaction(async (tx) => {
     const run = await lockRunOfRunner(tx, runnerId, message.runId);
     if (
@@ -75,7 +77,11 @@ export async function acceptRunEvents(
         attempt: message.attempt,
         runnerSeq: seq,
       })),
-      { leaseDurationMs: env.RUN_LEASE_DURATION_MS, logger },
+      {
+        ...options,
+        onPlanningSucceeded: (hookTx, runId, output) =>
+          applyPlanningOutput(hookTx, runId, output, options),
+      },
     );
   });
 }

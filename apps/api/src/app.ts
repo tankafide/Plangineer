@@ -5,7 +5,11 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { HTTPException } from 'hono/http-exception';
 import { requestId } from 'hono/request-id';
-import { RUN_EVENTS_PATH, RUNNER_ATTACHMENT_PATH } from '@plangineer/contracts';
+import {
+  RUN_EVENTS_PATH,
+  RUNNER_ATTACHMENT_PATH,
+  RUNNER_PLANNING_INPUTS_PATH,
+} from '@plangineer/contracts';
 import type { AuthProvider } from './auth/auth-provider.ts';
 import { resolveSession } from './auth/session.ts';
 import type { ServiceDeps } from './lib/service-deps.ts';
@@ -13,6 +17,7 @@ import type { Logger } from './logger.ts';
 import { router } from './rpc/router.ts';
 import { runnerAttachmentRoute } from './runners/runner-attachment-route.ts';
 import type { RunnerConnections } from './runners/runner-connections.ts';
+import { runnerPlanningInputsRoute } from './runners/runner-planning-inputs-route.ts';
 import { RUNNER_SOCKET_PATH, runnerSocketRoute } from './runners/runner-socket.ts';
 import { runEventStreamRoute } from './runs/run-event-stream.ts';
 import type { RunEventTail } from './runs/run-event-tail.ts';
@@ -78,6 +83,9 @@ export function createApp({
   );
   app.get(RUNNER_ATTACHMENT_PATH, (c) =>
     runnerAttachmentRoute({ ...deps, logger: c.get('logger') })(c),
+  );
+  app.get(RUNNER_PLANNING_INPUTS_PATH, (c) =>
+    runnerPlanningInputsRoute({ ...deps, logger: c.get('logger') })(c),
   );
   app.get(RUN_EVENTS_PATH, (c) =>
     runEventStreamRoute({

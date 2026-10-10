@@ -12,6 +12,7 @@ import type { ReactNode } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { LoadFailed } from '@/components/load-failed';
+import { MarkdownEditor } from '@/components/markdown-editor';
 import { StaleNotice } from '@/components/stale-notice';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -25,8 +26,8 @@ import {
 import { Field, FieldError, FieldLabel, FieldTitle } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { FULL_SCREEN_ON_PHONE } from '@/lib/full-screen';
 import { DeleteContextFile } from './delete-context-file';
-import { MarkdownEditor } from './markdown-editor';
 
 /** The file's title and text. The output keeps the contract's rules for both. */
 const ContextFileFields = z
@@ -49,10 +50,6 @@ const ContextFileFields = z
   );
 type ContextFileInput = z.input<typeof ContextFileFields>;
 type ContextFileOutput = z.output<typeof ContextFileFields>;
-
-/** On a phone the screen fills the viewport, over the app header. From md up it sits in the page. */
-const SCREEN =
-  'fixed inset-0 z-20 flex h-dvh flex-col gap-3 overflow-y-auto bg-background p-4 md:static md:z-auto md:h-auto md:overflow-visible md:p-0';
 
 function BackLink({ featureId }: { featureId: string }) {
   return (
@@ -122,7 +119,7 @@ function ContextFileEditor({ file, stale }: { file: ContextFile; stale: ReactNod
   const saved = update.isSuccess && !form.formState.isDirty;
 
   return (
-    <form noValidate className={SCREEN} onSubmit={(event) => void submit(event)}>
+    <form noValidate className={FULL_SCREEN_ON_PHONE} onSubmit={(event) => void submit(event)}>
       <BackLink featureId={file.featureId} />
       {stale}
       <Controller

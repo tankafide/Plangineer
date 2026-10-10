@@ -6,6 +6,7 @@ import { silentLogger, storeRunner, storeUser, testAuth, testDeps } from '../tes
 import {
   appendRunnerEvents,
   messageEvent,
+  planningOutputEvent,
   queueRun,
   runRow,
   startedEvent,
@@ -98,6 +99,24 @@ describe('appendRunEvents', () => {
     });
     expect(appended.ended).toBe(true);
     expect((await runRow(database.db, runId)).status).toBe('failed');
+  });
+
+  it('fails a test run that sends planning.output with protocol_error', async () => {
+    const runId = await leasedRun();
+
+    await appendRunnerEvents(deps(), runId, [
+      startedEvent,
+      planningOutputEvent({
+        kind: 'step',
+        step: { id: 's', title: 'T', files: [], body: '', doneWhen: [] },
+      }),
+    ]);
+
+    expect((await storedEvents(database.db, runId)).at(-1)?.payload).toMatchObject({
+      type: 'run.failed',
+      reason: 'protocol_error',
+      message: 'The runner sent planning.output for a test run.',
+    });
   });
 
   it('skips runner events on a terminal run, leaves it unchanged, and still acknowledges', async () => {

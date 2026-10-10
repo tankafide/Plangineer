@@ -23,6 +23,7 @@ async function builtRepository(root) {
   for (const prompt of TASK_PROMPTS) {
     await put(root, `apps/api/src/features/templates/${prompt}`, prompt);
   }
+  await put(root, 'apps/api/src/planning/templates/planning-prompt.md', 'planning');
   await put(root, '.env.example', 'API_PORT=3000\n');
   await put(root, 'apps/web/dist/index.html', '<html></html>');
   await put(root, 'apps/runner/dist/cli.mjs', 'runner');
@@ -57,6 +58,7 @@ describe('stageDesktop', () => {
     expect(
       (await readdir(path.join(stage, 'server', 'src', 'features', 'templates'))).toSorted(),
     ).toEqual(TASK_PROMPTS);
+    expect(await read(stage, 'server/src/planning/templates/planning-prompt.md')).toBe('planning');
     expect(await read(stage, 'server/env.example')).toBe('API_PORT=3000\n');
     expect(await read(stage, 'web/index.html')).toBe('<html></html>');
     expect(await read(stage, 'runner/dist/cli.mjs')).toBe('runner');

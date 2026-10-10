@@ -3,9 +3,11 @@ import { jsonByteLength } from './json-bytes.ts';
 import { SETUP_INPUTS_MAX, SETUP_JOB_MAX_BYTES } from './repository-setup.ts';
 import { TASK_INPUTS_MAX } from './feature.ts';
 import {
+  PlanningJob,
   PrePlanningJob,
   RunJob,
   runnerAttachmentPath,
+  runnerPlanningInputsPath,
   RunnerToServerMessage,
   SETUP_FILE_CONTENT_MAX,
   ServerToRunnerMessage,
@@ -250,8 +252,49 @@ describe('PrePlanningJob', () => {
   });
 });
 
-describe('runnerAttachmentPath', () => {
-  it('fills in the attachment id', () => {
+const ASK = { findings: 'ask', rounds: { mode: 'ask' } };
+
+function planningJob(overrides: Record<string, unknown> = {}) {
+  return {
+    kind: 'planning',
+    turn: 'guided',
+    section: null,
+    repository: { owner: 'acme', name: 'app' },
+    ref: 'main',
+    prompt: 'Run one planning turn.',
+    settings: {
+      decisions: 'ask',
+      planCheckIn: 'pause',
+      planReview: ASK,
+      implementationReview: ASK,
+    },
+    ...overrides,
+  };
+}
+
+describe('PlanningJob', () => {
+  it.each([
+    ['a guided turn on a branch', planningJob()],
+    ['a guided turn on a 40-character commit', planningJob({ ref: 'a'.repeat(40) })],
+    ['a section action', planningJob({ turn: 'section_action', section: 'goal' })],
+    ['a step revision', planningJob({ turn: 'revise_step' })],
+  ])('accepts %s', (_name, job) => {
+    expect(RunJob.parse(job)).toEqual(job);
+  });
+
+  it.each([
+    ['a section action with no section', { turn: 'section_action', section: null }],
+    ['a guided turn with a section', { section: 'goal' }],
+    ['a step revision with a section', { turn: 'revise_step', section: 'steps' }],
+    ['an unknown key', { inputs: '# Planning inputs' }],
+  ])('rejects %s', (_name, overrides) => {
+    expect(PlanningJob.safeParse(planningJob(overrides)).success).toBe(false);
+  });
+});
+
+describe('runner download paths', () => {
+  it('fill in the attachment id and the run id', () => {
     expect(runnerAttachmentPath(RUN_ID)).toBe(`/api/runners/attachments/${RUN_ID}`);
+    expect(runnerPlanningInputsPath(RUN_ID)).toBe(`/api/runners/planning-inputs/${RUN_ID}`);
   });
 });

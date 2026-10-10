@@ -1,23 +1,27 @@
 import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { renderPage } from '@/test/app-harness';
+import { renderPage, renderRoute } from '@/test/app-harness';
 import {
   CONTEXT_FILE_ID,
   contextFileFixture,
   contextFileSummaryFixture,
   FEATURE_ID,
   featureFixture,
+  featureSummaryFixture,
   taskFixture,
 } from '@/test/feature-fixtures';
 import {
   answerJson,
   answerProcedure,
+  answerSignedIn,
   COMMIT,
   neverAnswers,
+  page,
   RUN_ID,
   rpcError,
 } from '@/test/fixtures';
+import { planWorkspaceFixture } from '@/test/plan-fixtures';
 import { FeatureScreen } from './feature-screen';
 
 const EXPLORATION_RUN_ID = '0199c1a3-1111-7d4e-8f90-a1b2c3d4e5f7';
@@ -89,21 +93,53 @@ describe('FeatureScreen', () => {
     );
   });
 
-  it('shows Start planning for a plan-ready Manual feature and moves it to Planning', async () => {
+  it('starts planning for a plan-ready Manual feature and opens its plan', async () => {
+    answerSignedIn();
+    answerProcedure('feature/list', answerJson(page([featureSummaryFixture()])));
     answerProcedure('feature/get', answerJson(featureFixture({ state: 'plan_ready' })));
     const starts = answerProcedure(
       'feature/startPlanning',
       answerJson(featureFixture({ state: 'planning' })),
     );
+    answerProcedure('plan/get', answerJson(planWorkspaceFixture({ revision: null })));
+    const { router } = await renderRoute(`/features/${FEATURE_ID}`);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Start planning' }));
+
+    expect(await screen.findByText('No draft yet.')).toBeTruthy();
+    expect(router.state.location.pathname).toBe(`/features/${FEATURE_ID}/plan`);
+    expect(starts).toEqual([{ featureId: FEATURE_ID }]);
+  });
+
+  it('shows the alert linking to Runners when no runner can take the planning turn', async () => {
+    answerProcedure('feature/get', answerJson(featureFixture({ state: 'plan_ready' })));
+    answerProcedure('feature/startPlanning', rpcError('RUNNER_REQUIRED', 409));
     await renderScreen();
 
     await userEvent.click(await screen.findByRole('button', { name: 'Start planning' }));
 
-    const title = screen.getByRole('heading', { name: 'Export invoices as CSV' });
-    await waitFor(() => expect(title.parentElement?.textContent).toContain('Planning'));
-    expect(starts).toEqual([{ featureId: FEATURE_ID }]);
-    expect(screen.queryByRole('button', { name: 'Start planning' })).toBeNull();
+    expect(await screen.findByText(/No runner can take this feature/)).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Runners' }).getAttribute('href')).toBe('/runners');
+    expect(screen.queryByText(/Planning could not start/)).toBeNull();
   });
+
+  it.each([
+    ['planning', 'Planning'],
+    ['ready_for_review', 'Ready for review'],
+  ] as const)(
+    'links a feature in %s to its plan in place of Start planning',
+    async (state, badge) => {
+      answerProcedure('feature/get', answerJson(featureFixture({ state })));
+
+      await renderScreen();
+
+      const open = await screen.findByRole('link', { name: 'Open plan' });
+      expect(open.getAttribute('href')).toBe(`/features/${FEATURE_ID}/plan`);
+      expect(screen.queryByRole('button', { name: 'Start planning' })).toBeNull();
+      const title = screen.getByRole('heading', { name: 'Export invoices as CSV' });
+      expect(title.parentElement?.textContent).toContain(badge);
+    },
+  );
 
   it('says planning starts by itself, with no Start planning, for a plan-ready Auto loop feature', async () => {
     answerProcedure(

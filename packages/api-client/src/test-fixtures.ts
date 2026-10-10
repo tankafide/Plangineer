@@ -1,6 +1,9 @@
 import type {
   ContextFile,
   FeatureDetail,
+  PlanBody,
+  PlanRevision,
+  PlanWorkspace,
   RepositoryDetail,
   Run,
   RunEvent,
@@ -200,6 +203,79 @@ export function contextFileFixture(overrides: Partial<ContextFile> = {}): Contex
     ticked: true,
     content: '# Feature brief\n\nExport invoices as CSV.',
     updatedAt: '2026-10-09T10:05:00.000Z',
+    ...overrides,
+  };
+}
+
+/** A uuid whose last digits are the given number, so plan item ids read apart in a test. */
+const planId = (n: number) => `0199c1a9-7777-7d4e-8f90-${String(n).padStart(12, '0')}`;
+export const STEP_IDS = [planId(1), planId(2)] as const;
+
+/** A ready body of two steps, each with one covered done-when line. */
+export function planBodyFixture(overrides: Partial<PlanBody> = {}): PlanBody {
+  return {
+    goal: 'Export invoices as CSV.',
+    prerequisites: [],
+    steps: STEP_IDS.map((id, index) => ({
+      id,
+      repositoryId: REPOSITORY_ID,
+      title: `Step ${index + 1}`,
+      files: [`src/step-${index + 1}.ts`],
+      body: '',
+      doneWhen: [{ id: planId(11 + index), text: `Step ${index + 1} works.` }],
+    })),
+    decisions: [],
+    constraints: [],
+    coverage: [
+      { lineId: planId(11), ticks: ['unit'], stale: false },
+      { lineId: planId(12), ticks: ['unit'], stale: false },
+    ],
+    blockers: [],
+    verification: { automated: ['pnpm verify'], agentChecks: [], humanChecks: [] },
+    ...overrides,
+  };
+}
+
+export function planRevisionFixture(overrides: Partial<PlanRevision> = {}): PlanRevision {
+  return {
+    id: planId(100 + (overrides.number ?? 1)),
+    number: 1,
+    source: 'agent',
+    createdAt: '2026-10-10T10:00:00.000Z',
+    body: planBodyFixture(),
+    acceptanceCriteria: [
+      { lineId: planId(11), label: '1a', text: 'Step 1 works.' },
+      { lineId: planId(12), label: '2a', text: 'Step 2 works.' },
+    ],
+    contextFiles: [],
+    baseCommits: [{ repositoryId: REPOSITORY_ID, commit: COMMIT }],
+    ...overrides,
+  };
+}
+
+export function planWorkspaceFixture(overrides: Partial<PlanWorkspace> = {}): PlanWorkspace {
+  const feature = featureFixture();
+  return {
+    featureId: FEATURE_ID,
+    featureState: 'planning',
+    runMode: 'manual',
+    workflowSettings: feature.workflowSettings,
+    revision: planRevisionFixture(),
+    turn: {
+      id: planId(200),
+      kind: 'guided',
+      section: null,
+      action: null,
+      stepId: null,
+      runId: RUN_ID,
+      status: 'succeeded',
+      createdAt: '2026-10-10T09:59:00.000Z',
+    },
+    questions: [],
+    decisions: [],
+    readiness: [],
+    sections: [],
+    autoLoopStopped: false,
     ...overrides,
   };
 }

@@ -5,12 +5,11 @@ import {
   type PrePlanningJob,
   type RunnerRunEventBody,
 } from '@plangineer/contracts';
-import { AttachmentDownloadError, type Attachments } from '../connection/attachments.ts';
+import { ServerFileError, type ServerFiles } from '../connection/server-files.ts';
 import { type RunFailed, runFailed } from '../jobs/run-failed.ts';
+import { refuseTaskFolder, TASK_DIR } from '../jobs/task-folder.ts';
 import { checkoutEntry } from '../setup/setup-tree.ts';
 
-/** The folder the runner writes a task's inputs and attachments into, outside Git's history. */
-const TASK_DIR = '.plangineer-task';
 const ATTACHMENTS_DIR = `${TASK_DIR}/attachments`;
 const EXPLORATION_SKILL = '.agents/skills/codebase-exploration/SKILL.md';
 const SAFE_NAME_MAX = 60;
@@ -45,16 +44,16 @@ function inputsFile(job: PrePlanningJob, commit: string, saved: string[]): strin
 async function downloadAttachments(
   worktree: string,
   job: PrePlanningJob,
-  attachments: Attachments,
+  serverFiles: ServerFiles,
   signal: AbortSignal,
 ): Promise<string[] | RunFailed> {
   const saved: string[] = [];
   for (const [index, attachment] of job.attachments.entries()) {
     const rel = `${ATTACHMENTS_DIR}/${index + 1}-${safeAttachmentName(attachment.name)}`;
     try {
-      await attachments.download(attachment.id, path.join(worktree, ...rel.split('/')), signal);
+      await serverFiles.attachment(attachment.id, path.join(worktree, ...rel.split('/')), signal);
     } catch (error) {
-      if (!(error instanceof AttachmentDownloadError)) throw error;
+      if (!(error instanceof ServerFileError)) throw error;
       return runFailed(
         'attachment_failed',
         `The attachment ${attachment.name} could not be downloaded: ${error.message}.`,
@@ -74,12 +73,11 @@ export async function preparePrePlanning(
   worktree: string,
   commit: string,
   job: PrePlanningJob,
-  attachments: Attachments,
+  serverFiles: ServerFiles,
   signal: AbortSignal,
 ): Promise<RunFailed | null> {
-  if ((await checkoutEntry(worktree, TASK_DIR)) !== null) {
-    return runFailed('checkout_failed', `The repository holds ${TASK_DIR}, which the runner owns.`);
-  }
+  const taken = await refuseTaskFolder(worktree);
+  if (taken !== null) return taken;
   if (job.task === 'exploration' && !(await checkoutEntry(worktree, EXPLORATION_SKILL))?.isFile()) {
     return runFailed(
       'skill_missing',
@@ -87,7 +85,7 @@ export async function preparePrePlanning(
     );
   }
   await mkdir(path.join(worktree, ...ATTACHMENTS_DIR.split('/')), { recursive: true });
-  const saved = await downloadAttachments(worktree, job, attachments, signal);
+  const saved = await downloadAttachments(worktree, job, serverFiles, signal);
   if (!Array.isArray(saved)) return saved;
   await writeFile(
     path.join(worktree, TASK_DIR, 'inputs.md'),

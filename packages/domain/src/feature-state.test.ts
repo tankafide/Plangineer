@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { featureStateAfterTasks, startPlanning } from './feature-state.ts';
+import { FeatureState } from '@plangineer/contracts';
+import { featureStateAfterTasks, planOpen, startPlanning } from './feature-state.ts';
 
 describe('featureStateAfterTasks', () => {
   it('moves pre_planning to plan_ready once every task run has ended', () => {
@@ -16,10 +17,13 @@ describe('featureStateAfterTasks', () => {
     expect(featureStateAfterTasks('pre_planning', ['succeeded', status])).toBe('pre_planning');
   });
 
-  it.each(['plan_ready', 'planning'] as const)('leaves %s unchanged', (state) => {
-    expect(featureStateAfterTasks(state, ['succeeded'])).toBe(state);
-    expect(featureStateAfterTasks(state, ['running'])).toBe(state);
-  });
+  it.each(['plan_ready', 'planning', 'ready_for_review'] as const)(
+    'leaves %s unchanged',
+    (state) => {
+      expect(featureStateAfterTasks(state, ['succeeded'])).toBe(state);
+      expect(featureStateAfterTasks(state, ['running'])).toBe(state);
+    },
+  );
 });
 
 describe('startPlanning', () => {
@@ -36,13 +40,22 @@ describe('startPlanning', () => {
     expect(startPlanning(state, 'auto_loop')).toEqual({ ok: false, reason: 'auto_loop' });
   });
 
-  it.each(['manual', 'manual_plan', 'auto_loop'] as const)(
-    'refuses a feature already planning under %s',
-    (runMode) => {
-      expect(startPlanning('planning', runMode)).toEqual({
-        ok: false,
-        reason: 'already_planning',
-      });
-    },
-  );
+  it.each([
+    ['planning', 'manual'],
+    ['planning', 'manual_plan'],
+    ['planning', 'auto_loop'],
+    ['ready_for_review', 'manual'],
+    ['ready_for_review', 'manual_plan'],
+    ['ready_for_review', 'auto_loop'],
+  ] as const)('refuses a feature in %s under %s as already planning', (state, runMode) => {
+    expect(startPlanning(state, runMode)).toEqual({ ok: false, reason: 'already_planning' });
+  });
+});
+
+describe('planOpen', () => {
+  const OPEN = new Set<FeatureState>(['planning', 'ready_for_review']);
+
+  it.each(FeatureState.options)('is open only while planning or ready for review: %s', (state) => {
+    expect(planOpen(state)).toBe(OPEN.has(state));
+  });
 });

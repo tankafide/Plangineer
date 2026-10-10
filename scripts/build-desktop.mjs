@@ -12,6 +12,7 @@ const STAGE_LAYOUT = [
   ['server/drizzle', 'apps/api/drizzle'],
   ['server/src/setup/templates', 'apps/api/src/setup/templates'],
   ['server/src/features/templates', 'apps/api/src/features/templates'],
+  ['server/src/planning/templates', 'apps/api/src/planning/templates'],
   ['server/env.example', '.env.example'],
   ['web', 'apps/web/dist'],
   ['runner/dist', 'apps/runner/dist'],

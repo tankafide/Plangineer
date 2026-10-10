@@ -18,6 +18,16 @@ import {
   startFeaturePlanning,
 } from '../features/feature-service.ts';
 import type { Result } from '../lib/result.ts';
+import { getPlan, getPlanRevision, listPlanRevisions } from '../planning/plan-service.ts';
+import {
+  answerPlanQuestion,
+  continuePlanning,
+  editPlan,
+  markPlanReady,
+  retryTurn,
+  reviseStep,
+  runSectionAction,
+} from '../planning/plan-write-service.ts';
 import {
   addRepository,
   changeRepository,
@@ -101,6 +111,41 @@ export const router = os.router({
     ),
     startPlanning: authed.feature.startPlanning.handler(async ({ context, input, errors }) =>
       unwrap(await startFeaturePlanning(context, context.user.id, input.featureId), errors),
+    ),
+  },
+  plan: {
+    get: authed.plan.get.handler(async ({ context, input, errors }) =>
+      unwrap(await getPlan(context, context.user.id, input.featureId), errors),
+    ),
+    answer: authed.plan.answer.handler(async ({ context, input, errors }) =>
+      unwrap(await answerPlanQuestion(context, context.user.id, input), errors),
+    ),
+    continue: authed.plan.continue.handler(async ({ context, input, errors }) =>
+      unwrap(await continuePlanning(context, context.user.id, input.featureId), errors),
+    ),
+    retry: authed.plan.retry.handler(async ({ context, input, errors }) =>
+      unwrap(await retryTurn(context, context.user.id, input.featureId), errors),
+    ),
+    edit: authed.plan.edit.handler(async ({ context, input, errors }) =>
+      unwrap(await editPlan(context, context.user.id, input), errors),
+    ),
+    sectionAction: authed.plan.sectionAction.handler(async ({ context, input, errors }) =>
+      unwrap(await runSectionAction(context, context.user.id, input), errors),
+    ),
+    reviseStep: authed.plan.reviseStep.handler(async ({ context, input, errors }) =>
+      unwrap(await reviseStep(context, context.user.id, input), errors),
+    ),
+    markReady: authed.plan.markReady.handler(async ({ context, input, errors }) =>
+      unwrap(await markPlanReady(context, context.user.id, input), errors),
+    ),
+    revisions: authed.plan.revisions.handler(async ({ context, input, errors }) =>
+      unwrap(await listPlanRevisions(context, context.user.id, input), errors),
+    ),
+    revision: authed.plan.revision.handler(async ({ context, input, errors }) =>
+      unwrap(
+        await getPlanRevision(context, context.user.id, input.featureId, input.number),
+        errors,
+      ),
     ),
   },
   contextFile: {

@@ -22,9 +22,12 @@ export const ReviewSettings = z.strictObject({
 });
 export type ReviewSettings = z.infer<typeof ReviewSettings>;
 
+export const PlanCheckIn = z.enum(['pause', 'skip']);
+export type PlanCheckIn = z.infer<typeof PlanCheckIn>;
+
 export const WorkflowSettings = z.strictObject({
   decisions: Decisions,
-  planCheckIn: z.enum(['pause', 'skip']),
+  planCheckIn: PlanCheckIn,
   planReview: ReviewSettings,
   implementationReview: ReviewSettings,
 });

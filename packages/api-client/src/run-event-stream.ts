@@ -1,8 +1,9 @@
 import { isTerminalRunEvent, RunEvent } from '@plangineer/contracts';
 import { type EventSourceMessage, EventSourceParserStream } from 'eventsource-parser/stream';
 
+/** `idle` while the hook is skipped and opens no stream. */
 export type RunEventStreamState =
-  | { status: 'connecting' | 'live' | 'reconnecting' | 'ended' }
+  | { status: 'idle' | 'connecting' | 'live' | 'reconnecting' | 'ended' }
   | { status: 'failed'; error: Error };
 
 const RUN_EVENT_MESSAGE = 'run-event';

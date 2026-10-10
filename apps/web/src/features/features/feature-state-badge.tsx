@@ -6,6 +6,8 @@ const STATE_BADGES: Record<FeatureState, { label: string; variant: 'info' | 'war
   // Plan ready waits on the engineer to start planning.
   plan_ready: { label: 'Plan ready', variant: 'warning' },
   planning: { label: 'Planning', variant: 'info' },
+  // Ready for review waits on the engineer to review the plan.
+  ready_for_review: { label: 'Ready for review', variant: 'warning' },
 };
 
 export function FeatureStateBadge({ state }: { state: FeatureState }) {

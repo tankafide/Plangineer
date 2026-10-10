@@ -13,6 +13,18 @@ import {
 } from './instance.ts';
 import { meGet } from './me.ts';
 import {
+  planAnswer,
+  planContinue,
+  planEdit,
+  planGet,
+  planMarkReady,
+  planRetry,
+  planReviseStep,
+  planRevision,
+  planRevisions,
+  planSectionAction,
+} from './plan.ts';
+import {
   repositoryAdd,
   repositoryGet,
   repositoryList,
@@ -75,6 +87,51 @@ export {
 export { MeGetOutput, UserRole } from './me.ts';
 export { PageInput } from './pagination.ts';
 export {
+  AcceptanceCriterion,
+  PLAN_QUESTIONS_IN_INPUTS,
+  PlanAnswerInput,
+  PlanConflictData,
+  PlanConflictReason,
+  PlanEditInput,
+  PLANNING_INPUTS_MAX,
+  PlanningTurn,
+  PlanQuestion,
+  PlanReviseStepInput,
+  PlanRevision,
+  PlanRevisionSource,
+  PlanRevisionSummary,
+  PlanSectionActionInput,
+  PlanWorkspace,
+  ReadinessItem,
+  ReadinessKey,
+  SectionStatus,
+} from './plan.ts';
+export {
+  CoverageColumn,
+  CoverageRow,
+  DONE_WHEN_MAX,
+  DraftDecision,
+  DraftStep,
+  PLAN_BODY_MAX_BYTES,
+  PlanBlocker,
+  PlanBody,
+  PlanConstraint,
+  PlanDecision,
+  PlanDraft,
+  PlanSection,
+  PlanStep,
+  PlanVerification,
+  Prerequisite,
+  SectionAction,
+} from './plan-body.ts';
+export {
+  PLANNING_OUTPUT_MAX_BYTES,
+  PlanningOutput,
+  PlanningTurnKind,
+  QuestionDraft,
+  SectionPatch,
+} from './planning-output.ts';
+export {
   AgentRole,
   GithubRepositoryId,
   INSTALLABLE_REPOSITORIES_MAX,
@@ -113,7 +170,14 @@ export {
   SLOT_LINE_PATTERN,
   UNMOVABLE_CONTENT_MAX,
 } from './repository-setup.ts';
-export { Decisions, ReviewRounds, ReviewSettings, RunMode, WorkflowSettings } from './run-mode.ts';
+export {
+  Decisions,
+  PlanCheckIn,
+  ReviewRounds,
+  ReviewSettings,
+  RunMode,
+  WorkflowSettings,
+} from './run-mode.ts';
 export {
   CommitSha,
   GitRef,
@@ -166,9 +230,12 @@ export {
   MAX_EVENTS_MESSAGE_BYTES,
   MAX_EVENTS_PER_MESSAGE,
   MAX_SOCKET_MESSAGE_BYTES,
+  PlanningJob,
   PrePlanningJob,
   RUNNER_ATTACHMENT_PATH,
+  RUNNER_PLANNING_INPUTS_PATH,
   runnerAttachmentPath,
+  runnerPlanningInputsPath,
   RunJob,
   RunnerSocketClose,
   RunnerToServerMessage,
@@ -193,6 +260,18 @@ export const contract = {
     get: featureGet,
     update: featureUpdate,
     startPlanning: featureStartPlanning,
+  },
+  plan: {
+    get: planGet,
+    answer: planAnswer,
+    continue: planContinue,
+    retry: planRetry,
+    edit: planEdit,
+    sectionAction: planSectionAction,
+    reviseStep: planReviseStep,
+    markReady: planMarkReady,
+    revisions: planRevisions,
+    revision: planRevision,
   },
   contextFile: { get: contextFileGet, update: contextFileUpdate, delete: contextFileDelete },
   runner: {

@@ -51,6 +51,7 @@ const VALID_BODIES = [
     changedPaths: ['.agents/skills/testing/SKILL.md'],
     changedPathCount: 1,
   },
+  { type: 'planning.output', output: { kind: 'section', patch: { section: 'goal', goal: 'G' } } },
   {
     type: 'run.succeeded',
     resultText: 'done',
@@ -186,6 +187,27 @@ describe('RunnerRunEventBody', () => {
 
   it('accepts a runner event', () => {
     expect(RunnerRunEventBody.safeParse(VALID_BODIES[4]).success).toBe(true);
+  });
+
+  it('accepts a planning.output event', () => {
+    const body = VALID_BODIES.find((candidate) => candidate.type === 'planning.output');
+    expect(RunnerRunEventBody.parse(body)).toEqual(body);
+  });
+
+  it('accepts a run.failed for planning inputs that failed to download', () => {
+    const body = {
+      type: 'run.failed',
+      reason: 'inputs_failed',
+      message: 'The planning inputs answered 404.',
+      exitCode: null,
+      stderrTail: [],
+    };
+    expect(RunnerRunEventBody.safeParse(body).success).toBe(true);
+  });
+
+  it('rejects a planning.output event whose output is invalid', () => {
+    const body = { type: 'planning.output', output: { kind: 'questions', questions: [] } };
+    expect(RunnerRunEventBody.safeParse(body).success).toBe(false);
   });
 });
 

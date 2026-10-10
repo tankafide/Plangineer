@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { jsonByteLength } from './json-bytes.ts';
+import { PlanningOutput } from './planning-output.ts';
 import { SETUP_BRANCH } from './repository-setup.ts';
 import { CommitSha, RunCancelReason, RunFailureReason } from './run.ts';
 
@@ -26,6 +27,7 @@ export const RunEventType = z.enum([
   'run.cancel_requested',
   'run.lease_lost',
   'setup.pushed',
+  'planning.output',
   'run.succeeded',
   'run.failed',
   'run.cancelled',
@@ -100,6 +102,8 @@ const SetupPushed = eventType('setup.pushed', {
     ),
   changedPathCount: z.int().min(0),
 });
+/** The planning run's output, applied when its run.succeeded is stored. */
+const PlanningOutputEvent = eventType('planning.output', { output: PlanningOutput });
 const RunSucceeded = eventType('run.succeeded', {
   resultText: AgentText,
   truncated: z.boolean(),
@@ -128,6 +132,7 @@ export const RunEventBody = z.discriminatedUnion('type', [
   RunCancelRequested.body,
   RunLeaseLost.body,
   SetupPushed.body,
+  PlanningOutputEvent.body,
   RunSucceeded.body,
   RunFailed.body,
   RunCancelled.body,
@@ -144,6 +149,7 @@ export const RunnerRunEventBody = z.discriminatedUnion('type', [
   AgentRateLimit.body,
   AgentOther.body,
   SetupPushed.body,
+  PlanningOutputEvent.body,
   RunSucceeded.body,
   RunFailed.body,
   RunCancelled.body,
@@ -163,6 +169,7 @@ export const RunEvent = z.discriminatedUnion('type', [
   RunCancelRequested.event,
   RunLeaseLost.event,
   SetupPushed.event,
+  PlanningOutputEvent.event,
   RunSucceeded.event,
   RunFailed.event,
   RunCancelled.event,

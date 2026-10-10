@@ -47,6 +47,10 @@ const EVENTS: Record<string, RunEventBody> = {
     changedPaths: ['.agents/skills/testing/SKILL.md'],
     changedPathCount: 1,
   },
+  'planning.output': {
+    type: 'planning.output',
+    output: { kind: 'section', patch: { section: 'goal', goal: 'Export plans as PDF.' } },
+  },
   'run.succeeded': {
     type: 'run.succeeded',
     resultText: 'x',
@@ -92,6 +96,7 @@ const ALLOWED: Record<string, RunStatus> = {
   'leased run.lease_lost kept': 'leased',
   'running run.lease_lost kept': 'running',
   'running setup.pushed': 'running',
+  'running planning.output': 'running',
   ...Object.fromEntries(AGENT_EVENTS.map((type) => [`running ${type}`, 'running'])),
 };
 

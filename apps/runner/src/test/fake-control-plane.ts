@@ -3,6 +3,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import {
   MAX_SOCKET_MESSAGE_BYTES,
   RUNNER_ATTACHMENT_PATH,
+  RUNNER_PLANNING_INPUTS_PATH,
   type RunJob,
   RunnerSocketClose,
   RunnerToServerMessage,
@@ -15,9 +16,10 @@ type Message<T extends RunnerToServerMessage['type']> = Extract<RunnerToServerMe
 type RunEvents = Message<'run.events'>;
 
 const ATTACHMENT_PREFIX = RUNNER_ATTACHMENT_PATH.replace(':attachmentId', '');
+const PLANNING_INPUTS_PREFIX = RUNNER_PLANNING_INPUTS_PATH.replace(':runId', '');
 
-/** An attachment the fake serves on the runner attachment route. */
-export interface FakeAttachment {
+/** A file the fake serves on a runner download route. */
+interface FakeServerFile {
   mediaType: string;
   content: Buffer;
 }
@@ -30,10 +32,10 @@ interface ReceivedMessage {
 }
 
 /**
- * A stand-in for the API's runner socket and attachment route, for runner tests. It checks the
+ * A stand-in for the API's runner socket and download routes, for runner tests. It checks the
  * runner token at the handshake, parses every message with the protocol schemas, records it, and
  * acknowledges events. Tests drive it: assign and cancel runs, answer heartbeats and welcomes,
- * drop or close the socket, and fill `attachments` for the route to serve.
+ * drop or close the socket, and fill `attachments` and `planningInputs` for the routes to serve.
  */
 export async function startFakeControlPlane() {
   const token: string = randomUUID();
@@ -48,7 +50,9 @@ export async function startFakeControlPlane() {
     serverUrl: '',
     received,
     /** The attachments the route serves by id. Any other id answers 404. */
-    attachments: new Map<string, FakeAttachment>(),
+    attachments: new Map<string, FakeServerFile>(),
+    /** The planning inputs the route serves by run id. Any other id answers 404. */
+    planningInputs: new Map<string, string>(),
     autoAck: true,
     heartbeatIntervalMs: 10_000,
     get connections() {
@@ -158,22 +162,31 @@ export async function startFakeControlPlane() {
     }
   }
 
-  /** Answers an attachment as the API does: 401 for a bad token, 404 for an unknown id. */
-  function serveAttachment(request: IncomingMessage, response: ServerResponse): void {
-    const { pathname } = new URL(request.url ?? '/', 'http://fake');
-    const attachment = pathname.startsWith(ATTACHMENT_PREFIX)
-      ? plane.attachments.get(decodeURIComponent(pathname.slice(ATTACHMENT_PREFIX.length)))
-      : undefined;
+  /** The file a download route names, or undefined for an unknown route or id. */
+  function findFile(pathname: string): FakeServerFile | undefined {
+    if (pathname.startsWith(ATTACHMENT_PREFIX)) {
+      return plane.attachments.get(decodeURIComponent(pathname.slice(ATTACHMENT_PREFIX.length)));
+    }
+    if (!pathname.startsWith(PLANNING_INPUTS_PREFIX)) return undefined;
+    const runId = decodeURIComponent(pathname.slice(PLANNING_INPUTS_PREFIX.length));
+    const inputs = plane.planningInputs.get(runId);
+    if (inputs === undefined) return undefined;
+    return { mediaType: 'text/markdown; charset=utf-8', content: Buffer.from(inputs) };
+  }
+
+  /** Answers a download as the API does: 401 for a bad token, 404 for an unknown id. */
+  function serveFile(request: IncomingMessage, response: ServerResponse): void {
+    const file = findFile(new URL(request.url ?? '/', 'http://fake').pathname);
     if (request.headers.authorization !== `Bearer ${plane.token}`) {
       response.writeHead(401).end();
-    } else if (request.method !== 'GET' || attachment === undefined) {
+    } else if (request.method !== 'GET' || file === undefined) {
       response.writeHead(404).end();
     } else {
-      response.writeHead(200, { 'content-type': attachment.mediaType }).end(attachment.content);
+      response.writeHead(200, { 'content-type': file.mediaType }).end(file.content);
     }
   }
 
-  const http = createServer(serveAttachment);
+  const http = createServer(serveFile);
   const server = new WebSocketServer({
     server: http,
     path: '/api/runners/socket',

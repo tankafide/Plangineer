@@ -2,6 +2,8 @@ import { leaseLostOutcome } from '@plangineer/domain';
 import type { ServiceDeps } from '../lib/service-deps.ts';
 import { advanceFeature } from '../features/feature-advance.ts';
 import { findStuckPrePlanningFeatures } from '../features/feature-repository.ts';
+import { startAutoPlanning } from '../features/feature-service.ts';
+import { findAutoPlanReadyFeatures } from '../planning/planning-repository.ts';
 import { wakeRunner } from '../runners/runner-repository.ts';
 import { listLapsedRunIds, lockLapsedRun } from './run-dispatch-repository.ts';
 import { onRunEnded } from './run-ended.ts';
@@ -9,7 +11,7 @@ import { appendRunEvents, type RunEventItem } from './run-events-repository.ts';
 
 /** The most lapsed leases one sweep handles. The next tick takes the rest. */
 const SWEEP_BATCH = 100;
-/** The most features left in pre_planning one sweep re-advances. */
+/** The most features left in pre_planning or Auto loop plan_ready one sweep repairs, of each. */
 const REPAIR_BATCH = 50;
 
 function leaseLostMessage(status: 'leased' | 'running', attempt: number): string {
@@ -22,7 +24,8 @@ function leaseLostMessage(status: 'leased' | 'running', attempt: number): string
  * Handles every run whose lease lapsed, each in its own transaction: records the lost lease,
  * then requeues, fails or cancels the run as leaseLostOutcome decides. A requeued run wakes
  * its runner. Then it re-advances features left in pre_planning, in case a run-end advance
- * failed. Returns how many runs it handled.
+ * failed, and starts the planning of Auto loop features left in plan_ready. Returns how many
+ * runs it handled.
  */
 export async function sweepLapsedLeases(deps: ServiceDeps): Promise<number> {
   const { db, env, logger } = deps;
@@ -61,6 +64,9 @@ export async function sweepLapsedLeases(deps: ServiceDeps): Promise<number> {
   }
   for (const featureId of await findStuckPrePlanningFeatures(db, REPAIR_BATCH)) {
     await advanceFeature(deps, featureId);
+  }
+  for (const featureId of await findAutoPlanReadyFeatures(db, REPAIR_BATCH)) {
+    await startAutoPlanning(deps, featureId);
   }
   return handled;
 }

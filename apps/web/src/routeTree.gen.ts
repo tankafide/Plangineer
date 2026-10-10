@@ -24,6 +24,8 @@ import { Route as AppRunsIndexRouteImport } from './routes/_app/runs/index'
 import { Route as AppRunsRunIdRouteImport } from './routes/_app/runs/$runId'
 import { Route as AppFeaturesFeatureIdIndexRouteImport } from './routes/_app/features/$featureId/index'
 import { Route as AppFeaturesFeatureIdFilesContextFileIdRouteImport } from './routes/_app/features/$featureId/files/$contextFileId'
+import { Route as AppFeaturesFeatureIdPlanIndexRouteImport } from './routes/_app/features/$featureId/plan/index'
+import { Route as AppFeaturesFeatureIdPlanRevisionsRouteImport } from './routes/_app/features/$featureId/plan/revisions'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -102,6 +104,18 @@ const AppFeaturesFeatureIdFilesContextFileIdRoute =
     path: '/$featureId/files/$contextFileId',
     getParentRoute: () => AppFeaturesRoute,
   } as any)
+const AppFeaturesFeatureIdPlanIndexRoute =
+  AppFeaturesFeatureIdPlanIndexRouteImport.update({
+    id: '/$featureId/plan/',
+    path: '/$featureId/plan/',
+    getParentRoute: () => AppFeaturesRoute,
+  } as any)
+const AppFeaturesFeatureIdPlanRevisionsRoute =
+  AppFeaturesFeatureIdPlanRevisionsRouteImport.update({
+    id: '/$featureId/plan/revisions',
+    path: '/$featureId/plan/revisions',
+    getParentRoute: () => AppFeaturesRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
@@ -118,6 +132,8 @@ export interface FileRoutesByFullPath {
   '/runs/': typeof AppRunsIndexRoute
   '/features/$featureId/': typeof AppFeaturesFeatureIdIndexRoute
   '/features/$featureId/files/$contextFileId': typeof AppFeaturesFeatureIdFilesContextFileIdRoute
+  '/features/$featureId/plan/revisions': typeof AppFeaturesFeatureIdPlanRevisionsRoute
+  '/features/$featureId/plan/': typeof AppFeaturesFeatureIdPlanIndexRoute
 }
 export interface FileRoutesByTo {
   '/get-started': typeof GetStartedRoute
@@ -133,6 +149,8 @@ export interface FileRoutesByTo {
   '/runs': typeof AppRunsIndexRoute
   '/features/$featureId': typeof AppFeaturesFeatureIdIndexRoute
   '/features/$featureId/files/$contextFileId': typeof AppFeaturesFeatureIdFilesContextFileIdRoute
+  '/features/$featureId/plan/revisions': typeof AppFeaturesFeatureIdPlanRevisionsRoute
+  '/features/$featureId/plan': typeof AppFeaturesFeatureIdPlanIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -151,6 +169,8 @@ export interface FileRoutesById {
   '/_app/runs/': typeof AppRunsIndexRoute
   '/_app/features/$featureId/': typeof AppFeaturesFeatureIdIndexRoute
   '/_app/features/$featureId/files/$contextFileId': typeof AppFeaturesFeatureIdFilesContextFileIdRoute
+  '/_app/features/$featureId/plan/revisions': typeof AppFeaturesFeatureIdPlanRevisionsRoute
+  '/_app/features/$featureId/plan/': typeof AppFeaturesFeatureIdPlanIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -169,6 +189,8 @@ export interface FileRouteTypes {
     | '/runs/'
     | '/features/$featureId/'
     | '/features/$featureId/files/$contextFileId'
+    | '/features/$featureId/plan/revisions'
+    | '/features/$featureId/plan/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/get-started'
@@ -184,6 +206,8 @@ export interface FileRouteTypes {
     | '/runs'
     | '/features/$featureId'
     | '/features/$featureId/files/$contextFileId'
+    | '/features/$featureId/plan/revisions'
+    | '/features/$featureId/plan'
   id:
     | '__root__'
     | '/_app'
@@ -201,6 +225,8 @@ export interface FileRouteTypes {
     | '/_app/runs/'
     | '/_app/features/$featureId/'
     | '/_app/features/$featureId/files/$contextFileId'
+    | '/_app/features/$featureId/plan/revisions'
+    | '/_app/features/$featureId/plan/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -316,6 +342,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppFeaturesFeatureIdFilesContextFileIdRouteImport
       parentRoute: typeof AppFeaturesRoute
     }
+    '/_app/features/$featureId/plan/': {
+      id: '/_app/features/$featureId/plan/'
+      path: '/$featureId/plan'
+      fullPath: '/features/$featureId/plan/'
+      preLoaderRoute: typeof AppFeaturesFeatureIdPlanIndexRouteImport
+      parentRoute: typeof AppFeaturesRoute
+    }
+    '/_app/features/$featureId/plan/revisions': {
+      id: '/_app/features/$featureId/plan/revisions'
+      path: '/$featureId/plan/revisions'
+      fullPath: '/features/$featureId/plan/revisions'
+      preLoaderRoute: typeof AppFeaturesFeatureIdPlanRevisionsRouteImport
+      parentRoute: typeof AppFeaturesRoute
+    }
   }
 }
 
@@ -324,6 +364,8 @@ interface AppFeaturesRouteChildren {
   AppFeaturesIndexRoute: typeof AppFeaturesIndexRoute
   AppFeaturesFeatureIdIndexRoute: typeof AppFeaturesFeatureIdIndexRoute
   AppFeaturesFeatureIdFilesContextFileIdRoute: typeof AppFeaturesFeatureIdFilesContextFileIdRoute
+  AppFeaturesFeatureIdPlanRevisionsRoute: typeof AppFeaturesFeatureIdPlanRevisionsRoute
+  AppFeaturesFeatureIdPlanIndexRoute: typeof AppFeaturesFeatureIdPlanIndexRoute
 }
 
 const AppFeaturesRouteChildren: AppFeaturesRouteChildren = {
@@ -332,6 +374,9 @@ const AppFeaturesRouteChildren: AppFeaturesRouteChildren = {
   AppFeaturesFeatureIdIndexRoute: AppFeaturesFeatureIdIndexRoute,
   AppFeaturesFeatureIdFilesContextFileIdRoute:
     AppFeaturesFeatureIdFilesContextFileIdRoute,
+  AppFeaturesFeatureIdPlanRevisionsRoute:
+    AppFeaturesFeatureIdPlanRevisionsRoute,
+  AppFeaturesFeatureIdPlanIndexRoute: AppFeaturesFeatureIdPlanIndexRoute,
 }
 
 const AppFeaturesRouteWithChildren = AppFeaturesRoute._addFileChildren(

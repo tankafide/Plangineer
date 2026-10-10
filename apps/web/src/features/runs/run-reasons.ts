@@ -17,6 +17,7 @@ export const FAILURE_REASON_LABELS: Record<RunFailureReason, string> = {
   setup_publish_failed: 'The setup branch could not be pushed',
   skill_missing: 'The repository has no codebase-exploration skill',
   attachment_failed: 'An attachment could not be downloaded',
+  inputs_failed: 'The planning inputs could not be downloaded',
 };
 
 export const CANCEL_REASON_LABELS: Record<RunCancelReason, string> = {

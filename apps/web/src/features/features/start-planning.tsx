@@ -1,9 +1,11 @@
-import { startPlanningConflictReason, useStartPlanning } from '@plangineer/api-client';
+import { isApiError, startPlanningConflictReason, useStartPlanning } from '@plangineer/api-client';
 import type { FeatureDetail, StartPlanningConflictData } from '@plangineer/contracts';
 import { startPlanning } from '@plangineer/domain';
+import { useNavigate } from '@tanstack/react-router';
 import { CircleAlert } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { RunnerRequiredAlert } from './runner-required-alert';
 
 const AUTO_LOOP_NOTICE = 'Planning starts by itself under Auto loop.';
 
@@ -12,17 +14,29 @@ const CONFLICT_MESSAGES: Record<StartPlanningConflictData['reason'], string> = {
   already_planning: 'Planning has already started.',
 };
 
-function startFailure(error: NonNullable<ReturnType<typeof useStartPlanning>['error']>): string {
+type StartError = NonNullable<ReturnType<typeof useStartPlanning>['error']>;
+
+function StartFailed({ error }: { error: StartError }) {
+  if (isApiError(error, 'RUNNER_REQUIRED'))
+    return <RunnerRequiredAlert message="No runner can take this feature." />;
   const reason = startPlanningConflictReason(error);
-  return reason === null ? `Planning could not start: ${error.message}` : CONFLICT_MESSAGES[reason];
+  return (
+    <Alert variant="destructive">
+      <CircleAlert aria-hidden />
+      <AlertDescription>
+        {reason === null ? `Planning could not start: ${error.message}` : CONFLICT_MESSAGES[reason]}
+      </AlertDescription>
+    </Alert>
+  );
 }
 
 /**
- * Start planning, shown only when the feature's state and run mode allow it. Under Auto loop a
- * plan-ready feature says that planning starts by itself instead.
+ * Start planning, shown only when the feature's state and run mode allow it, which opens the plan
+ * once it starts. Under Auto loop a plan-ready feature says that planning starts by itself instead.
  */
 export function StartPlanning({ feature }: { feature: FeatureDetail }) {
   const start = useStartPlanning();
+  const navigate = useNavigate();
   const verdict = startPlanning(feature.state, feature.runMode);
 
   if (!verdict.ok) {
@@ -33,16 +47,19 @@ export function StartPlanning({ feature }: { feature: FeatureDetail }) {
   }
   return (
     <div className="flex flex-col gap-3">
-      {start.isError && (
-        <Alert variant="destructive">
-          <CircleAlert aria-hidden />
-          <AlertDescription>{startFailure(start.error)}</AlertDescription>
-        </Alert>
-      )}
+      {start.isError && <StartFailed error={start.error} />}
       <Button
         className="w-full md:w-auto md:self-start"
         disabled={start.isPending}
-        onClick={() => start.mutate({ featureId: feature.id })}
+        onClick={() =>
+          start.mutate(
+            { featureId: feature.id },
+            {
+              onSuccess: () =>
+                navigate({ to: '/features/$featureId/plan', params: { featureId: feature.id } }),
+            },
+          )
+        }
       >
         {start.isPending ? 'Starting…' : 'Start planning'}
       </Button>
