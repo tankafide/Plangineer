@@ -18,6 +18,7 @@ The roadmap targets the desktop app: one engineer, one machine, Claude Code, and
 | Repository setup | Chunk 2 built it on Oct 8, 2026, as the [repository setup plan](2026-10-08-repository-setup.md) describes: adding a repository, the scan, the three checklists, and one setup pull request with the four orchestrators and the chosen rule skills. Each repository's default run mode is on its settings card |
 | Browser pairing | Replaced the copied code with `plangineer-runner login --server <url>`, which opens an approval page in the browser, as the [runner browser pairing plan](2026-10-08-runner-browser-pairing.md) describes |
 | Feature intake | Chunk 3 built it on Oct 10, 2026, as the [feature intake plan](2026-10-09-feature-intake.md) describes: the intake form, intake, exploration and research tasks on the local runner, editable context files, run modes per feature, and plan ready |
+| Planning | Chunk 4 built it on Oct 10, 2026, as the [planning plan](2026-10-10-planning.md) describes: guided planning turns on the local runner that ask questions and draft a structured plan, the plan workspace with section actions, step edits and the coverage grid, Auto loop drafting, and the revision diff |
 | Desktop app | Built on Oct 9, 2026 from the [desktop app plan](2026-10-08-desktop-app.md). See [Desktop app](#desktop-app) |
 | Releases | The engineer publishes runner 0.3.0 with `pnpm runner:publish`, and the first draft release of the desktop app, as the desktop app plan's D25 says |
 | Roadmap re-cut | On Oct 9, 2026 the ten chunks became nine. See [What changed in the re-cut](#what-changed-in-the-re-cut) |
@@ -29,8 +30,8 @@ The roadmap targets the desktop app: one engineer, one machine, Claude Code, and
 | 1 | Runner and run pipeline | 1 | Built | The app sends a job to a paired runner, and a `claude -p` run streams events back on Windows, macOS and Linux |
 | 2 | Repository setup | 1 | Built | A real repository gets a setup pull request with its orchestrators and rule skills |
 | 3 | Feature intake and pre-planning | 1 | Built | A submitted feature produces context files and reaches plan ready |
-| 4 | Planning | 1 | Next | An engineer goes from context files to a ready plan mostly by clicking, edits it, and compares any two revisions |
-| 5 | Plan review and approval | 1 | | A plan review raises findings, the author model confirms them, fixes make a new revision, and the engineer approves the plan. This is the Phase 1 gate |
+| 4 | Planning | 1 | Built | An engineer goes from context files to a ready plan mostly by clicking, edits it, and compares any two revisions |
+| 5 | Plan review and approval | 1 | Next | A plan review raises findings, the author model confirms them, fixes make a new revision, and the engineer approves the plan. This is the Phase 1 gate |
 | 6 | Implementation | 2 | | An approved plan becomes a pull request with nobody driving the agent |
 | 7 | Implementation review | 2 | | A review on a different model from the implementer produces a plan audit with every deviation decided, and a feature under the Auto loop run mode goes from intake to an open pull request with nobody deciding. This is the Phase 2 gate |
 | 8 | Verification | 3 | | Every feature gets an evidence report. This is the Phase 3 gate |

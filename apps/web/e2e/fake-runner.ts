@@ -22,11 +22,14 @@ const SKILLS = {
   e2e: '---\nname: e2e\ndescription: A skill for the e2e journey.\n---\n\n# E2E\n',
   'codebase-exploration':
     '---\nname: codebase-exploration\ndescription: Explores the codebase for a brief.\n---\n\n# Codebase exploration\n',
+  'plan-orchestrator':
+    '---\nname: plan-orchestrator\ndescription: Plans a feature.\n---\n\n# Plan orchestrator\n',
 };
 
 /**
  * A temporary folder holding a bare `acme/app` remote on `main` with a synced skills mirror,
- * including the codebase-exploration skill an exploration task needs.
+ * including the codebase-exploration skill an exploration task needs and the plan-orchestrator
+ * skill a planning turn needs.
  */
 async function createRemote(root: string): Promise<string> {
   const remote = path.join(root, 'remote');
