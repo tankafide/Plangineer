@@ -29,7 +29,8 @@
     "skills:check": "node apps/runner/src/cli.ts skills check",
     "verify": "node scripts/verify.mjs",
     "worktree:new": "node scripts/worktree-new.mjs",
-    "auto:run": "node scripts/auto-run.mjs"
+    "auto:run": "node scripts/auto-run.mjs",
+    "auto:watch": "node scripts/auto-watch.mjs"
   },
   "devDependencies": {
     "@swc/core": "1.16.13",

@@ -1,13 +1,15 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { execa } from 'execa';
 import { z } from 'zod';
-import { ImplementationReport, PlanReport, runSession } from './auto-run-session.mjs';
+import { ImplementationReport, PlanReport, runSession, sessionIdOf } from './auto-run-session.mjs';
 import { isEntryPoint, reportFailure, repoRoot } from './script-entry.mjs';
 
 const DEFAULT_ROUNDS = 2;
 const LOG_DIR = 'logs/auto';
+/** The run's outcome, written beside the session logs when the run ends. */
+export const OUTCOME_FILE = 'outcome.json';
 
 const autoReview = (count) => ({ findings: 'fix_all', rounds: { mode: 'fixed', count } });
 
@@ -22,6 +24,11 @@ function settingsBlock({ planRounds, implementationRounds }) {
   return `Workflow settings:\n${JSON.stringify(settings)}\n`;
 }
 
+const FINISH = [
+  'Stop every process you started in the background, such as a dev server, before you finish.',
+  'Finish once the last review round is committed, then return the report the output schema describes.',
+];
+
 function planPrompt(request) {
   return [
     'Use the plan-orchestrator skill to plan the engineer request below.',
@@ -30,7 +37,7 @@ function planPrompt(request) {
     request.trim(),
     '</request>',
     '',
-    'Finish once the last review round is committed, then return the report the output schema describes.',
+    ...FINISH,
   ].join('\n');
 }
 
@@ -38,7 +45,15 @@ function implementationPrompt(planPath) {
   return [
     `Use the implementation-orchestrator skill to build the plan at ${planPath} on the current branch.`,
     'Do not push.',
-    'Finish once the last review round is committed, then return the report the output schema describes.',
+    ...FINISH,
+  ].join('\n');
+}
+
+function resumePrompt() {
+  return [
+    'You were cut off before your workflow finished. Continue it from where you stopped, starting from the state of the working tree and of every subagent you started.',
+    'Do not push.',
+    ...FINISH,
   ].join('\n');
 }
 
@@ -55,10 +70,10 @@ async function git(cwd, ...args) {
 }
 
 /**
- * Checks that cwd is a clean linked worktree on a branch, and returns the main checkout, which
- * keeps the logs after the worktree is removed.
+ * Checks that cwd is a linked worktree on a branch, and clean unless a session is resumed, and
+ * returns the main checkout, which keeps the logs after the worktree is removed.
  */
-async function mainCheckoutOf(cwd) {
+async function mainCheckoutOf(cwd, { clean }) {
   const dirs = await git(
     cwd,
     'rev-parse',
@@ -70,47 +85,56 @@ async function mainCheckoutOf(cwd) {
   if (gitDir === commonDir) throw new Error('Run auto-run from a linked worktree');
   const branch = await execa('git', ['symbolic-ref', '--quiet', 'HEAD'], { cwd, reject: false });
   if (branch.exitCode !== 0) throw new Error('The worktree has a detached HEAD');
-  if ((await git(cwd, 'status', '--porcelain')) !== '') {
+  if (clean && (await git(cwd, 'status', '--porcelain')) !== '') {
     throw new Error('The working tree has uncommitted changes');
   }
   return path.dirname(commonDir);
 }
 
-/**
- * Plans the request, or starts from planPath, then builds the plan. Stops after planning when
- * the plan leaves anything for the engineer.
- */
-export async function autoRun({
-  command,
-  cwd,
-  request,
-  planPath,
-  planRounds,
-  implementationRounds,
-}) {
+/** The phase a resumed session log belongs to, from its file name. */
+function phaseOf(resumeLog) {
+  const phase = path.basename(resumeLog, '.jsonl');
+  if (phase !== 'plan' && phase !== 'implementation') {
+    throw new Error(`${resumeLog} is not a plan.jsonl or implementation.jsonl session log`);
+  }
+  return phase;
+}
+
+/** Creates a new run's log folder with its settings, or reuses the resumed run's folder. */
+async function prepareLogDir({ cwd, resumeLog, planRounds, implementationRounds }) {
+  const mainCheckout = await mainCheckoutOf(cwd, { clean: resumeLog === undefined });
+  if (resumeLog !== undefined) {
+    const logDir = path.dirname(resumeLog);
+    await rm(path.join(logDir, OUTCOME_FILE), { force: true });
+    return logDir;
+  }
   const stamp = new Date().toISOString().replaceAll(/[:.]/g, '-');
-  const logDir = path.join(await mainCheckoutOf(cwd), LOG_DIR, stamp);
+  const logDir = path.join(mainCheckout, LOG_DIR, stamp);
   await mkdir(logDir, { recursive: true });
-  const settingsFile = path.join(logDir, 'settings.md');
-  await writeFile(settingsFile, settingsBlock({ planRounds, implementationRounds }));
-  const session = (name, prompt, schema) => {
-    const logFile = path.join(logDir, `${name}.jsonl`);
-    console.error(`Running the ${name} session. Its log is ${logFile}`);
-    return runSession({ command, cwd, prompt, settingsFile, schema, logFile });
-  };
+  await writeFile(
+    path.join(logDir, 'settings.md'),
+    settingsBlock({ planRounds, implementationRounds }),
+  );
+  return logDir;
+}
+
+async function runPhases({ session, request, planPath, resume }) {
+  const start = (phase, prompt, schema) =>
+    resume?.phase === phase
+      ? session(phase, resumePrompt(), schema, resume.sessionId)
+      : session(phase, prompt(), schema);
 
   let plan = null;
   let builtPlan = planPath;
-  if (request !== undefined) {
-    await writeFile(path.join(logDir, 'request.md'), request);
-    plan = await session('plan', planPrompt(request), PlanReport);
+  if (request !== undefined || resume?.phase === 'plan') {
+    plan = await start('plan', () => planPrompt(request), PlanReport);
     const reasons = blockers(plan);
     if (reasons.length > 0) return { ready: false, reasons, plan, implementation: null };
     builtPlan = plan.planPath;
   }
-  const implementation = await session(
+  const implementation = await start(
     'implementation',
-    implementationPrompt(builtPlan),
+    () => implementationPrompt(builtPlan),
     ImplementationReport,
   );
   const reasons = [
@@ -118,6 +142,45 @@ export async function autoRun({
     ...implementation.checks.failed.map((check) => `Failed check: ${check}`),
   ];
   return { ready: reasons.length === 0, reasons, plan, implementation };
+}
+
+/**
+ * Plans the request, or starts from planPath, then builds the plan. Stops after planning when
+ * the plan leaves anything for the engineer. With resumeLog, it continues that cut-off session,
+ * then runs the phase after it. The outcome, or the error, also goes to OUTCOME_FILE.
+ */
+export async function autoRun({
+  command,
+  cwd,
+  request,
+  planPath,
+  resumeLog,
+  planRounds,
+  implementationRounds,
+  processPollMs,
+}) {
+  const resume =
+    resumeLog === undefined
+      ? undefined
+      : { phase: phaseOf(resumeLog), sessionId: await sessionIdOf(resumeLog) };
+  const logDir = await prepareLogDir({ cwd, resumeLog, planRounds, implementationRounds });
+  if (request !== undefined) await writeFile(path.join(logDir, 'request.md'), request);
+  const settingsFile = path.join(logDir, 'settings.md');
+  const session = (name, prompt, schema, resumeId) => {
+    const logFile = path.join(logDir, `${name}.jsonl`);
+    console.error(`Running the ${name} session. Its log is ${logFile}`);
+    const options = { command, cwd, prompt, settingsFile, schema, logFile };
+    return runSession({ ...options, resumeId, processPollMs });
+  };
+  const outcomeFile = path.join(logDir, OUTCOME_FILE);
+  try {
+    const outcome = await runPhases({ session, request, planPath, resume });
+    await writeFile(outcomeFile, JSON.stringify(outcome, null, 2));
+    return outcome;
+  } catch (error) {
+    await writeFile(outcomeFile, JSON.stringify({ error: error.message }, null, 2));
+    throw error;
+  }
 }
 
 const RoundCount = z.coerce.number().int().min(1);
@@ -128,18 +191,25 @@ export function parseCli(argv) {
     options: {
       'request-file': { type: 'string' },
       plan: { type: 'string' },
-      'plan-rounds': { type: 'string', default: String(DEFAULT_ROUNDS) },
-      'implementation-rounds': { type: 'string', default: String(DEFAULT_ROUNDS) },
+      resume: { type: 'string' },
+      'plan-rounds': { type: 'string' },
+      'implementation-rounds': { type: 'string' },
     },
   });
-  if ((values['request-file'] === undefined) === (values.plan === undefined)) {
-    throw new Error('Pass exactly one of --request-file and --plan');
+  const starts = [values['request-file'], values.plan, values.resume];
+  if (starts.filter((start) => start !== undefined).length !== 1) {
+    throw new Error('Pass exactly one of --request-file, --plan and --resume');
+  }
+  const rounds = [values['plan-rounds'], values['implementation-rounds']];
+  if (values.resume !== undefined && rounds.some((count) => count !== undefined)) {
+    throw new Error('A resumed run keeps its settings, so it takes no round counts');
   }
   return {
     requestFile: values['request-file'],
     planPath: values.plan,
-    planRounds: RoundCount.parse(values['plan-rounds']),
-    implementationRounds: RoundCount.parse(values['implementation-rounds']),
+    resumeLog: values.resume === undefined ? undefined : path.resolve(values.resume),
+    planRounds: RoundCount.parse(values['plan-rounds'] ?? DEFAULT_ROUNDS),
+    implementationRounds: RoundCount.parse(values['implementation-rounds'] ?? DEFAULT_ROUNDS),
   };
 }
 

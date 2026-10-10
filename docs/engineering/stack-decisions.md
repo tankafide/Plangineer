@@ -64,7 +64,8 @@ Nothing imports from another `apps/*` package.
 | `pnpm db:reset` | Drops, migrates and seeds the dev database, keeping its GitHub App row |
 | `pnpm --filter @plangineer/api db:seed` | Seeds the dev database. Running it twice adds nothing |
 | `pnpm worktree:new <branch>` | Creates a worktree for a new or existing branch beside the main checkout, copies `.env` into it and installs dependencies |
-| `pnpm auto:run` | Runs the plan and implementation sessions for `auto-orchestrator` from a linked worktree, then prints whether the work is ready to land, as JSON |
+| `pnpm auto:run` | Runs the plan and implementation sessions for `auto-orchestrator` from a linked worktree, or continues a cut-off session with `--resume <log>`, stops every process a session left running, then prints whether the work is ready to land, as JSON |
+| `pnpm auto:watch <log folder>` | Prints one line per milestone of an auto run: each commit, each session's start and end, and the run's end, then exits |
 | `pnpm skills:lint` | Runs the runner's `skills lint` on every skill, then this repository's routing, delegation and references checks |
 | `pnpm verify` | Format check, skills mirror check, Oxlint, typecheck, dependency-cruiser, Knip, Vitest, in that order. Must pass before work is done |
 | `pnpm test:e2e` | Playwright Test journeys against the local stack, on a database reset by `pnpm db:reset`. Must pass before work that adds or changes a journey is done |

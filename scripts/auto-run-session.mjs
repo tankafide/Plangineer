@@ -1,6 +1,7 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { execa } from 'execa';
 import { z } from 'zod';
+import { trackSessionProcesses } from './session-processes.mjs';
 
 /** Only the engineer's own session lands work, so the headless sessions cannot push or merge. */
 const DISALLOWED_TOOLS = ['Bash(git push:*)', 'Bash(gh:*)'];
@@ -69,6 +70,12 @@ const ResultEvent = z.looseObject({
 
 const StreamEvent = z.looseObject({ type: z.string() });
 
+const InitEvent = z.looseObject({
+  type: z.literal('system'),
+  subtype: z.literal('init'),
+  session_id: z.string().min(1),
+});
+
 /**
  * The output schema wraps the report in an object, because a tool's input schema cannot be a
  * union at its top level.
@@ -91,24 +98,51 @@ function parseEvent(line, logFile) {
   return parsed.data;
 }
 
-function lastResult(log, logFile) {
+function events(log, logFile) {
   return log
     .split(/\r?\n/)
     .filter((line) => line.trim() !== '')
-    .map((line) => parseEvent(line, logFile))
-    .findLast((event) => event.type === 'result');
+    .map((line) => parseEvent(line, logFile));
+}
+
+/** The id of the session a log holds, which `claude --resume` takes. */
+export async function sessionIdOf(logFile) {
+  const init = events(await readFile(logFile, 'utf8'), logFile).findLast(
+    (event) => event.type === 'system' && event.subtype === 'init',
+  );
+  const parsed = InitEvent.safeParse(init);
+  if (!parsed.success) throw new Error(`${logFile} holds no session to resume`);
+  return parsed.data.session_id;
+}
+
+/** What the session wrote after offset bytes, so a resumed log ignores the earlier run. */
+async function logSince(logFile, offset) {
+  return (await readFile(logFile)).subarray(offset).toString('utf8');
 }
 
 /**
  * Runs one headless session, logs its stream to logFile, and returns its validated report. Auto
- * mode lets its classifier approve each action, and anything that would prompt is denied.
+ * mode lets its classifier approve each action, and anything that would prompt is denied. With
+ * resumeId, it continues that session and appends to its log. Once the session ends, every process
+ * it left running is stopped.
  */
-export async function runSession({ command, cwd, prompt, settingsFile, schema, logFile }) {
+export async function runSession({
+  command,
+  cwd,
+  prompt,
+  settingsFile,
+  schema,
+  logFile,
+  resumeId,
+  processPollMs,
+}) {
   const [file, ...prefix] = command;
   const output = reportOutput(schema);
+  const offset = resumeId === undefined ? 0 : (await stat(logFile)).size;
   const args = [
     ...prefix,
     '-p',
+    ...(resumeId === undefined ? [] : ['--resume', resumeId]),
     '--output-format',
     'stream-json',
     '--verbose',
@@ -123,15 +157,23 @@ export async function runSession({ command, cwd, prompt, settingsFile, schema, l
     '--json-schema',
     JSON.stringify(z.toJSONSchema(output, { target: 'draft-7' })),
   ];
-  const run = await execa(file, args, {
+  const session = execa(file, args, {
     cwd,
     env: SESSION_ENV,
     input: prompt,
-    stdout: { file: logFile },
+    stdout: { file: logFile, append: resumeId !== undefined },
     stderr: 'inherit',
     reject: false,
   });
-  const last = lastResult(await readFile(logFile, 'utf8'), logFile);
+  const processes = trackSessionProcesses(session.pid, { pollMs: processPollMs });
+  const run = await session;
+  const leftRunning = await processes.stop();
+  if (leftRunning.length > 0) {
+    console.error(`Stopped processes the session left running: ${leftRunning.join(', ')}`);
+  }
+  const last = events(await logSince(logFile, offset), logFile).findLast(
+    (event) => event.type === 'result',
+  );
   if (last === undefined) {
     const ending = run.failed ? run.shortMessage : `exit code ${run.exitCode}`;
     throw new Error(`The session ended with no result (${ending}). See ${logFile}`, {

@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execa } from 'execa';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { autoRun, parseCli } from './auto-run.mjs';
+import { autoRun, OUTCOME_FILE } from './auto-run.mjs';
 import { repoRoot } from './script-entry.mjs';
 
 const FAKE_CLAUDE = path.join(repoRoot, 'scripts/auto-run-fake-claude.mjs');
@@ -70,6 +70,11 @@ describe('autoRun', () => {
       implementationRounds: 1,
       ...options,
     });
+  }
+
+  async function runDir() {
+    const [dir] = await readdir(path.join(main, 'logs', 'auto'));
+    return path.join(main, 'logs', 'auto', dir);
   }
 
   async function calls() {
@@ -161,13 +166,106 @@ describe('autoRun', () => {
   it('keeps the logs in the main checkout, so removing the worktree keeps them', async () => {
     await run({ plan: success(planReport), implementation: success(implementationReport) });
 
-    const [runDir] = await readdir(path.join(main, 'logs', 'auto'));
-    expect((await readdir(path.join(main, 'logs', 'auto', runDir))).toSorted()).toEqual([
+    expect((await readdir(await runDir())).toSorted()).toEqual([
       'implementation.jsonl',
+      'outcome.json',
       'plan.jsonl',
       'request.md',
       'settings.md',
     ]);
+  });
+
+  it('tells each session to stop the processes it started', async () => {
+    await run({ plan: success(planReport), implementation: success(implementationReport) });
+
+    for (const { prompt } of await calls()) {
+      expect(prompt).toContain('Stop every process you started in the background');
+    }
+  });
+
+  it('writes the outcome beside the logs', async () => {
+    const outcome = await run({
+      plan: success(planReport),
+      implementation: success(implementationReport),
+    });
+
+    expect(JSON.parse(await readFile(path.join(await runDir(), OUTCOME_FILE), 'utf8'))).toEqual(
+      outcome,
+    );
+  });
+
+  it('writes the error as the outcome when a session fails', async () => {
+    await expect(run({ plan: null, implementation: null })).rejects.toThrow(
+      'The session ended with no result',
+    );
+
+    const outcome = JSON.parse(await readFile(path.join(await runDir(), OUTCOME_FILE), 'utf8'));
+    expect(outcome.error).toMatch(/^The session ended with no result/);
+  });
+
+  describe('resuming a session', () => {
+    const settings = 'Workflow settings:\n{"kept":true}\n';
+
+    async function cutOff(phase) {
+      const logDir = path.join(main, 'logs', 'auto', 'earlier');
+      await mkdir(logDir, { recursive: true });
+      await writeFile(path.join(logDir, 'settings.md'), settings);
+      await writeFile(path.join(logDir, OUTCOME_FILE), '{"ready":false}');
+      const init = { type: 'system', subtype: 'init', session_id: `${phase}-cut-off` };
+      const logFile = path.join(logDir, `${phase}.jsonl`);
+      await writeFile(logFile, `${JSON.stringify(init)}\n`);
+      return logFile;
+    }
+
+    it('continues the cut-off session in a dirty worktree, with its settings', async () => {
+      const resumeLog = await cutOff('implementation');
+      await writeFile(path.join(worktree, 'partial.txt'), 'x');
+
+      const outcome = await run(
+        { plan: null, implementation: null, resume: success(implementationReport) },
+        { resumeLog },
+      );
+
+      expect(outcome.ready).toBe(true);
+      const [resumed] = await calls();
+      expect(resumed.args.slice(0, 3)).toEqual(['-p', '--resume', 'implementation-cut-off']);
+      expect(resumed.prompt).toContain('You were cut off before your workflow finished.');
+      expect(resumed.settings).toBe(settings);
+      expect(await calls()).toHaveLength(1);
+    });
+
+    it('builds the plan after a resumed plan session finishes', async () => {
+      const resumeLog = await cutOff('plan');
+
+      const outcome = await run(
+        { plan: null, implementation: success(implementationReport), resume: success(planReport) },
+        { resumeLog },
+      );
+
+      expect(outcome.ready).toBe(true);
+      const [, implementation] = await calls();
+      expect(implementation.prompt).toContain('the plan at docs/plans/2026-10-08-thing.md');
+    });
+
+    it('replaces the earlier outcome when the resumed run ends', async () => {
+      const resumeLog = await cutOff('implementation');
+
+      const outcome = await run(
+        { plan: null, implementation: null, resume: success(implementationReport) },
+        { resumeLog },
+      );
+
+      const written = await readFile(path.join(path.dirname(resumeLog), OUTCOME_FILE), 'utf8');
+      expect(JSON.parse(written)).toEqual(outcome);
+    });
+
+    it('refuses a file that is not a session log', async () => {
+      const resumeLog = path.join(path.dirname(await cutOff('plan')), 'settings.md');
+
+      await expect(run({}, { resumeLog })).rejects.toThrow(
+        `${resumeLog} is not a plan.jsonl or implementation.jsonl session log`,
+      );
+    });
   });
 
   it('refuses to start in the main checkout', async () => {
@@ -189,41 +287,5 @@ describe('autoRun', () => {
       'The working tree has uncommitted changes',
     );
     expect(await calls()).toEqual([]);
-  });
-});
-
-describe('parseCli', () => {
-  it('defaults both review loops to two rounds', () => {
-    expect(parseCli(['--request-file', 'r.md'])).toEqual({
-      requestFile: 'r.md',
-      planPath: undefined,
-      planRounds: 2,
-      implementationRounds: 2,
-    });
-  });
-
-  it('takes the round counts', () => {
-    const options = parseCli([
-      '--plan',
-      'p.md',
-      '--plan-rounds',
-      '4',
-      '--implementation-rounds',
-      '1',
-    ]);
-    expect(options).toMatchObject({ planPath: 'p.md', planRounds: 4, implementationRounds: 1 });
-  });
-
-  it.each([[[]], [['--request-file', 'r.md', '--plan', 'p.md']]])(
-    'requires exactly one of a request and a plan: %j',
-    (argv) => {
-      expect(() => parseCli(argv)).toThrow('Pass exactly one of --request-file and --plan');
-    },
-  );
-
-  it('rejects a round count under one', () => {
-    expect(() => parseCli(['--plan', 'p.md', '--plan-rounds', '0'])).toThrow(
-      'expected number to be >=1',
-    );
   });
 });

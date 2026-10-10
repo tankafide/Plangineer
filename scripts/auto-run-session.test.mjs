@@ -1,8 +1,8 @@
 import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { PlanReport, runSession } from './auto-run-session.mjs';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { PlanReport, runSession, sessionIdOf } from './auto-run-session.mjs';
 import { repoRoot } from './script-entry.mjs';
 
 const FAKE_CLAUDE = path.join(repoRoot, 'scripts/auto-run-fake-claude.mjs');
@@ -24,30 +24,48 @@ const success = (report) => ({
   structured_output: { report },
 });
 
+function isRunning(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 describe('runSession', () => {
   let root;
   let recordFile;
+  let logFile;
 
   beforeEach(async () => {
     root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'auto-run-session-')));
     recordFile = path.join(root, 'calls.jsonl');
+    logFile = path.join(root, 'plan.jsonl');
     await writeFile(path.join(root, 'settings.md'), 'Workflow settings:\n{}\n');
   });
 
   afterEach(async () => {
+    const calls = await readFile(recordFile, 'utf8').catch(() => '');
+    for (const line of calls.split('\n').filter(Boolean)) {
+      const { leftPid } = JSON.parse(line);
+      if (leftPid !== undefined && isRunning(leftPid)) process.kill(leftPid);
+    }
     await rm(root, { recursive: true, force: true, maxRetries: 5 });
   });
 
-  async function session(plan, command) {
+  async function session(plan, { command, config, ...options } = {}) {
     const configFile = path.join(root, 'config.json');
-    await writeFile(configFile, JSON.stringify({ recordFile, results: { plan } }));
+    const results = { plan, resume: plan };
+    await writeFile(configFile, JSON.stringify({ recordFile, results, ...config }));
     return runSession({
       command: command ?? [process.execPath, FAKE_CLAUDE, configFile],
       cwd: root,
       prompt: 'Use the plan-orchestrator skill.',
       settingsFile: path.join(root, 'settings.md'),
       schema: PlanReport,
-      logFile: path.join(root, 'plan.jsonl'),
+      logFile,
+      ...options,
     });
   }
 
@@ -142,8 +160,74 @@ describe('runSession', () => {
   });
 
   it('names the failure when the CLI cannot start', async () => {
-    await expect(session(null, [path.join(root, 'no-such-claude')])).rejects.toThrow(
+    await expect(session(null, { command: [path.join(root, 'no-such-claude')] })).rejects.toThrow(
       /^The session ended with no result \(.+\)\. See /,
     );
+  });
+
+  it('continues a session with --resume and appends to its log', async () => {
+    const earlier = [
+      { type: 'system', subtype: 'init', session_id: 'plan-session' },
+      { type: 'result', subtype: 'error_max_turns', is_error: true },
+    ];
+    await writeFile(logFile, earlier.map((event) => `${JSON.stringify(event)}\n`).join(''));
+
+    const report = await session(success(planReport), { resumeId: 'plan-session' });
+
+    expect(report).toEqual(planReport);
+    expect((await args()).slice(0, 3)).toEqual(['-p', '--resume', 'plan-session']);
+    const log = (await readFile(logFile, 'utf8')).split('\n').filter(Boolean);
+    expect(log.map((line) => JSON.parse(line).type)).toEqual([
+      'system',
+      'result',
+      'system',
+      'result',
+    ]);
+  });
+
+  it('reads only what a resumed session wrote, not the earlier result', async () => {
+    await writeFile(logFile, `${JSON.stringify(success(planReport))}\n`);
+
+    await expect(session(null, { resumeId: 'plan-session' })).rejects.toThrow(
+      /^The session ended with no result \(exit code 0\)\. See /,
+    );
+  });
+
+  it('stops a process the session left running', async () => {
+    await session(success(planReport), {
+      config: { leaveProcess: true, lingerMs: 1_500 },
+      processPollMs: 100,
+    });
+
+    const { leftPid } = await firstCall();
+    await vi.waitFor(() => expect(isRunning(leftPid)).toBe(false), { timeout: 5_000 });
+  });
+});
+
+const init = (id) => JSON.stringify({ type: 'system', subtype: 'init', session_id: id });
+
+describe('sessionIdOf', () => {
+  let root;
+
+  beforeEach(async () => {
+    root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'auto-run-session-id-')));
+  });
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true, maxRetries: 5 });
+  });
+
+  it("returns the id of the log's last session", async () => {
+    const logFile = path.join(root, 'implementation.jsonl');
+    await writeFile(logFile, `${init('first')}\n{"type":"result"}\n${init('second')}\n`);
+
+    expect(await sessionIdOf(logFile)).toBe('second');
+  });
+
+  it('refuses a log with no session', async () => {
+    const logFile = path.join(root, 'plan.jsonl');
+    await writeFile(logFile, '{"type":"result"}\n');
+
+    await expect(sessionIdOf(logFile)).rejects.toThrow(`${logFile} holds no session to resume`);
   });
 });
