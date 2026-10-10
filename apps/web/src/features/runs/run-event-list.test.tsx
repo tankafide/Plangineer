@@ -1,4 +1,4 @@
-import type { DraftStep, PlanningOutput, RunEvent } from '@plangineer/contracts';
+import type { DraftStep, PlanningOutput, RunEvent, RunFailureReason } from '@plangineer/contracts';
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
@@ -62,10 +62,7 @@ const EVERY_KIND: RunEvent[] = [
   }),
 ];
 
-function failedEvent(
-  id: number,
-  reason: 'setup_invalid_output' | 'setup_publish_failed' | 'inputs_failed',
-) {
+function failedEvent(id: number, reason: RunFailureReason) {
   return runEvent(id, {
     type: 'run.failed',
     reason,
@@ -160,6 +157,7 @@ describe('RunEventList', () => {
     ['setup_invalid_output', 'Failed: The setup output broke a skill rule'],
     ['setup_publish_failed', 'Failed: The setup branch could not be pushed'],
     ['inputs_failed', 'Failed: The planning inputs could not be downloaded'],
+    ['skill_missing', 'Failed: The repository is missing a skill the run follows'],
   ] as const)('labels the %s failure reason', async (reason, label) => {
     await renderEvents([failedEvent(1, reason)]);
 

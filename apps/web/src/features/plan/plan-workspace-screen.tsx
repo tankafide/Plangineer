@@ -105,7 +105,15 @@ function SectionContent({
     );
   }
   if (section === 'test_plan') {
-    return <CoverageGrid featureId={featureId} body={body} blockedReason={blockedReason} />;
+    // Unsaved ticks belong to the revision they were made on, so a newer one starts clean.
+    return (
+      <CoverageGrid
+        key={revision}
+        featureId={featureId}
+        body={body}
+        blockedReason={blockedReason}
+      />
+    );
   }
   return <SectionView section={section} body={body} />;
 }

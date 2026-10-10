@@ -65,6 +65,37 @@ describe('CoverageGrid', () => {
     expect(editedCoverage(edits[0])).toEqual(BODY.coverage);
   });
 
+  it('drops unsaved ticks when a newer revision marks a row stale', async () => {
+    const staleBody = {
+      ...BODY,
+      coverage: BODY.coverage.map((row) =>
+        row.lineId === LINE_1A ? { ...row, stale: true } : row,
+      ),
+    };
+    answerProcedure(
+      'plan/sectionAction',
+      answerJson(
+        planWorkspaceFixture({
+          sections: [{ section: 'test_plan', status: 'needs_work' }],
+          revision: planRevisionFixture({ number: 2, body: staleBody }),
+        }),
+      ),
+    );
+    const grid = await renderGrid(BODY.coverage);
+
+    await userEvent.click(grid.getByRole('checkbox', { name: '1a: Integration' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Expand Test plan' }));
+
+    const staleRow = within(await screen.findByRole('row', { name: /1a\. Step 1 works\..*Stale/ }));
+    expect(staleRow.getByRole('checkbox', { name: '1a: Integration' })).toHaveProperty(
+      'ariaChecked',
+      'false',
+    );
+    expect(screen.getByRole('button', { name: 'Save coverage' }).hasAttribute('disabled')).toBe(
+      true,
+    );
+  });
+
   it('shows Gap on a row with no tick', async () => {
     const grid = await renderGrid(
       BODY.coverage.map((row) => (row.lineId === LINE_2A ? { ...row, ticks: [] } : row)),
