@@ -31,20 +31,23 @@ The roadmap targets the desktop app: one engineer, one machine, Claude Code, and
 | 4 | Planning | 1 | | An engineer goes from context files to a ready plan mostly by clicking, edits it, and compares any two revisions |
 | 5 | Plan review and approval | 1 | | A plan review raises findings, the author model confirms them, fixes make a new revision, and the engineer approves the plan. This is the Phase 1 gate |
 | 6 | Implementation | 2 | | An approved plan becomes a pull request with nobody driving the agent |
-| 7 | Implementation review | 2 | | A review on a different model from the implementer produces a plan audit with every deviation decided. This is the Phase 2 gate |
+| 7 | Implementation review | 2 | | A review on a different model from the implementer produces a plan audit with every deviation decided, and a feature under the Auto loop run mode goes from intake to an open pull request with nobody deciding. This is the Phase 2 gate |
 | 8 | Verification | 3 | | Every feature gets an evidence report. This is the Phase 3 gate |
 | 9 | Features across repositories | 1 to 3 | | One feature spanning two repositories goes from intake to one verified pull request per repository |
 
 Chunks 3 to 8 build every stage for a feature in one repository. Every record is shaped for several repositories from chunk 3: a feature holds a list of repositories, a plan holds a base commit per repository, and a step names its repository. Chunk 9 then adds the cross-repository orchestrators and runs the stages across repositories.
 
+The [run modes](../product/mvp.md#run-modes) grow the same way. Chunk 3 adds the run mode to the feature, and each later chunk makes its own stop point follow it.
+
 ### 3. Feature intake and pre-planning
 
 - **Feature tabs.** One tab per feature, each showing its status.
-- **Intake form.** Description, ticket link, attachments, the exploration checkbox and research topics. The repository picker lists the configured repositories and takes one. Several repositories and **Not sure** come in chunk 9.
+- **Intake form.** Description, ticket link, attachments, the exploration checkbox, research topics and the run mode. The repository picker lists the configured repositories and takes one. Several repositories and **Not sure** come in chunk 9.
 - **Jira connection.** Appears only when a ticket link needs it. The app adds the Jira MCP server to the engineer's Claude Code, which runs on the same machine, and walks them through sign-in.
 - **Pre-planning tasks.** Intake, exploration and one research task per topic, running in parallel. Each records the commit it ran against.
 - **Context files.** Open, edit, rename, delete and tick.
-- **Plan ready.** Reached when the tasks finish. A failed task does not block it, and planning starts only when the engineer clicks Start planning.
+- **Plan ready.** Reached when the tasks finish. A failed task does not block it. Under Manual and Manual plan, planning starts when the engineer clicks Start planning. Under Auto loop it starts by itself, once chunk 4 exists.
+- **Run modes.** Manual, Manual plan and Auto loop, each a fixed set of workflow settings. The repository's settings card replaces chunk 2's per-setting fields with a default run mode, and the feature's mode can change at any time.
 - **Records.** Feature, Pre-planning task and Context file.
 
 ### 4. Planning
@@ -53,7 +56,7 @@ The planning session and the plan workspace are one chunk, because the session w
 
 - **Plan revision record.** Sections, acceptance criteria, source context files, base commit per repository and revision number. Never edited in place.
 - **Guided loop.** Read context, decide or ask, draft, check for blockers, then repeat or finish.
-- **Question cards.** One question at a time, as choices with a recommended option and a free-text answer.
+- **Question cards.** One question at a time, as choices with a recommended option and a free-text answer. Under Auto loop, `decisions` is `recommended`: the agent takes each recommended option and records it, and the check-in after the draft is skipped.
 - **Decisions.** Every call the agent makes alone is recorded with its reason.
 - **Constraints.** The section appears from standing rules, exploration risk flags or intake wording, with proposed targets.
 - **Readiness checklist.** A plan with an open question, a vague step, a missing "done when" line or an uncovered line cannot be marked ready.
@@ -71,10 +74,10 @@ The finding pipeline is built once here, on plans, and chunk 7 reuses it for dif
 - **Finding record.** Location, claim, kind, severity, suggested change, source skill, author verdict, rule outcome and decision.
 - **Pipeline.** Review, confirm by the authoring model, apply triage rules, fix, and assess the round.
 - **Triage rules.** Read from the repository, and applied as the plan review's `findings` setting says.
-- **Re-review.** The plan review's `rounds` setting: under `ask`, the engineer sees the assessment and chooses whether to review again.
+- **Re-review.** The plan review's `rounds` setting: under `ask`, the engineer sees the assessment and chooses whether to review again. Auto loop sets `fix_all` and two fixed rounds.
 - **Inline findings.** Shown against the plan lines they refer to, with accept and reject buttons. Disputed findings are collapsed and can be overruled.
 - **Triage screen.** One finding per card.
-- **Approval.** The engineer approves the plan once it has no open findings, which freezes the revision. Peer approval waits for a team server.
+- **Approval.** The engineer approves the plan once it has no open findings, which freezes the revision. Under Auto loop the app approves it and records the run mode as the reason. Peer approval waits for a team server.
 - **Staleness check.** Runs when the plan is marked ready, when it is approved and when implementation starts. The runner fetches the repository and compares the files changed on main since the base commit with the plan's files. Overlap shows a warning with dismissal and Replan. Replan before approval makes a new revision. GitHub webhooks are not used, since the desktop app has no public URL.
 - **Records.** Approval and Staleness dismissal.
 
@@ -87,14 +90,14 @@ The finding pipeline is built once here, on plans, and chunk 7 reuses it for dif
 - **Amendments.** A new revision made from the approved one. The level, set from which sections changed, decides which sections plan review covers, and review covers the diff only. The engineer approves it, and implementation resumes on the same branch.
 - **Pull request.** One for the repository, with the plan summary attached.
 - **Run timeline.** Current stage, round, skills loaded and cost so far.
-- **Notifications.** The in-app inbox and a system notification from the tray when a run stops, fails or needs a decision.
+- **Notifications.** The in-app inbox and a system notification from the tray when a run stops, fails or needs a decision, and when the pull request opens. Every run mode stops for an open prerequisite, an undecided point, a failed check and a failed run.
 - **Records.** Notification.
 
 ### 7. Implementation review
 
 - **Implementation review.** The chunk 5 pipeline, applied to the diff against the plan and the rule skills. The reviewer runs on a different Claude model from the implementer by default.
 - **Deviations and extras.** Every step matched to the diff and every change matched to a step. A departure the implementer did not log is marked unreported.
-- **Decisions.** Accept, revert or replan, always made by an engineer unless `findings` is `fix_all`. Replan goes through chunk 6's amendment path.
+- **Decisions.** Accept, revert or replan, made by the engineer under Manual. Manual plan and Auto loop set `fix_all` and two fixed rounds, so the agent applies the recommended Accept or Revert. Replan goes through chunk 6's amendment path.
 - **Plan audit.** Every step as built as planned, deviated or not built, then every extra, each with who decided and why.
 - **Pull request.** The audit and the findings history are attached.
 
@@ -134,6 +137,7 @@ The ten chunks were written on Oct 7, 2026, before Plangineer became a desktop a
 | Hosted runners as CI jobs in old chunk 8 | After the MVP, team server | The desktop's runner serves every stage |
 | 9. Codex and implementation review | 7. Implementation review, with Codex after the MVP | A different Claude model gives the review its second opinion |
 | Deploy webhook and object storage in old chunk 10 | A Verify button and evidence files on disk in chunk 8 | No public URL and no Docker on the desktop |
+| Workflow settings edited per repository | Three run modes chosen per feature, built from chunk 3 | An engineer chooses per feature between deciding everything, planning by hand, or the auto loop |
 | Several repositories in every chunk, cross-repository orchestrators in old chunk 2 | 9. Features across repositories | Chunks 3 to 8 prove the stages on one repository first, on records already shaped for several |
 
 ## Desktop app
@@ -167,6 +171,8 @@ These questions were raised while building the desktop app and are settled when 
 - Whether a team server can rely on keeping the desktop's `BETTER_AUTH_SECRET` to decrypt the stored GitHub App, or needs a way to re-encrypt it.
 - How to reach `pg_dump` inside the Linux AppImage. The guide's `--appimage-extract` route is untested.
 
+**Custom run modes.** A team sets each stop point itself and saves the set as its own mode.
+
 **Codex adapter.** `codex exec` produces the same run events as the Claude Code adapter, so review can run on a different vendor.
 
 **Auto-fix and rollout.** The MVP's Phase 4: fix commits that can be reverted, push notifications and metrics.
@@ -177,5 +183,6 @@ These questions were raised while building the desktop app and are settled when 
 
 - **Records shaped for several repositories.** Repository lists on features, base commits per repository and a repository on each step shape the data model, so chunk 3 builds them that way even though chunk 9 runs them.
 - **Phone width.** Every screen works as one column from its first chunk, so the later phone app reuses it.
+- **Run modes.** Every stop point a chunk adds reads the feature's run mode, and every mode still stops for an open prerequisite, an undecided point, a failed check and a failed run.
 - **One API.** Every UI action goes through the API a phone app will use.
 - **Worktrees.** Agent runs work in Git worktrees the runner owns, and nothing switches branches in a working copy.
