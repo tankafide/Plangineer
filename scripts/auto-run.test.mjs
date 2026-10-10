@@ -98,7 +98,7 @@ describe('autoRun', () => {
       implementation: implementationReport,
     });
     const [plan, implementation] = await calls();
-    expect(plan.prompt).toContain('plan-orchestrator');
+    expect(plan.prompt).toMatch(/plan-orchestrator skill[^]*This session only plans it/);
     expect(plan.prompt).toContain('<request>\nAdd a thing.\n</request>');
     expect(implementation.prompt).toContain(
       'implementation-orchestrator skill to build the plan at docs/plans/2026-10-08-thing.md',

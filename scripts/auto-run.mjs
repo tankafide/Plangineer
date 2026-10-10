@@ -43,6 +43,7 @@ const FINISH = [
 function planPrompt(request) {
   return [
     'Use the plan-orchestrator skill to plan the engineer request below.',
+    'The request is the goal of the whole run. This session only plans it: it never changes code, tests, config or scripts, and a separate session builds the plan after this one ends.',
     '',
     '<request>',
     request.trim(),
