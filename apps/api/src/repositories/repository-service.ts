@@ -1,4 +1,5 @@
 import {
+  GitRef,
   INSTALLABLE_REPOSITORIES_MAX,
   type InstallableRepository,
   type PageInput,
@@ -100,6 +101,8 @@ export async function addRepository(
     (repository) => repository.githubRepositoryId === input.githubRepositoryId,
   );
   if (found === undefined) return fail('NOT_FOUND');
+  // Every pre-planning run checks out this branch, so a name GitRef refuses fails here, loudly.
+  const defaultBranch = GitRef.parse(found.defaultBranch);
   const repositoryId = await deps.db.transaction((tx) =>
     insertRepository(tx, {
       githubRepositoryId: found.githubRepositoryId,
@@ -109,7 +112,7 @@ export async function addRepository(
       description: input.description,
       roleSettings: DEFAULT_ROLE_SETTINGS,
       defaultRunMode: 'manual',
-      defaultBranch: found.defaultBranch,
+      defaultBranch,
       createdBy: userId,
     }),
   );

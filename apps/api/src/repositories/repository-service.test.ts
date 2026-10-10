@@ -111,12 +111,14 @@ describe('repository procedures', () => {
   const add = (githubRepositoryId: number) =>
     call(router.repository.add, { githubRepositoryId, description: 'x' }, { context: admin });
 
-  it('returns NOT_FOUND for a repository the App cannot reach, and CONFLICT for one added twice', async () => {
+  it('returns NOT_FOUND for a repository the App cannot reach, CONFLICT for one added twice, and refuses a default branch that is not a GitRef', async () => {
     fake.repositories.push(fakeRepository({ id: 77 }));
+    fake.repositories.push(fakeRepository({ id: 79, defaultBranch: 'feat+x' }));
 
     await expect(add(78)).rejects.toMatchObject({ code: 'NOT_FOUND' });
     await add(77);
     await expect(add(77)).rejects.toMatchObject({ code: 'CONFLICT' });
+    await expect(add(79)).rejects.toThrow(/may hold only letters/);
     expect(await repositoryCount()).toBe(1);
   });
 
