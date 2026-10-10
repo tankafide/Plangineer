@@ -165,6 +165,7 @@ export function githubHandlers(state: GithubState): HttpHandler[] {
             name: repository.name,
             owner: { login: repository.owner },
             private: repository.private,
+            default_branch: repository.defaultBranch,
           })),
         },
         { headers },

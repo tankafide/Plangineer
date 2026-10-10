@@ -1,5 +1,4 @@
 import {
-  DEFAULT_WORKFLOW_SETTINGS,
   RepositoryScan,
   RoleSettings,
   RunEvent,
@@ -8,13 +7,13 @@ import {
   type SetupStatus,
   SetupJob,
   SetupSelection,
-  WorkflowSettings,
 } from '@plangineer/contracts';
 import { renderSetupFiles, renderSetupInputs, renderSetupPrompt } from '../setup/setup-files.ts';
 import type { Database } from './client.ts';
 import {
   SEED_AT,
   SEED_COMMIT,
+  SEED_DEFAULT_BRANCH,
   SEED_REPOSITORIES,
   SEED_ROLE_SETTINGS,
   SEED_RUNNER_ID,
@@ -183,10 +182,11 @@ async function seedSetup(db: Database, repository: SeedRepository): Promise<void
 }
 
 /**
- * Inserts the dev seed: two users, a runner that never connects, and one repository per setup
- * state. Ids and times are fixed, and a row that exists is skipped, so seeding twice adds nothing.
- * Rows go in directly, not through the repository modules, because those take no fixed ids or
- * times; each JSONB value is still parsed with its contract schema first.
+ * Inserts the dev seed: two users, a runner that never connects, one repository per setup
+ * state and acme/app for the intake journey. It adds no feature, since a feature belongs to its
+ * author. Ids and times are fixed, and a row that exists is skipped, so seeding twice adds
+ * nothing. Rows go in directly, not through the repository modules, because those take no
+ * fixed ids or times; each JSONB value is still parsed with its contract schema first.
  */
 export async function seedDatabase(db: Database): Promise<void> {
   await db
@@ -225,7 +225,8 @@ export async function seedDatabase(db: Database): Promise<void> {
         name: repository.name,
         description: repository.description,
         roleSettings: RoleSettings.parse(SEED_ROLE_SETTINGS),
-        workflowSettings: WorkflowSettings.parse(DEFAULT_WORKFLOW_SETTINGS),
+        defaultRunMode: repository.defaultRunMode,
+        defaultBranch: SEED_DEFAULT_BRANCH,
         createdBy: SEED_USER_IDS.admin,
         createdAt: SEED_AT,
         updatedAt: SEED_AT,

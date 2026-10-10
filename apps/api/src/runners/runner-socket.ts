@@ -8,10 +8,10 @@ import {
 import type { Context, Next } from 'hono';
 import { type RawData, WebSocket, WebSocketServer } from 'ws';
 import type { ServiceDeps } from '../lib/service-deps.ts';
-import { advanceSetupOfRun } from '../setup/setup-advance.ts';
 import type { Logger } from '../logger.ts';
+import { onRunEnded } from '../runs/run-ended.ts';
 import type { HeldSocket, RunnerConnections } from './runner-connections.ts';
-import { findRunnerByToken } from './runner-service.ts';
+import { authenticateRunner } from './runner-auth.ts';
 import {
   acceptHeartbeat,
   acceptHello,
@@ -40,11 +40,6 @@ export function createRunnerSocketServer(): WebSocketServerLike {
   const server = new WebSocketServer({ noServer: true, maxPayload: MAX_SOCKET_MESSAGE_BYTES });
   if (!isWebSocketServerLike(server)) throw new Error('The runner socket server needs noServer');
   return server;
-}
-
-function bearerToken(header: string | undefined): string | undefined {
-  const match = /^Bearer (\S+)$/.exec(header ?? '');
-  return match?.[1];
 }
 
 function textOf(data: RawData): string {
@@ -112,7 +107,7 @@ function runnerSession(
           attempt: message.attempt,
           seq: accepted.ackedSeq,
         });
-        if (accepted.ended) await advanceSetupOfRun(deps, message.runId);
+        if (accepted.ended) await onRunEnded(deps, message.runId);
         return;
       }
       case 'run.heartbeat':
@@ -183,8 +178,7 @@ function runnerSession(
  */
 export function runnerSocketRoute(deps: ServiceDeps, connections: RunnerConnections) {
   return async (c: Context, next: Next) => {
-    const token = bearerToken(c.req.header('authorization'));
-    const runner = token === undefined ? undefined : await findRunnerByToken(deps.db, token);
+    const runner = await authenticateRunner(deps.db, c.req.header('authorization'));
     if (runner === undefined) return c.text('Unauthorized', 401);
     const upgrade = upgradeWebSocket(() => ({
       onOpen: (_event, ws) => {

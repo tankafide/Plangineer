@@ -4,6 +4,7 @@ import { GithubFailed } from './github-failed.ts';
 import { PageInput, pageOutput } from './pagination.ts';
 import { RepositoryScan, SelectionError, SetupSelection, SetupStatus } from './repository-setup.ts';
 import { RunStatus } from './run.ts';
+import { RunMode } from './run-mode.ts';
 
 export const GithubRepositoryId = z.int().min(1);
 
@@ -39,35 +40,6 @@ export const RoleSettings = z.strictObject({
 });
 export type RoleSettings = z.infer<typeof RoleSettings>;
 
-const RoundCount = z.int().min(1).max(5);
-
-export const ReviewRounds = z.discriminatedUnion('mode', [
-  z.strictObject({ mode: z.literal('ask') }),
-  z.strictObject({ mode: z.literal('fixed'), count: RoundCount }),
-  z.strictObject({ mode: z.literal('adaptive'), max: RoundCount }),
-]);
-export type ReviewRounds = z.infer<typeof ReviewRounds>;
-
-export const ReviewSettings = z.strictObject({
-  findings: z.enum(['ask', 'fix_all']),
-  rounds: ReviewRounds,
-});
-export type ReviewSettings = z.infer<typeof ReviewSettings>;
-
-export const WorkflowSettings = z.strictObject({
-  planCheckIn: z.enum(['pause', 'skip']),
-  planReview: ReviewSettings,
-  implementationReview: ReviewSettings,
-});
-export type WorkflowSettings = z.infer<typeof WorkflowSettings>;
-
-/** Today's behavior: the engineer confirms the plan, picks the fixes and decides each round. */
-export const DEFAULT_WORKFLOW_SETTINGS: WorkflowSettings = {
-  planCheckIn: 'pause',
-  planReview: { findings: 'ask', rounds: { mode: 'ask' } },
-  implementationReview: { findings: 'ask', rounds: { mode: 'ask' } },
-};
-
 const RepositoryDescription = z.string().min(1).max(200);
 
 const SetupRun = z.object({ id: z.uuid(), status: RunStatus, startedByViewer: z.boolean() });
@@ -89,7 +61,7 @@ export const RepositoryDetail = z.object({
   name: z.string(),
   description: z.string(),
   roleSettings: RoleSettings,
-  workflowSettings: WorkflowSettings,
+  defaultRunMode: RunMode,
   setup: SetupView.nullable(),
   createdAt: z.iso.datetime(),
 });
@@ -100,6 +72,7 @@ export const RepositorySummary = z.object({
   owner: z.string(),
   name: z.string(),
   description: z.string(),
+  defaultRunMode: RunMode,
   setupStatus: SetupStatus.nullable(),
 });
 export type RepositorySummary = z.infer<typeof RepositorySummary>;
@@ -136,13 +109,13 @@ export const RepositoryUpdateInput = z
     repositoryId: z.uuid(),
     description: RepositoryDescription.optional(),
     roleSettings: RoleSettings.optional(),
-    workflowSettings: WorkflowSettings.optional(),
+    defaultRunMode: RunMode.optional(),
   })
   .refine(
     (input) =>
       input.description !== undefined ||
       input.roleSettings !== undefined ||
-      input.workflowSettings !== undefined,
+      input.defaultRunMode !== undefined,
     'must change at least one field',
   );
 export type RepositoryUpdateInput = z.infer<typeof RepositoryUpdateInput>;

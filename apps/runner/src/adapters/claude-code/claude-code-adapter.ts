@@ -26,6 +26,12 @@ const ACCESS: Record<AgentAccess, { permissionMode: string; tools: string; allow
       tools: 'Read,Glob,Grep,Skill',
       allowedTools: 'Read,Glob,Grep,Skill',
     },
+    research: {
+      permissionMode: 'dontAsk',
+      tools: 'Read,Glob,Grep,Skill,WebSearch,WebFetch',
+      allowedTools:
+        'Read Glob Grep Skill WebSearch WebFetch(domain:github.com) WebFetch(domain:raw.githubusercontent.com)',
+    },
     write_skills: {
       permissionMode: 'dontAsk',
       tools: 'Read,Glob,Grep,Edit,Write,WebSearch,WebFetch,Agent',

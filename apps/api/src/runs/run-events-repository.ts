@@ -10,6 +10,7 @@ import { nextRunStatus } from '@plangineer/domain';
 import { and, asc, eq, gt, inArray, isNotNull, max, sql } from 'drizzle-orm';
 import type { Executor, Transaction } from '../db/client.ts';
 import { runEvents, runs } from '../db/schema.ts';
+import { insertContextFile } from '../features/context-file-repository.ts';
 import type { Logger } from '../logger.ts';
 import { RUN_EVENTS_CHANNEL } from '../realtime/notifications.ts';
 
@@ -96,11 +97,22 @@ function protocolError(message: string): RunEventBody {
   return { type: 'run.failed', reason: 'protocol_error', message, exitCode: null, stderrTail: [] };
 }
 
-/** Why an event cannot be appended to this run, or undefined when the status rules decide. */
+/**
+ * Why an event cannot be appended to this run, or undefined when the status rules decide. A
+ * pre-planning run's answer becomes its context file, so a blank or truncated one is refused.
+ */
 function kindMismatch(kind: RunKind, body: RunEventBody): string | undefined {
-  return body.type === 'setup.pushed' && kind !== 'setup'
-    ? `The runner sent setup.pushed for a ${kind} run.`
-    : undefined;
+  if (body.type === 'setup.pushed' && kind !== 'setup') {
+    return `The runner sent setup.pushed for a ${kind} run.`;
+  }
+  if (
+    body.type === 'run.succeeded' &&
+    kind === 'pre_planning' &&
+    (body.truncated || body.resultText.trim() === '')
+  ) {
+    return 'The runner sent a blank or truncated answer for a pre-planning run.';
+  }
+  return undefined;
 }
 
 export interface AppendResult {
@@ -112,7 +124,8 @@ export interface AppendResult {
 
 /**
  * Appends events to one run in order under its row lock, applying each status move through
- * nextRunStatus. A repeated runner event and any event after the run ended are skipped. An
+ * nextRunStatus. A pre-planning run's run.succeeded stores its context file in the same
+ * transaction. A repeated runner event and any event after the run ended are skipped. An
  * event the rules reject, or one its run's kind cannot have, stops the batch and fails the run
  * with protocol_error instead.
  */
@@ -141,6 +154,9 @@ export async function appendRunEvents(
       status = next;
     }
     if (item.body.type === 'run.cancel_requested') cancelRequested = true;
+    if (item.body.type === 'run.succeeded' && run.kind === 'pre_planning') {
+      await insertContextFile(tx, runId, item.body.resultText);
+    }
     eventId += 1;
     rows.push({
       runId,

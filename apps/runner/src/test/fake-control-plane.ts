@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import {
   MAX_SOCKET_MESSAGE_BYTES,
+  RUNNER_ATTACHMENT_PATH,
   type RunJob,
   RunnerSocketClose,
   RunnerToServerMessage,
@@ -12,6 +14,14 @@ import { rawText } from '../connection/control-plane-socket.ts';
 type Message<T extends RunnerToServerMessage['type']> = Extract<RunnerToServerMessage, { type: T }>;
 type RunEvents = Message<'run.events'>;
 
+const ATTACHMENT_PREFIX = RUNNER_ATTACHMENT_PATH.replace(':attachmentId', '');
+
+/** An attachment the fake serves on the runner attachment route. */
+export interface FakeAttachment {
+  mediaType: string;
+  content: Buffer;
+}
+
 interface ReceivedMessage {
   message: RunnerToServerMessage;
   bytes: number;
@@ -20,9 +30,10 @@ interface ReceivedMessage {
 }
 
 /**
- * A stand-in for the API's runner socket, for runner tests. It checks the runner token at the
- * handshake, parses every message with the protocol schemas, records it, and acknowledges events.
- * Tests drive it: assign and cancel runs, answer heartbeats and welcomes, drop or close the socket.
+ * A stand-in for the API's runner socket and attachment route, for runner tests. It checks the
+ * runner token at the handshake, parses every message with the protocol schemas, records it, and
+ * acknowledges events. Tests drive it: assign and cancel runs, answer heartbeats and welcomes,
+ * drop or close the socket, and fill `attachments` for the route to serve.
  */
 export async function startFakeControlPlane() {
   const token: string = randomUUID();
@@ -36,6 +47,8 @@ export async function startFakeControlPlane() {
     token,
     serverUrl: '',
     received,
+    /** The attachments the route serves by id. Any other id answers 404. */
+    attachments: new Map<string, FakeAttachment>(),
     autoAck: true,
     heartbeatIntervalMs: 10_000,
     get connections() {
@@ -107,10 +120,14 @@ export async function startFakeControlPlane() {
           message.events.some((entry) => entry.event.type === type),
       );
     },
-    stop(): Promise<void> {
+    async stop(): Promise<void> {
       for (const client of server.clients) client.terminate();
-      return new Promise((resolve, reject) =>
+      await new Promise<void>((resolve, reject) =>
         server.close((error) => (error ? reject(error) : resolve())),
+      );
+      http.closeAllConnections();
+      await new Promise<void>((resolve, reject) =>
+        http.close((error) => (error ? reject(error) : resolve())),
       );
     },
   };
@@ -141,9 +158,24 @@ export async function startFakeControlPlane() {
     }
   }
 
+  /** Answers an attachment as the API does: 401 for a bad token, 404 for an unknown id. */
+  function serveAttachment(request: IncomingMessage, response: ServerResponse): void {
+    const { pathname } = new URL(request.url ?? '/', 'http://fake');
+    const attachment = pathname.startsWith(ATTACHMENT_PREFIX)
+      ? plane.attachments.get(decodeURIComponent(pathname.slice(ATTACHMENT_PREFIX.length)))
+      : undefined;
+    if (request.headers.authorization !== `Bearer ${plane.token}`) {
+      response.writeHead(401).end();
+    } else if (request.method !== 'GET' || attachment === undefined) {
+      response.writeHead(404).end();
+    } else {
+      response.writeHead(200, { 'content-type': attachment.mediaType }).end(attachment.content);
+    }
+  }
+
+  const http = createServer(serveAttachment);
   const server = new WebSocketServer({
-    host: '127.0.0.1',
-    port: 0,
+    server: http,
     path: '/api/runners/socket',
     maxPayload: MAX_SOCKET_MESSAGE_BYTES,
     verifyClient: (info, callback) =>
@@ -170,8 +202,8 @@ export async function startFakeControlPlane() {
     });
   });
 
-  await new Promise<void>((resolve) => server.once('listening', resolve));
-  const address = server.address();
+  await new Promise<void>((resolve) => http.listen(0, '127.0.0.1', resolve));
+  const address = http.address();
   if (address === null || typeof address === 'string') throw new Error('The server has no port');
   plane.serverUrl = `http://127.0.0.1:${address.port}`;
   return plane;

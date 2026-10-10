@@ -12,6 +12,9 @@ export function AppHeader() {
         className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-1 px-4 py-1"
       >
         <span className="mr-auto hidden text-sm font-semibold md:inline">Plangineer</span>
+        <Link to="/features" className={LINK_CLASS}>
+          Features
+        </Link>
         <Link to="/" activeOptions={{ exact: true }} className={LINK_CLASS}>
           Account
         </Link>

@@ -15,6 +15,8 @@ export const FAILURE_REASON_LABELS: Record<RunFailureReason, string> = {
   timeout: 'The run took too long',
   setup_invalid_output: 'The setup output broke a skill rule',
   setup_publish_failed: 'The setup branch could not be pushed',
+  skill_missing: 'The repository has no codebase-exploration skill',
+  attachment_failed: 'An attachment could not be downloaded',
 };
 
 export const CANCEL_REASON_LABELS: Record<RunCancelReason, string> = {

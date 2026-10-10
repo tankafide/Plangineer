@@ -10,6 +10,9 @@ const WEB_URL = 'http://localhost:5173';
 
 export default defineConfig({
   testDir: 'e2e',
+  // Every journey signs in as the one e2e user, whose features go to their most recently seen
+  // runner. One worker runs the files and projects in turn, so no journey sees another's runner.
+  workers: 1,
   globalSetup: './e2e/global-setup.ts',
   reporter: [['html', { open: 'never' }]],
   use: { baseURL: WEB_URL, trace: 'retain-on-failure' },

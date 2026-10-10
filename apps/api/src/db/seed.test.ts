@@ -1,16 +1,24 @@
 import { fileURLToPath } from 'node:url';
-import { count } from 'drizzle-orm';
+import { asc, count } from 'drizzle-orm';
 import { execa } from 'execa';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { testEnv } from '../test/fixtures.ts';
 import { createTestApp } from '../test/test-app.ts';
 import { createTestDatabase, type TestDatabase } from '../test/test-database.ts';
-import { repositories, repositorySetups, runEvents, runners, runs, user } from './schema.ts';
+import {
+  features,
+  repositories,
+  repositorySetups,
+  runEvents,
+  runners,
+  runs,
+  user,
+} from './schema.ts';
 import { seedDatabase } from './seed.ts';
 
 const SESSION_CLI = fileURLToPath(new URL('../test/e2e-session-cli.ts', import.meta.url));
-const TABLES = { user, runners, repositories, repositorySetups, runs, runEvents };
+const TABLES = { user, runners, repositories, repositorySetups, runs, runEvents, features };
 
 async function counts(database: TestDatabase) {
   const entries = await Promise.all(
@@ -41,10 +49,11 @@ describe('seedDatabase', () => {
       repositorySetups: 0,
       runs: 0,
       runEvents: 0,
+      features: 0,
     });
   });
 
-  it('stores the users, runner, repositories and one setup per status, and adds nothing on a second run', async () => {
+  it('stores the users, runner, repositories and one setup per status, no feature, and adds nothing on a second run', async () => {
     await seedDatabase(database.db);
     const first = await counts(database);
     await seedDatabase(database.db);
@@ -52,10 +61,11 @@ describe('seedDatabase', () => {
     expect(first).toEqual({
       user: 2,
       runners: 1,
-      repositories: 7,
+      repositories: 8,
       repositorySetups: 6,
       runs: 4,
       runEvents: 1 + 4 + 5 + 5,
+      features: 0,
     });
     expect(await counts(database)).toEqual(first);
     const statuses = await database.db
@@ -69,6 +79,34 @@ describe('seedDatabase', () => {
       'scanned',
       'scanned',
     ]);
+  });
+
+  it('gives every repository the main branch, acme/app included, and the three default run modes', async () => {
+    await seedDatabase(database.db);
+
+    const rows = await database.db
+      .select({
+        name: repositories.name,
+        defaultBranch: repositories.defaultBranch,
+        defaultRunMode: repositories.defaultRunMode,
+      })
+      .from(repositories)
+      .orderBy(asc(repositories.name));
+
+    expect(rows.every((row) => row.defaultBranch === 'main')).toBe(true);
+    expect(rows.map((row) => row.name)).toContain('app');
+    expect(
+      Object.fromEntries(
+        rows
+          .filter((row) => ['web-app', 'api-complete', 'api-scanned', 'app'].includes(row.name))
+          .map((row) => [row.name, row.defaultRunMode]),
+      ),
+    ).toEqual({
+      'web-app': 'manual',
+      'api-complete': 'manual_plan',
+      'api-scanned': 'auto_loop',
+      app: 'manual',
+    });
   });
 
   it('prints a session cookie for a seeded user that the API resolves', async () => {

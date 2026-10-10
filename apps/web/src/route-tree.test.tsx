@@ -1,8 +1,9 @@
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { describe, expect, it } from 'vitest';
 import { AUTH_URL, renderRoute, server } from '@/test/app-harness';
+import { CONTEXT_FILE_ID, FEATURE_ID } from '@/test/feature-fixtures';
 import { answerJson, answerProcedure, answerSignedIn, page } from '@/test/fixtures';
 
 function answerSession(response: () => Response) {
@@ -139,14 +140,17 @@ describe('routes', () => {
     expect(inputs).toEqual([]);
   });
 
-  it('shows the header with Account, Runners, Repositories and Runs above a signed-in screen', async () => {
+  it('shows the header with Features, Account, Runners, Repositories and Runs above a signed-in screen', async () => {
     answerSignedIn();
     answerProcedure('runner/list', answerJson(page([])));
 
     await renderRoute('/runners');
 
     const nav = await screen.findByRole('navigation', { name: 'Main' });
-    expect(nav.textContent).toContain('Account');
+    expect(nav.textContent).toMatch(/^Plangineer\s*Features\s*Account/);
+    expect(within(nav).getByRole('link', { name: 'Features' }).getAttribute('href')).toBe(
+      '/features',
+    );
     const runners = screen.getByRole('link', { name: 'Runners' });
     expect(runners.getAttribute('aria-current')).toBe('page');
     expect(screen.getByRole('link', { name: 'Runs' }).getAttribute('href')).toBe('/runs');
@@ -160,6 +164,27 @@ describe('routes', () => {
     answerSignedIn();
 
     await renderRoute('/runs/not-a-run');
+
+    expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeTruthy();
+  });
+
+  it('shows Page not found for a feature id that is not a uuid', async () => {
+    answerSignedIn();
+    answerProcedure('feature/list', answerJson(page([])));
+
+    await renderRoute('/features/not-a-feature');
+
+    expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeTruthy();
+  });
+
+  it.each([
+    ['context file', `/features/${FEATURE_ID}/files/not-a-file`],
+    ['feature', `/features/not-a-feature/files/${CONTEXT_FILE_ID}`],
+  ])('shows Page not found for a context file path with a bad %s id', async (_, path) => {
+    answerSignedIn();
+    answerProcedure('feature/list', answerJson(page([])));
+
+    await renderRoute(path);
 
     expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeTruthy();
   });

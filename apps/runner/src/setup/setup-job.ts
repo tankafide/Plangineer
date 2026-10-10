@@ -1,11 +1,11 @@
 import path from 'node:path';
 import {
-  FAILURE_MESSAGE_MAX,
   type RunnerRunEventBody,
   SETUP_BRANCH,
   type SetupJob,
   SKILLS_ROOT,
 } from '@plangineer/contracts';
+import { type RunFailed, runFailed } from '../jobs/run-failed.ts';
 import { lintSkill } from '../skills/skill-lint.ts';
 import { GitError } from '../worktrees/git.ts';
 import { finishRepositoryFiles, guardChangedPaths, publishSetup } from './setup-publish.ts';
@@ -20,7 +20,6 @@ import {
   writeSetupFiles,
 } from './setup-tree.ts';
 
-type RunFailed = Extract<RunnerRunEventBody, { type: 'run.failed' }>;
 type SetupPushed = Extract<RunnerRunEventBody, { type: 'setup.pushed' }>;
 
 export type SetupStep<T> = { ok: true; value: T } | { ok: false; event: RunFailed };
@@ -30,16 +29,7 @@ function failed(
   message: string,
   stderrTail: string[] = [],
 ): { ok: false; event: RunFailed } {
-  return {
-    ok: false,
-    event: {
-      type: 'run.failed',
-      reason,
-      message: message.slice(0, FAILURE_MESSAGE_MAX),
-      exitCode: null,
-      stderrTail,
-    },
-  };
+  return { ok: false, event: runFailed(reason, message, stderrTail) };
 }
 
 /** Runs a step, turning broken output into setup_invalid_output. Any other error is the runner's. */

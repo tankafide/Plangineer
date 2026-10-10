@@ -1,7 +1,13 @@
-import { type RunJob, type RunKind, type RunStatus, SetupJob } from '@plangineer/contracts';
+import {
+  PrePlanningJob,
+  type RunJob,
+  type RunKind,
+  type RunStatus,
+  SetupJob,
+} from '@plangineer/contracts';
 import { and, asc, count, eq, inArray, lt, sql } from 'drizzle-orm';
 import type { Executor, Transaction } from '../db/client.ts';
-import { repositorySetups, runs } from '../db/schema.ts';
+import { prePlanningTasks, repositorySetups, runs } from '../db/schema.ts';
 
 /** Queries for dispatch, the sweeper and the runner socket, which act on a runner's runs. */
 
@@ -29,9 +35,10 @@ interface ClaimableRow {
   ref: string;
   prompt: string;
   setupJob: unknown;
+  taskJob: unknown;
 }
 
-/** A test run's job from its row, or the setup job that start rendered and stored. */
+/** A test run's job from its row, or the setup or task job rendered and stored when queued. */
 function jobOf(row: ClaimableRow): RunJob {
   switch (row.kind) {
     case 'test':
@@ -43,6 +50,8 @@ function jobOf(row: ClaimableRow): RunJob {
       };
     case 'setup':
       return SetupJob.parse(row.setupJob);
+    case 'pre_planning':
+      return PrePlanningJob.parse(row.taskJob);
     default: {
       const unknownKind: never = row.kind;
       throw new Error(`Unknown run kind ${String(unknownKind)}`);
@@ -69,9 +78,11 @@ export async function lockClaimableRuns(
       ref: runs.ref,
       prompt: runs.prompt,
       setupJob: repositorySetups.job,
+      taskJob: prePlanningTasks.job,
     })
     .from(runs)
     .leftJoin(repositorySetups, eq(repositorySetups.runId, runs.id))
+    .leftJoin(prePlanningTasks, eq(prePlanningTasks.runId, runs.id))
     .where(
       and(eq(runs.runnerId, runnerId), eq(runs.status, 'queued'), eq(runs.cancelRequested, false)),
     )

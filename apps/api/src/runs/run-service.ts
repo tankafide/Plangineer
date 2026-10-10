@@ -10,7 +10,7 @@ import { toPage } from '../lib/page.ts';
 import { fail, ok, type Result } from '../lib/result.ts';
 import type { ServiceDeps } from '../lib/service-deps.ts';
 import { lockRunnerForUser, wakeRunner } from '../runners/runner-repository.ts';
-import { advanceSetupOfRun } from '../setup/setup-advance.ts';
+import { onRunEnded } from './run-ended.ts';
 import { appendRunEvents, type RunEventItem } from './run-events-repository.ts';
 import { findRunForUser, insertRun, listRunsForUser, lockRunForUser } from './run-repository.ts';
 
@@ -84,6 +84,6 @@ export async function cancelRun(
     return ok({ ended, run: await readRun(tx, deps, userId, runId) });
   });
   if (!cancelled.ok) return cancelled;
-  if (cancelled.value.ended) await advanceSetupOfRun(deps, runId);
+  if (cancelled.value.ended) await onRunEnded(deps, runId);
   return ok(cancelled.value.run);
 }

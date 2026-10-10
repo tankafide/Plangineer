@@ -39,6 +39,7 @@ function listOf(repository: RepositoryDetail) {
         owner: repository.owner,
         name: repository.name,
         description: repository.description,
+        defaultRunMode: repository.defaultRunMode,
         setupStatus: repository.setup?.status ?? null,
       },
     ],

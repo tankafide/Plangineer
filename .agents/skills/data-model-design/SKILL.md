@@ -31,7 +31,8 @@ What each record owns and how it changes. A plan that adds a record not listed h
 | Runner | Belongs to one user. Stores a hashed pairing token and never the token, unique on the hash. Revoking sets a status and keeps the row, because runs point at it |
 | GitHub App | One row, enforced by a unique `singleton` column with `check (singleton)`. Belongs to nothing and is never deleted by the app. Its client secret and private key are stored encrypted |
 | Runner login request | Belongs to no user until a member approves it, then to the approver, and cascades with them. Its secrets are stored only as hashes. It completes once, and it is deleted an hour after it expires |
-| Feature | The root of a change. Context files, pre-planning tasks, plan revisions, threads and runs belong to it. Its state is an enumerated column |
+| Feature | The root of a change. Context files, pre-planning tasks, plan revisions, threads and runs belong to it. Its state is an enumerated column. Its repositories are rows of a join table, one per repository |
+| Feature attachment | Belongs to a feature and cascades with it. Immutable. Holds the bytes as `bytea` with the name, media type and size |
 | Pre-planning task | Belongs to a feature and cascades with it. Records the commit it ran against. Produces one context file |
 | Context file | Belongs to a feature and cascades with it. Plan revisions record which context files they were built from in a join table |
 | Plan revision | Immutable. Never updated: each edit inserts a row with the next `revision_number`, unique per plan. JSONB `body` plus columns for whatever is filtered or joined, such as the amendment level and the base commit per repository. One row is marked approved, enforced by a partial unique index |

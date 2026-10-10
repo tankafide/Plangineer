@@ -4,8 +4,8 @@ import { toPage } from '../lib/page.ts';
 import { fail, ok, type Result } from '../lib/result.ts';
 import type { ServiceDeps } from '../lib/service-deps.ts';
 import { appendRunEvents } from '../runs/run-events-repository.ts';
+import { onRunEnded } from '../runs/run-ended.ts';
 import { lockOpenRunsOfRunner } from '../runs/run-repository.ts';
-import { advanceSetupOfRun } from '../setup/setup-advance.ts';
 import { hashSecret } from './pairing.ts';
 import {
   findActiveRunnerByTokenHash,
@@ -53,7 +53,7 @@ export async function revokeRunner(
     return ok({ runner, cancelledRunIds });
   });
   if (!revoked.ok) return revoked;
-  for (const runId of revoked.value.cancelledRunIds) await advanceSetupOfRun(deps, runId);
+  for (const runId of revoked.value.cancelledRunIds) await onRunEnded(deps, runId);
   return ok(revoked.value.runner);
 }
 

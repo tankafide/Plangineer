@@ -14,6 +14,7 @@ import { readCredentials, type RunnerCredentials } from './config/runner-credent
 import type { RunnerEnv } from './config/runner-env.ts';
 import { createRunnerLogger, type Logger } from './config/runner-logger.ts';
 import { runnerPaths } from './config/runner-paths.ts';
+import { createAttachments } from './connection/attachments.ts';
 import { connectControlPlane, type SocketFatal } from './connection/control-plane-socket.ts';
 import { createEventBuffer, type EventBuffer } from './jobs/event-buffer.ts';
 import { createJobQueue } from './jobs/job-queue.ts';
@@ -57,6 +58,7 @@ export async function startRunner(options: RunnerOptions): Promise<Runner> {
     paths: runnerPaths(env.PLANGINEER_RUNNER_DATA_DIR),
     gitBaseUrl: env.PLANGINEER_GIT_BASE_URL,
   });
+  const attachments = createAttachments(credentials);
   let isWelcomed = false;
   let isEnding = false;
   let heartbeatTimer: NodeJS.Timeout | undefined;
@@ -120,6 +122,7 @@ export async function startRunner(options: RunnerOptions): Promise<Runner> {
         job,
         adapter,
         worktrees,
+        attachments,
         timeoutMs: env.PLANGINEER_RUN_TIMEOUT_MS,
         emit: (event) => emit(run, event),
         onPlanLimit: (resetsAt) => queue.pause(resetsAt),

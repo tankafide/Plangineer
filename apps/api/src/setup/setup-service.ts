@@ -90,7 +90,11 @@ export async function scanRepository(
     if ((await lockRepository(tx, repositoryId)) === undefined) return fail('NOT_FOUND');
     const next = nextSetupStatus(await findSetupStatus(tx, repositoryId), 'scanned');
     if (!next.ok) return fail('CONFLICT');
-    await updateRepository(tx, repositoryId, { owner: repository.owner, name: repository.name });
+    await updateRepository(tx, repositoryId, {
+      owner: repository.owner,
+      name: repository.name,
+      defaultBranch: scan.defaultBranch,
+    });
     await saveScan(tx, repositoryId, scan, next.status);
     return ok(undefined);
   });

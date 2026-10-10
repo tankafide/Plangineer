@@ -1,12 +1,16 @@
 import { leaseLostOutcome } from '@plangineer/domain';
 import type { ServiceDeps } from '../lib/service-deps.ts';
+import { advanceFeature } from '../features/feature-advance.ts';
+import { findPrePlanningFeatures } from '../features/feature-repository.ts';
 import { wakeRunner } from '../runners/runner-repository.ts';
-import { advanceSetupOfRun } from '../setup/setup-advance.ts';
 import { listLapsedRunIds, lockLapsedRun } from './run-dispatch-repository.ts';
+import { onRunEnded } from './run-ended.ts';
 import { appendRunEvents, type RunEventItem } from './run-events-repository.ts';
 
 /** The most lapsed leases one sweep handles. The next tick takes the rest. */
 const SWEEP_BATCH = 100;
+/** The most features left in pre_planning one sweep re-advances. */
+const REPAIR_BATCH = 50;
 
 function leaseLostMessage(status: 'leased' | 'running', attempt: number): string {
   return status === 'running'
@@ -17,7 +21,8 @@ function leaseLostMessage(status: 'leased' | 'running', attempt: number): string
 /**
  * Handles every run whose lease lapsed, each in its own transaction: records the lost lease,
  * then requeues, fails or cancels the run as leaseLostOutcome decides. A requeued run wakes
- * its runner. Returns how many runs it handled.
+ * its runner. Then it re-advances features left in pre_planning, in case a run-end advance
+ * failed. Returns how many runs it handled.
  */
 export async function sweepLapsedLeases(deps: ServiceDeps): Promise<number> {
   const { db, env, logger } = deps;
@@ -52,7 +57,10 @@ export async function sweepLapsedLeases(deps: ServiceDeps): Promise<number> {
     });
     if (swept === undefined) continue;
     handled += 1;
-    if (swept.ended) await advanceSetupOfRun(deps, runId);
+    if (swept.ended) await onRunEnded(deps, runId);
+  }
+  for (const featureId of await findPrePlanningFeatures(db, REPAIR_BATCH)) {
+    await advanceFeature(deps, featureId);
   }
   return handled;
 }

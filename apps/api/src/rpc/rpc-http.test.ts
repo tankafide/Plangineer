@@ -1,4 +1,3 @@
-import { DEFAULT_WORKFLOW_SETTINGS } from '@plangineer/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { fakeRepository } from '../test/fake-github-state.ts';
 import { type FakeGithub, startFakeGithub } from '../test/fake-github.ts';
@@ -65,15 +64,7 @@ describe('RPC over HTTP', () => {
         },
       },
     ],
-    [
-      'a fixed round count of 6',
-      {
-        workflowSettings: {
-          ...DEFAULT_WORKFLOW_SETTINGS,
-          planReview: { findings: 'ask', rounds: { mode: 'fixed', count: 6 } },
-        },
-      },
-    ],
+    ['an unknown run mode', { defaultRunMode: 'autopilot' }],
   ])('refuses an update with %s', async (_name, change) => {
     const repositoryId = await storeRepository(database.db, {
       createdBy: adminId,

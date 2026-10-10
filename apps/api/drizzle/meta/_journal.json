@@ -36,6 +36,20 @@
       "when": 1791552348520,
       "tag": "0004_foamy_shadowcat",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791611719955,
+      "tag": "0005_organic_morlocks",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791611725846,
+      "tag": "0006_tranquil_sersi",
+      "breakpoints": true
     }
   ]
 }

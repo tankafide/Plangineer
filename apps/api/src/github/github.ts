@@ -22,6 +22,8 @@ export interface GithubRepository {
   name: string;
 }
 
+export type GithubInstallableRepository = InstallableRepository & { defaultBranch: string };
+
 export interface RepositoryInfo {
   repositoryId: number;
   owner: string;
@@ -163,7 +165,7 @@ export function createGithub({ appStore, logger }: { appStore: GithubAppStore; l
     /** Every repository each installation of the App reaches. */
     listInstallableRepositories: () =>
       call(async () => {
-        const repositories: InstallableRepository[] = [];
+        const repositories: GithubInstallableRepository[] = [];
         const app = await currentApp();
         for await (const { installation, octokit } of app.eachInstallation.iterator()) {
           const items = await octokit.paginate('GET /installation/repositories', {
@@ -176,6 +178,7 @@ export function createGithub({ appStore, logger }: { appStore: GithubAppStore; l
               owner: item.owner.login,
               name: item.name,
               private: item.private,
+              defaultBranch: item.default_branch,
             });
           }
         }

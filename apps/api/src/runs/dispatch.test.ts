@@ -1,7 +1,9 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { runners, runs } from '../db/schema.ts';
+import { storeFeature, storeTask, testPrePlanningJob } from '../test/features.ts';
 import { storeRunner, storeUser, testAuth, testDeps } from '../test/fixtures.ts';
+import { storeRepository } from '../test/setup-fixtures.ts';
 import { queueRun, runRow, storedEvents } from '../test/runs.ts';
 import { createTestDatabase, type TestDatabase } from '../test/test-database.ts';
 import { claimRuns } from './dispatch.ts';
@@ -60,6 +62,24 @@ describe('claimRuns', () => {
       },
     });
     expect((await runRow(database.db, runId)).leaseExpiresAt).not.toBeNull();
+  });
+
+  it('leases a queued pre_planning run with the job stored on its task', async () => {
+    const runnerId = await storeRunner(database.db, { userId });
+    const repositoryId = await storeRepository(database.db, { createdBy: userId });
+    const featureId = await storeFeature(database.db, { authorId: userId, repositoryId });
+    const { runId } = await storeTask(deps(), {
+      featureId,
+      repositoryId,
+      userId,
+      runnerId,
+      kind: 'research',
+    });
+
+    const [claimed] = await claimRuns(deps(), runnerId);
+
+    expect(claimed).toEqual({ runId, attempt: 1, job: testPrePlanningJob({ task: 'research' }) });
+    expect((await runRow(database.db, runId)).status).toBe('leased');
   });
 
   it.each([

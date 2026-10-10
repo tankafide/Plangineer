@@ -2,7 +2,7 @@ import { ORPCError } from '@orpc/client';
 import { InvalidSelectionData } from '@plangineer/contracts';
 
 /** A code the contract defines on a procedure, such as NOT_FOUND on run.get. */
-type ApiErrorCode = 'NOT_FOUND' | 'CONFLICT' | 'TOO_MANY_REQUESTS';
+type ApiErrorCode = 'NOT_FOUND' | 'CONFLICT' | 'TOO_MANY_REQUESTS' | 'RUNNER_REQUIRED';
 
 /** Whether a hook's error is the contract-defined error with this code. */
 export function isApiError(error: unknown, code: ApiErrorCode): boolean {

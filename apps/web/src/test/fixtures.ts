@@ -1,5 +1,4 @@
 import {
-  DEFAULT_WORKFLOW_SETTINGS,
   type InstallableRepository,
   type RepositoryDetail,
   type RepositoryScan,
@@ -12,6 +11,7 @@ import {
 } from '@plangineer/contracts';
 import { delay, http, HttpResponse } from 'msw';
 import { AUTH_URL, RPC_URL, rpcBody, server } from './app-harness.tsx';
+import { rpcInput } from './rpc-input.ts';
 
 export const RUNNER_ID = '0199c1a2-7b3c-7d4e-8f90-a1b2c3d4e5f6';
 export const RUN_ID = '0199c1a3-1111-7d4e-8f90-a1b2c3d4e5f6';
@@ -135,7 +135,7 @@ export function repositoryFixture(overrides: Partial<RepositoryDetail> = {}): Re
       implementation_review: ROLE_SETTING,
       verification: ROLE_SETTING,
     },
-    workflowSettings: DEFAULT_WORKFLOW_SETTINGS,
+    defaultRunMode: 'manual',
     setup: null,
     createdAt: '2026-10-08T08:00:00.000Z',
     ...overrides,
@@ -165,6 +165,7 @@ export function repositorySummaryFixture(
     owner: 'acme',
     name: 'web-app',
     description: 'The customer web app.',
+    defaultRunMode: 'manual',
     setupStatus: null,
     ...overrides,
   };
@@ -247,8 +248,7 @@ export function answerProcedure(
   const inputs: unknown[] = [];
   server.use(
     http.post(`${RPC_URL}/${path}`, async ({ request }) => {
-      const body: unknown = await request.json();
-      inputs.push(typeof body === 'object' && body !== null && 'json' in body ? body.json : null);
+      inputs.push(await rpcInput(request));
       const respond = responses[Math.min(inputs.length - 1, responses.length - 1)];
       if (respond === undefined) throw new Error(`answerProcedure needs a response for ${path}`);
       return respond();

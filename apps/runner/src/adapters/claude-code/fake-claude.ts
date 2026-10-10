@@ -49,6 +49,15 @@ async function crash(): Promise<number> {
   return 2;
 }
 
+/** The success fixture with an empty answer in its result line. */
+function blankAnswer(): string[] {
+  return fixture('success-tools.jsonl').map((line) => {
+    const value: unknown = JSON.parse(line);
+    if (typeof value !== 'object' || value === null || !('type' in value)) return line;
+    return value.type === 'result' ? JSON.stringify({ ...value, result: '' }) : line;
+  });
+}
+
 /** Writes the init line and the pids of itself and a grandchild, then waits to be stopped. */
 async function hang(): Promise<null> {
   const grandchild = spawn(process.execPath, ['-e', 'setInterval(() => {}, 60000)'], {
@@ -114,6 +123,7 @@ const scenarios: Record<string, () => Promise<number | null>> = {
   garbage: () => exitAfter([...fixture('success-tools.jsonl').slice(0, 1), 'not json'], 0),
   crlf: () => exitAfter(fixture('success-tools.jsonl'), 0, { ending: '\r\n' }),
   hang,
+  blank: () => exitAfter(blankAnswer(), 0),
   slow: () => exitAfter(fixture('success-tools.jsonl'), 0, { gapMs: SLOW_LINE_GAP_MS }),
   'setup-skills': () =>
     setup(async () => {

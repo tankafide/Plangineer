@@ -23,7 +23,7 @@ Pin these majors. Versions checked against npm on 6 October 2026.
 | Database | Postgres 18, Drizzle ORM 0.45.x at 0.45.2 or later (earlier releases have CVE-2026-39356) and Drizzle Kit (not the v1 release candidate) |
 | Auth | Better Auth 1.x with the Drizzle adapter and GitHub sign-in. No organization or SSO plugin |
 | GitHub | One GitHub App per deployment, `octokit` 5 |
-| Storage | Any S3-compatible store through the AWS S3 SDK; MinIO locally |
+| Storage | Feature attachments live in Postgres as `bytea`. An S3-compatible store through the AWS S3 SDK waits for a team server |
 | Logging | pino |
 | Lint and format | Oxlint with tsgolint (type-aware), Oxfmt. No ESLint or Prettier |
 | YAML | `yaml` 2, for skill frontmatter in the API scan and the runner lint |
@@ -53,7 +53,7 @@ Nothing imports from another `apps/*` package.
 | `pnpm setup:env` | Creates `.env` from `.env.example` with a fresh `BETTER_AUTH_SECRET` and `SETUP_TOKEN` |
 | `pnpm db:up` | Starts Postgres (Docker Compose) and waits for its healthcheck |
 | `pnpm db:migrate` | Applies pending migrations to the dev database |
-| `pnpm dev` | Starts Postgres, applies migrations, seeds, then runs the API and web. Once the API answers, it prints the Get started link, `http://localhost:5173/get-started#setup-token=<SETUP_TOKEN>`, where the dev GitHub App is created. MinIO joins it with the feature that needs it. For runs without a model, start `pnpm runner:fake` beside it |
+| `pnpm dev` | Starts Postgres, applies migrations, seeds, then runs the API and web. Once the API answers, it prints the Get started link, `http://localhost:5173/get-started#setup-token=<SETUP_TOKEN>`, where the dev GitHub App is created. For runs without a model, start `pnpm runner:fake` beside it |
 | `pnpm build` | Builds the API, web and runner bundles with `turbo run build`. Needs no `.env` |
 | `pnpm desktop:build` | Builds the bundles, fetches the Postgres binaries, fills `apps/desktop/stage/` and builds the installer for the current system |
 | `pnpm desktop:start` | Runs the desktop app from the checkout against `apps/desktop/stage/` |

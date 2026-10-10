@@ -1,5 +1,4 @@
 import {
-  DEFAULT_WORKFLOW_SETTINGS,
   type RepositoryScan,
   type RoleSetting,
   type RoleSettings,
@@ -75,7 +74,7 @@ export async function storeRepository(
       name: 'app',
       description: 'The web app',
       roleSettings: DEFAULT_ROLE_SETTINGS,
-      workflowSettings: DEFAULT_WORKFLOW_SETTINGS,
+      defaultBranch: 'main',
       ...overrides,
     })
     .returning({ id: repositories.id });

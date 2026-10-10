@@ -1,5 +1,4 @@
 import {
-  DEFAULT_WORKFLOW_SETTINGS,
   INSTALLABLE_REPOSITORIES_MAX,
   type InstallableRepository,
   type PageInput,
@@ -10,6 +9,7 @@ import {
   type RoleSetting,
   type RoleSettings,
 } from '@plangineer/contracts';
+import type { GithubInstallableRepository } from '../github/github.ts';
 import { githubFailed } from '../github/github-failed.ts';
 import { toPage } from '../lib/page.ts';
 import { fail, ok, type Result } from '../lib/result.ts';
@@ -19,6 +19,7 @@ import {
   deleteRepository,
   findAddedGithubIds,
   findRepositoryDetail,
+  hasFeatures,
   insertRepository,
   listRepositorySummaries,
   lockRepository,
@@ -83,13 +84,13 @@ export async function listInstallableRepositories({
   });
 }
 
-/** Adds a repository the App reaches, with every role on today's only option. */
+/** Adds a repository the App reaches, Manual, with every role on today's only option. */
 export async function addRepository(
   deps: ServiceDeps,
   userId: string,
   input: RepositoryAddInput,
 ): Promise<Result<RepositoryDetail, 'NOT_FOUND' | 'CONFLICT' | 'GITHUB_FAILED'>> {
-  let reachable: InstallableRepository[];
+  let reachable: GithubInstallableRepository[];
   try {
     reachable = await deps.github.listInstallableRepositories();
   } catch (error) {
@@ -107,7 +108,8 @@ export async function addRepository(
       name: found.name,
       description: input.description,
       roleSettings: DEFAULT_ROLE_SETTINGS,
-      workflowSettings: DEFAULT_WORKFLOW_SETTINGS,
+      defaultRunMode: 'manual',
+      defaultBranch: found.defaultBranch,
       createdBy: userId,
     }),
   );
@@ -138,7 +140,7 @@ export async function changeRepository(
   return ok(await readDetail(deps, repositoryId, userId));
 }
 
-/** Deletes a repository and its setup, unless its setup is generating. */
+/** Deletes a repository and its setup, unless its setup is generating or a feature involves it. */
 export async function removeRepository(
   { db }: ServiceDeps,
   repositoryId: string,
@@ -146,6 +148,7 @@ export async function removeRepository(
   return db.transaction(async (tx) => {
     if ((await lockRepository(tx, repositoryId)) === undefined) return fail('NOT_FOUND');
     if ((await findSetupStatus(tx, repositoryId)) === 'generating') return fail('CONFLICT');
+    if (await hasFeatures(tx, repositoryId)) return fail('CONFLICT');
     await deleteRepository(tx, repositoryId);
     return ok({ repositoryId });
   });

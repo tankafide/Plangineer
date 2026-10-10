@@ -5,6 +5,18 @@ import {
   createGithubAppManifest,
   getInstanceStatus,
 } from '../instance/instance-service.ts';
+import {
+  changeContextFile,
+  getContextFile,
+  removeContextFile,
+} from '../features/context-file-service.ts';
+import {
+  changeFeature,
+  createFeature,
+  getFeature,
+  listFeatures,
+  startFeaturePlanning,
+} from '../features/feature-service.ts';
 import type { Result } from '../lib/result.ts';
 import {
   addRepository,
@@ -73,6 +85,34 @@ export const router = os.router({
       email: user.email,
       role: UserRole.parse(user.role),
     })),
+  },
+  feature: {
+    create: authed.feature.create.handler(async ({ context, input, errors }) =>
+      unwrap(await createFeature(context, context.user.id, input), errors),
+    ),
+    list: authed.feature.list.handler(({ context, input }) =>
+      listFeatures(context, context.user.id, input),
+    ),
+    get: authed.feature.get.handler(async ({ context, input, errors }) =>
+      unwrap(await getFeature(context, context.user.id, input.featureId), errors),
+    ),
+    update: authed.feature.update.handler(async ({ context, input, errors }) =>
+      unwrap(await changeFeature(context, context.user.id, input), errors),
+    ),
+    startPlanning: authed.feature.startPlanning.handler(async ({ context, input, errors }) =>
+      unwrap(await startFeaturePlanning(context, context.user.id, input.featureId), errors),
+    ),
+  },
+  contextFile: {
+    get: authed.contextFile.get.handler(async ({ context, input, errors }) =>
+      unwrap(await getContextFile(context, context.user.id, input.contextFileId), errors),
+    ),
+    update: authed.contextFile.update.handler(async ({ context, input, errors }) =>
+      unwrap(await changeContextFile(context, context.user.id, input), errors),
+    ),
+    delete: authed.contextFile.delete.handler(async ({ context, input, errors }) =>
+      unwrap(await removeContextFile(context, context.user.id, input.contextFileId), errors),
+    ),
   },
   runner: {
     // startLogin and pollLogin are public: a runner has no token or session until it is paired.

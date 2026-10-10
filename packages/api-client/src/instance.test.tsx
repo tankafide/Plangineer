@@ -176,6 +176,7 @@ describe('useSetupRepositories', () => {
     owner: 'acme',
     name: 'web-app',
     description: 'The customer web app.',
+    defaultRunMode: 'manual',
     setupStatus: null,
   };
 

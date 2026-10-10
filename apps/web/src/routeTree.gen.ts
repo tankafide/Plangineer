@@ -13,12 +13,17 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as GetStartedRouteImport } from './routes/get-started'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppFeaturesRouteImport } from './routes/_app/features'
+import { Route as AppFeaturesIndexRouteImport } from './routes/_app/features/index'
+import { Route as AppFeaturesNewRouteImport } from './routes/_app/features/new'
 import { Route as AppRepositoriesIndexRouteImport } from './routes/_app/repositories/index'
 import { Route as AppRepositoriesRepositoryIdRouteImport } from './routes/_app/repositories/$repositoryId'
 import { Route as AppRunnersIndexRouteImport } from './routes/_app/runners/index'
 import { Route as AppRunnersApproveRouteImport } from './routes/_app/runners/approve'
 import { Route as AppRunsIndexRouteImport } from './routes/_app/runs/index'
 import { Route as AppRunsRunIdRouteImport } from './routes/_app/runs/$runId'
+import { Route as AppFeaturesFeatureIdIndexRouteImport } from './routes/_app/features/$featureId/index'
+import { Route as AppFeaturesFeatureIdFilesContextFileIdRouteImport } from './routes/_app/features/$featureId/files/$contextFileId'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -38,6 +43,21 @@ const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AppRoute,
+} as any)
+const AppFeaturesRoute = AppFeaturesRouteImport.update({
+  id: '/features',
+  path: '/features',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppFeaturesIndexRoute = AppFeaturesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppFeaturesRoute,
+} as any)
+const AppFeaturesNewRoute = AppFeaturesNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => AppFeaturesRoute,
 } as any)
 const AppRepositoriesIndexRoute = AppRepositoriesIndexRouteImport.update({
   id: '/repositories/',
@@ -70,41 +90,67 @@ const AppRunsRunIdRoute = AppRunsRunIdRouteImport.update({
   path: '/runs/$runId',
   getParentRoute: () => AppRoute,
 } as any)
+const AppFeaturesFeatureIdIndexRoute =
+  AppFeaturesFeatureIdIndexRouteImport.update({
+    id: '/$featureId/',
+    path: '/$featureId/',
+    getParentRoute: () => AppFeaturesRoute,
+  } as any)
+const AppFeaturesFeatureIdFilesContextFileIdRoute =
+  AppFeaturesFeatureIdFilesContextFileIdRouteImport.update({
+    id: '/$featureId/files/$contextFileId',
+    path: '/$featureId/files/$contextFileId',
+    getParentRoute: () => AppFeaturesRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/get-started': typeof GetStartedRoute
   '/sign-in': typeof SignInRoute
+  '/features': typeof AppFeaturesRouteWithChildren
+  '/features/new': typeof AppFeaturesNewRoute
   '/repositories/$repositoryId': typeof AppRepositoriesRepositoryIdRoute
   '/runners/approve': typeof AppRunnersApproveRoute
   '/runs/$runId': typeof AppRunsRunIdRoute
+  '/features/': typeof AppFeaturesIndexRoute
   '/repositories/': typeof AppRepositoriesIndexRoute
   '/runners/': typeof AppRunnersIndexRoute
   '/runs/': typeof AppRunsIndexRoute
+  '/features/$featureId/': typeof AppFeaturesFeatureIdIndexRoute
+  '/features/$featureId/files/$contextFileId': typeof AppFeaturesFeatureIdFilesContextFileIdRoute
 }
 export interface FileRoutesByTo {
   '/get-started': typeof GetStartedRoute
   '/sign-in': typeof SignInRoute
   '/': typeof AppIndexRoute
+  '/features/new': typeof AppFeaturesNewRoute
   '/repositories/$repositoryId': typeof AppRepositoriesRepositoryIdRoute
   '/runners/approve': typeof AppRunnersApproveRoute
   '/runs/$runId': typeof AppRunsRunIdRoute
+  '/features': typeof AppFeaturesIndexRoute
   '/repositories': typeof AppRepositoriesIndexRoute
   '/runners': typeof AppRunnersIndexRoute
   '/runs': typeof AppRunsIndexRoute
+  '/features/$featureId': typeof AppFeaturesFeatureIdIndexRoute
+  '/features/$featureId/files/$contextFileId': typeof AppFeaturesFeatureIdFilesContextFileIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/get-started': typeof GetStartedRoute
   '/sign-in': typeof SignInRoute
+  '/_app/features': typeof AppFeaturesRouteWithChildren
   '/_app/': typeof AppIndexRoute
+  '/_app/features/new': typeof AppFeaturesNewRoute
   '/_app/repositories/$repositoryId': typeof AppRepositoriesRepositoryIdRoute
   '/_app/runners/approve': typeof AppRunnersApproveRoute
   '/_app/runs/$runId': typeof AppRunsRunIdRoute
+  '/_app/features/': typeof AppFeaturesIndexRoute
   '/_app/repositories/': typeof AppRepositoriesIndexRoute
   '/_app/runners/': typeof AppRunnersIndexRoute
   '/_app/runs/': typeof AppRunsIndexRoute
+  '/_app/features/$featureId/': typeof AppFeaturesFeatureIdIndexRoute
+  '/_app/features/$featureId/files/$contextFileId': typeof AppFeaturesFeatureIdFilesContextFileIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -112,35 +158,49 @@ export interface FileRouteTypes {
     | '/'
     | '/get-started'
     | '/sign-in'
+    | '/features'
+    | '/features/new'
     | '/repositories/$repositoryId'
     | '/runners/approve'
     | '/runs/$runId'
+    | '/features/'
     | '/repositories/'
     | '/runners/'
     | '/runs/'
+    | '/features/$featureId/'
+    | '/features/$featureId/files/$contextFileId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/get-started'
     | '/sign-in'
     | '/'
+    | '/features/new'
     | '/repositories/$repositoryId'
     | '/runners/approve'
     | '/runs/$runId'
+    | '/features'
     | '/repositories'
     | '/runners'
     | '/runs'
+    | '/features/$featureId'
+    | '/features/$featureId/files/$contextFileId'
   id:
     | '__root__'
     | '/_app'
     | '/get-started'
     | '/sign-in'
+    | '/_app/features'
     | '/_app/'
+    | '/_app/features/new'
     | '/_app/repositories/$repositoryId'
     | '/_app/runners/approve'
     | '/_app/runs/$runId'
+    | '/_app/features/'
     | '/_app/repositories/'
     | '/_app/runners/'
     | '/_app/runs/'
+    | '/_app/features/$featureId/'
+    | '/_app/features/$featureId/files/$contextFileId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -178,6 +238,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/_app/features': {
+      id: '/_app/features'
+      path: '/features'
+      fullPath: '/features'
+      preLoaderRoute: typeof AppFeaturesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/features/': {
+      id: '/_app/features/'
+      path: '/'
+      fullPath: '/features/'
+      preLoaderRoute: typeof AppFeaturesIndexRouteImport
+      parentRoute: typeof AppFeaturesRoute
+    }
+    '/_app/features/new': {
+      id: '/_app/features/new'
+      path: '/new'
+      fullPath: '/features/new'
+      preLoaderRoute: typeof AppFeaturesNewRouteImport
+      parentRoute: typeof AppFeaturesRoute
     }
     '/_app/repositories/': {
       id: '/_app/repositories/'
@@ -221,10 +302,44 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRunsRunIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/features/$featureId/': {
+      id: '/_app/features/$featureId/'
+      path: '/$featureId'
+      fullPath: '/features/$featureId/'
+      preLoaderRoute: typeof AppFeaturesFeatureIdIndexRouteImport
+      parentRoute: typeof AppFeaturesRoute
+    }
+    '/_app/features/$featureId/files/$contextFileId': {
+      id: '/_app/features/$featureId/files/$contextFileId'
+      path: '/$featureId/files/$contextFileId'
+      fullPath: '/features/$featureId/files/$contextFileId'
+      preLoaderRoute: typeof AppFeaturesFeatureIdFilesContextFileIdRouteImport
+      parentRoute: typeof AppFeaturesRoute
+    }
   }
 }
 
+interface AppFeaturesRouteChildren {
+  AppFeaturesNewRoute: typeof AppFeaturesNewRoute
+  AppFeaturesIndexRoute: typeof AppFeaturesIndexRoute
+  AppFeaturesFeatureIdIndexRoute: typeof AppFeaturesFeatureIdIndexRoute
+  AppFeaturesFeatureIdFilesContextFileIdRoute: typeof AppFeaturesFeatureIdFilesContextFileIdRoute
+}
+
+const AppFeaturesRouteChildren: AppFeaturesRouteChildren = {
+  AppFeaturesNewRoute: AppFeaturesNewRoute,
+  AppFeaturesIndexRoute: AppFeaturesIndexRoute,
+  AppFeaturesFeatureIdIndexRoute: AppFeaturesFeatureIdIndexRoute,
+  AppFeaturesFeatureIdFilesContextFileIdRoute:
+    AppFeaturesFeatureIdFilesContextFileIdRoute,
+}
+
+const AppFeaturesRouteWithChildren = AppFeaturesRoute._addFileChildren(
+  AppFeaturesRouteChildren,
+)
+
 interface AppRouteChildren {
+  AppFeaturesRoute: typeof AppFeaturesRouteWithChildren
   AppIndexRoute: typeof AppIndexRoute
   AppRepositoriesRepositoryIdRoute: typeof AppRepositoriesRepositoryIdRoute
   AppRunnersApproveRoute: typeof AppRunnersApproveRoute
@@ -235,6 +350,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppFeaturesRoute: AppFeaturesRouteWithChildren,
   AppIndexRoute: AppIndexRoute,
   AppRepositoriesRepositoryIdRoute: AppRepositoriesRepositoryIdRoute,
   AppRunnersApproveRoute: AppRunnersApproveRoute,

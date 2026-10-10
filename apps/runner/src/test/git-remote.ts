@@ -12,6 +12,11 @@ export interface GitRemote {
   baseUrl: string;
   /** Commits `files` on `branch`, from `main`, and pushes it, returning the commit. */
   commit(files: Record<string, string>, branch?: string): Promise<string>;
+  /**
+   * Commits a symbolic link at `file` pointing to `target` on `branch`, from `main`, and pushes
+   * it. The link goes into Git's index only, so no link is created on disk.
+   */
+  commitLink(file: string, target: string, branch: string): Promise<string>;
   /** The commit a branch points at in the bare repository, or null when it has none. */
   branchCommit(branch: string): Promise<string | null>;
   /** The files on a branch of the bare repository, with their text. */
@@ -47,6 +52,18 @@ export async function createGitRemote(repository: Repository): Promise<GitRemote
       }
       await git(work, ['add', '--all']);
       await git(work, [...IDENTITY, 'commit', '--quiet', '-m', 'Test commit']);
+      await git(work, ['push', '--quiet', 'origin', branch]);
+      const commit = await git(work, ['rev-parse', 'HEAD']);
+      await git(work, ['checkout', '--quiet', 'main']);
+      return commit;
+    },
+    async commitLink(file, target, branch) {
+      await git(work, ['checkout', '--quiet', '-B', branch]);
+      const blob = (
+        await execa('git', ['hash-object', '-w', '--stdin'], { cwd: work, input: target })
+      ).stdout.trim();
+      await git(work, ['update-index', '--add', '--cacheinfo', `120000,${blob},${file}`]);
+      await git(work, [...IDENTITY, 'commit', '--quiet', '-m', 'Test link']);
       await git(work, ['push', '--quiet', 'origin', branch]);
       const commit = await git(work, ['rev-parse', 'HEAD']);
       await git(work, ['checkout', '--quiet', 'main']);

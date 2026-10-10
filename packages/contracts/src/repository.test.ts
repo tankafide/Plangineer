@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
-  DEFAULT_WORKFLOW_SETTINGS,
   RepositoryAddInput,
   RepositoryDetail,
   RepositoryUpdateInput,
   RoleSetting,
-  WorkflowSettings,
 } from './repository.ts';
 
 const ID = '0199c1a2-7b3c-7d4e-8f90-a1b2c3d4e5f6';
@@ -34,7 +32,7 @@ function detail(overrides: Record<string, unknown> = {}) {
     name: 'app',
     description: 'The web app',
     roleSettings,
-    workflowSettings: DEFAULT_WORKFLOW_SETTINGS,
+    defaultRunMode: 'manual',
     setup: null,
     createdAt: AT,
     ...overrides,
@@ -60,31 +58,6 @@ describe('RoleSetting', () => {
   });
 });
 
-const settings = (implementationReview: unknown) => ({
-  ...DEFAULT_WORKFLOW_SETTINGS,
-  implementationReview,
-});
-
-describe('WorkflowSettings', () => {
-  it.each([
-    DEFAULT_WORKFLOW_SETTINGS,
-    settings({ findings: 'fix_all', rounds: { mode: 'fixed', count: 5 } }),
-    settings({ findings: 'ask', rounds: { mode: 'adaptive', max: 1 } }),
-  ])('accepts %o', (value) => {
-    expect(WorkflowSettings.safeParse(value).success).toBe(true);
-  });
-
-  it.each([
-    settings({ findings: 'ask', rounds: { mode: 'fixed', count: 6 } }),
-    settings({ findings: 'ask', rounds: { mode: 'adaptive', max: 0 } }),
-    settings({ findings: 'ask', rounds: { mode: 'ask', count: 2 } }),
-    settings({ findings: 'auto', rounds: { mode: 'ask' } }),
-    { ...DEFAULT_WORKFLOW_SETTINGS, planCheckIn: 'always' },
-  ])('rejects %o', (value) => {
-    expect(WorkflowSettings.safeParse(value).success).toBe(false);
-  });
-});
-
 describe('RepositoryAddInput', () => {
   it.each([
     { githubRepositoryId: 0, description: 'x' },
@@ -100,6 +73,18 @@ describe('RepositoryUpdateInput', () => {
     expect(RepositoryUpdateInput.safeParse({ repositoryId: ID, description: 'x' }).success).toBe(
       true,
     );
+  });
+
+  it('accepts a default run mode', () => {
+    expect(
+      RepositoryUpdateInput.safeParse({ repositoryId: ID, defaultRunMode: 'manual_plan' }).success,
+    ).toBe(true);
+  });
+
+  it('rejects an unknown run mode', () => {
+    expect(
+      RepositoryUpdateInput.safeParse({ repositoryId: ID, defaultRunMode: 'auto' }).success,
+    ).toBe(false);
   });
 
   it('rejects an update that changes nothing', () => {
@@ -132,5 +117,11 @@ describe('RepositoryDetail', () => {
 
   it('strips an unknown key', () => {
     expect(RepositoryDetail.parse(detail({ githubInstallationId: 9 }))).toEqual(detail());
+  });
+
+  it('carries the default run mode and no workflow settings', () => {
+    const parsed = RepositoryDetail.parse(detail({ workflowSettings: {} }));
+    expect(parsed.defaultRunMode).toBe('manual');
+    expect(parsed).not.toHaveProperty('workflowSettings');
   });
 });

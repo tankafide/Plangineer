@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { jsonByteLength } from './json-bytes.ts';
 import { SETUP_INPUTS_MAX, SETUP_JOB_MAX_BYTES } from './repository-setup.ts';
+import { TASK_INPUTS_MAX } from './feature.ts';
 import {
+  PrePlanningJob,
   RunJob,
+  runnerAttachmentPath,
   RunnerToServerMessage,
   SETUP_FILE_CONTENT_MAX,
   ServerToRunnerMessage,
@@ -205,5 +208,50 @@ describe('RunJob', () => {
     ['an unknown key', { permissionMode: 'plan' }],
   ])('rejects a setup job with %s', (_, overrides) => {
     expect(RunJob.safeParse(setupJob(overrides)).success).toBe(false);
+  });
+});
+
+const ATTACHMENT = {
+  id: RUN_ID,
+  name: 'screen.png',
+  mediaType: 'image/png',
+  sizeBytes: 12,
+};
+
+function prePlanningJob(overrides: Record<string, unknown> = {}) {
+  return {
+    kind: 'pre_planning',
+    task: 'intake',
+    repository: { owner: 'acme', name: 'app' },
+    ref: 'main',
+    prompt: 'Write the feature brief.',
+    inputs: '## Description',
+    attachments: [ATTACHMENT],
+    ...overrides,
+  };
+}
+
+describe('PrePlanningJob', () => {
+  it.each([
+    prePlanningJob(),
+    prePlanningJob({ task: 'exploration', attachments: [] }),
+    prePlanningJob({ task: 'research', attachments: [] }),
+  ])('accepts a $task job', (job) => {
+    expect(RunJob.parse(job)).toEqual(job);
+  });
+
+  it('rejects inputs over TASK_INPUTS_MAX', () => {
+    const inputs = 'x'.repeat(TASK_INPUTS_MAX + 1);
+    expect(PrePlanningJob.safeParse(prePlanningJob({ inputs })).success).toBe(false);
+  });
+
+  it.each(['research', 'exploration'])('rejects a %s job with an attachment', (task) => {
+    expect(PrePlanningJob.safeParse(prePlanningJob({ task })).success).toBe(false);
+  });
+});
+
+describe('runnerAttachmentPath', () => {
+  it('fills in the attachment id', () => {
+    expect(runnerAttachmentPath(RUN_ID)).toBe(`/api/runners/attachments/${RUN_ID}`);
   });
 });

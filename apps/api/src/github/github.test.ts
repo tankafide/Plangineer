@@ -46,13 +46,15 @@ describe('createGithub', () => {
     await database.drop();
   });
 
-  it('lists every repository of every installation, across pages', async () => {
+  it('lists every repository of every installation with its default branch, across pages', async () => {
     for (let index = 0; index < 120; index += 1) {
       fake.repositories.push(
         fakeRepository({ installationId: 1, id: 2000 + index, name: `repo-${index}` }),
       );
     }
-    fake.repositories.push(fakeRepository({ installationId: 2, id: 9000, owner: 'beta' }));
+    fake.repositories.push(
+      fakeRepository({ installationId: 2, id: 9000, owner: 'beta', defaultBranch: 'trunk' }),
+    );
 
     const repositories = await github.listInstallableRepositories();
 
@@ -63,6 +65,7 @@ describe('createGithub', () => {
       owner: 'beta',
       name: 'app',
       private: true,
+      defaultBranch: 'trunk',
     });
   });
 

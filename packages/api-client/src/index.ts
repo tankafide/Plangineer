@@ -1,5 +1,14 @@
 export { invalidSelectionData, isApiError } from './api-error.ts';
 export { ApiProvider } from './api-provider.tsx';
+export { useContextFile, useDeleteContextFile, useUpdateContextFile } from './context-files.ts';
+export {
+  startPlanningConflictReason,
+  useCreateFeature,
+  useFeature,
+  useFeatureList,
+  useStartPlanning,
+  useUpdateFeature,
+} from './features.ts';
 export {
   githubAppSetupFailure,
   useCompleteGithubApp,

@@ -2,6 +2,7 @@ import {
   type RepositoryScan,
   type RoleSetting,
   type RoleSettings,
+  type RunMode,
   type SetupSelection,
   type SetupStatus,
 } from '@plangineer/contracts';
@@ -13,6 +14,7 @@ export const SEED_AT = new Date('2026-10-08T09:00:00.000Z');
 export const SEED_RUNNER_ID = '0199c1a2-0000-7000-8000-000000000101';
 export const SEED_RUNNER_TOKEN_HASH = '0'.repeat(64);
 export const SEED_COMMIT = '5eed'.repeat(10);
+export const SEED_DEFAULT_BRANCH = 'main';
 
 const ROLE: RoleSetting = {
   agent: 'claude_code',
@@ -57,7 +59,7 @@ export function seedScan(unmovableContent: string[] = []): RepositoryScan {
   ];
   return {
     commit: SEED_COMMIT,
-    defaultBranch: 'main',
+    defaultBranch: SEED_DEFAULT_BRANCH,
     scannedAt: SEED_AT.toISOString(),
     skills,
     orchestratorReferences: [],
@@ -83,6 +85,7 @@ export interface SeedRepository {
   id: string;
   name: string;
   description: string;
+  defaultRunMode: RunMode;
   setup: SetupStatus | 'unmovable' | null;
 }
 
@@ -90,13 +93,50 @@ const repositoryId = (index: number) =>
   `0199c1a2-0000-7000-8000-${String(200 + index).padStart(12, '0')}`;
 
 const REPOSITORIES: Omit<SeedRepository, 'id'>[] = [
-  { name: 'web-app', description: 'The customer web app', setup: null },
-  { name: 'api-scanned', description: 'An API that is scanned', setup: 'scanned' },
-  { name: 'api-generating', description: 'An API whose setup is running', setup: 'generating' },
-  { name: 'api-pr-open', description: 'An API with an open setup pull request', setup: 'pr_open' },
-  { name: 'api-complete', description: 'An API whose setup merged', setup: 'complete' },
-  { name: 'api-failed', description: 'An API whose setup failed', setup: 'failed' },
-  { name: 'api-unmovable', description: 'An API with loose skill files', setup: 'unmovable' },
+  { name: 'web-app', description: 'The customer web app', defaultRunMode: 'manual', setup: null },
+  {
+    name: 'api-scanned',
+    description: 'An API that is scanned',
+    defaultRunMode: 'auto_loop',
+    setup: 'scanned',
+  },
+  {
+    name: 'api-generating',
+    description: 'An API whose setup is running',
+    defaultRunMode: 'manual',
+    setup: 'generating',
+  },
+  {
+    name: 'api-pr-open',
+    description: 'An API with an open setup pull request',
+    defaultRunMode: 'manual',
+    setup: 'pr_open',
+  },
+  {
+    name: 'api-complete',
+    description: 'An API whose setup merged',
+    defaultRunMode: 'manual_plan',
+    setup: 'complete',
+  },
+  {
+    name: 'api-failed',
+    description: 'An API whose setup failed',
+    defaultRunMode: 'manual',
+    setup: 'failed',
+  },
+  {
+    name: 'api-unmovable',
+    description: 'An API with loose skill files',
+    defaultRunMode: 'manual',
+    setup: 'unmovable',
+  },
+  // The repository the intake journey's local remote serves.
+  {
+    name: 'app',
+    description: 'The app the intake journey uses',
+    defaultRunMode: 'manual',
+    setup: null,
+  },
 ];
 
 export const SEED_REPOSITORIES: SeedRepository[] = REPOSITORIES.map((repository, index) => ({

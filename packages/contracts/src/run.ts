@@ -33,6 +33,8 @@ export const RunFailureReason = z.enum([
   'timeout',
   'setup_invalid_output',
   'setup_publish_failed',
+  'skill_missing',
+  'attachment_failed',
 ]);
 export type RunFailureReason = z.infer<typeof RunFailureReason>;
 
@@ -40,7 +42,7 @@ export const RunCancelReason = z.enum(['requested', 'runner_revoked']);
 export type RunCancelReason = z.infer<typeof RunCancelReason>;
 
 /** What a run does. The kind sets the job the runner gets and what its agent may change. */
-export const RunKind = z.enum(['test', 'setup']);
+export const RunKind = z.enum(['test', 'setup', 'pre_planning']);
 export type RunKind = z.infer<typeof RunKind>;
 
 const REPOSITORY_OWNER = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;

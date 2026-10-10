@@ -1,10 +1,11 @@
 import type { CliStatus, RunnerRunEventBody } from '@plangineer/contracts';
 
 /**
- * What the agent may do, which the job kind sets: a test job only reads, and a setup job may
- * also create and edit files under .agents/skills/, search the web and start subagents.
+ * What the agent may do, which the job sets: a test, intake or exploration job only reads, a
+ * research job also searches the web and fetches from GitHub, and a setup job may also create
+ * and edit files under .agents/skills/ and start subagents.
  */
-export type AgentAccess = 'read_only' | 'write_skills';
+export type AgentAccess = 'read_only' | 'research' | 'write_skills';
 
 /** What an adapter needs to run one job: the prompt, the worktree and the agent's access. */
 export interface AgentJob {

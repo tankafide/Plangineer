@@ -1,5 +1,5 @@
 import { CliStatus, type PageInput, Runner, type RunnerPlatform } from '@plangineer/contracts';
-import { and, desc, eq, lt, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, lt, sql, type SQL } from 'drizzle-orm';
 import type { Executor, Transaction } from '../db/client.ts';
 import { toIsoOrNull } from '../lib/dates.ts';
 import { runners } from '../db/schema.ts';
@@ -89,6 +89,26 @@ export async function findRunnerForUser(
     .from(runners)
     .where(and(eq(runners.id, runnerId), eq(runners.userId, userId)));
   return row === undefined ? undefined : toRunner(row);
+}
+
+/** The most a user's active runners list holds when a runner is picked for them. */
+const RUNNER_CANDIDATES_MAX = 100;
+
+/**
+ * The user's active runners, each with when it was last seen, to pick one for new work. They
+ * come most recently seen first, so the limit never drops the runner the pick wants.
+ */
+export async function listActiveRunnersForUser(
+  executor: Executor,
+  userId: string,
+): Promise<{ id: string; status: Runner['status']; lastSeenAt: string | null }[]> {
+  const rows = await executor
+    .select({ id: runners.id, status: runners.status, lastSeenAt: runners.lastSeenAt })
+    .from(runners)
+    .where(and(eq(runners.userId, userId), eq(runners.status, 'active')))
+    .orderBy(sql`${runners.lastSeenAt} DESC NULLS LAST`, asc(runners.id))
+    .limit(RUNNER_CANDIDATES_MAX);
+  return rows.map((row) => ({ ...row, lastSeenAt: toIsoOrNull(row.lastSeenAt) }));
 }
 
 /** Locks the user's runner row, so claims and revokes on it run one at a time. */

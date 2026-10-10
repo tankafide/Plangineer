@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { Stats } from 'node:fs';
 import { access, lstat, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { SKILLS_ROOT, SLOT_LINE_PATTERN, type SetupJob } from '@plangineer/contracts';
@@ -44,6 +45,19 @@ async function listFiles(dir: string, rel = ''): Promise<string[]> {
 
 const toPath = (root: string, rel: string) => path.join(root, ...rel.split('/'));
 
+/**
+ * What the checkout holds at a `/`-separated path, without following a link, or null when it
+ * holds nothing there.
+ */
+export async function checkoutEntry(worktree: string, rel: string): Promise<Stats | null> {
+  try {
+    return await lstat(toPath(worktree, rel));
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return null;
+    throw error;
+  }
+}
+
 /** Every path setup writes, deletes or creates folders through. None may be a link. */
 const WRITTEN_PATHS = [
   '.agents',
@@ -63,14 +77,9 @@ const WRITTEN_PATHS = [
  */
 export async function refuseLinkedPaths(worktree: string): Promise<void> {
   for (const rel of WRITTEN_PATHS) {
-    let isLink: boolean;
-    try {
-      isLink = (await lstat(toPath(worktree, rel))).isSymbolicLink();
-    } catch (error) {
-      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') continue;
-      throw error;
+    if ((await checkoutEntry(worktree, rel))?.isSymbolicLink() === true) {
+      throw new SetupOutputError(`${rel} is a link, so setup will not write through it`);
     }
-    if (isLink) throw new SetupOutputError(`${rel} is a link, so setup will not write through it`);
   }
   // Listing fails on any link inside the skill trees, such as a linked skill folder.
   await listFiles(path.join(worktree, SKILLS_ROOT));

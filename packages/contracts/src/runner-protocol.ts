@@ -1,5 +1,11 @@
 import { z } from 'zod';
 import {
+  ATTACHMENTS_MAX,
+  FeatureAttachment,
+  PrePlanningTaskKind,
+  TASK_INPUTS_MAX,
+} from './feature.ts';
+import {
   SETUP_INPUTS_MAX,
   SETUP_JOB_MAX_BYTES,
   SkillFilePath,
@@ -123,7 +129,27 @@ export const SetupJob = z
   );
 export type SetupJob = z.infer<typeof SetupJob>;
 
-export const RunJob = z.discriminatedUnion('kind', [TestJob, SetupJob]);
+/**
+ * One pre-planning task, rendered by the API when the feature is created. Only an intake job
+ * lists attachments, so the engineer's files never reach a run with web tools.
+ */
+export const PrePlanningJob = z
+  .strictObject({
+    kind: z.literal('pre_planning'),
+    task: PrePlanningTaskKind,
+    repository: Repository,
+    ref: GitRef,
+    prompt: Prompt,
+    inputs: z.string().min(1).max(TASK_INPUTS_MAX),
+    attachments: z.array(FeatureAttachment).max(ATTACHMENTS_MAX),
+  })
+  .refine(
+    (job) => job.task === 'intake' || job.attachments.length === 0,
+    'only an intake job may list attachments',
+  );
+export type PrePlanningJob = z.infer<typeof PrePlanningJob>;
+
+export const RunJob = z.discriminatedUnion('kind', [TestJob, SetupJob, PrePlanningJob]);
 export type RunJob = z.infer<typeof RunJob>;
 
 const RunAssign = z.strictObject({ type: z.literal('run.assign'), ...RunAttempt, job: RunJob });
@@ -147,3 +173,10 @@ export const ServerToRunnerMessage = z.discriminatedUnion('type', [
   RunHeartbeatReply,
 ]);
 export type ServerToRunnerMessage = z.infer<typeof ServerToRunnerMessage>;
+
+/** Where a runner downloads an attachment of the intake run it holds. */
+export const RUNNER_ATTACHMENT_PATH = '/api/runners/attachments/:attachmentId';
+
+export function runnerAttachmentPath(attachmentId: string): string {
+  return RUNNER_ATTACHMENT_PATH.replace(':attachmentId', encodeURIComponent(attachmentId));
+}

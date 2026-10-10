@@ -4,6 +4,8 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { stageDesktop } from './build-desktop.mjs';
 
+const TASK_PROMPTS = ['exploration-prompt.md', 'intake-prompt.md', 'research-prompt.md'];
+
 /** Writes one file at a POSIX-style path under root. */
 async function put(root, posixPath, text) {
   const file = path.join(root, ...posixPath.split('/'));
@@ -18,6 +20,9 @@ async function builtRepository(root) {
   await put(root, 'apps/api/dist/chunk-a.mjs', 'chunk');
   await put(root, 'apps/api/drizzle/0000_init.sql', 'sql');
   await put(root, 'apps/api/src/setup/templates/AGENTS.md', 'template');
+  for (const prompt of TASK_PROMPTS) {
+    await put(root, `apps/api/src/features/templates/${prompt}`, prompt);
+  }
   await put(root, '.env.example', 'API_PORT=3000\n');
   await put(root, 'apps/web/dist/index.html', '<html></html>');
   await put(root, 'apps/runner/dist/cli.mjs', 'runner');
@@ -49,6 +54,9 @@ describe('stageDesktop', () => {
     expect(await read(stage, 'server/dist/chunk-a.mjs')).toBe('chunk');
     expect(await read(stage, 'server/drizzle/0000_init.sql')).toBe('sql');
     expect(await read(stage, 'server/src/setup/templates/AGENTS.md')).toBe('template');
+    expect(
+      (await readdir(path.join(stage, 'server', 'src', 'features', 'templates'))).toSorted(),
+    ).toEqual(TASK_PROMPTS);
     expect(await read(stage, 'server/env.example')).toBe('API_PORT=3000\n');
     expect(await read(stage, 'web/index.html')).toBe('<html></html>');
     expect(await read(stage, 'runner/dist/cli.mjs')).toBe('runner');

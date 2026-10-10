@@ -1,3 +1,11 @@
+import { contextFileDelete, contextFileGet, contextFileUpdate } from './context-file.ts';
+import {
+  featureCreate,
+  featureGet,
+  featureList,
+  featureStartPlanning,
+  featureUpdate,
+} from './feature.ts';
 import {
   instanceCompleteGithubApp,
   instanceGetStatus,
@@ -26,6 +34,35 @@ import {
   runnerStartLogin,
 } from './runner.ts';
 
+export {
+  CONTEXT_FILE_CONTENT_MAX,
+  CONTEXT_FILE_TITLE_MAX,
+  ContextFile,
+  ContextFileSummary,
+  ContextFileUpdateInput,
+} from './context-file.ts';
+export {
+  ATTACHMENT_BYTES_MAX,
+  ATTACHMENT_NAME_MAX,
+  ATTACHMENTS_MAX,
+  ATTACHMENTS_TOTAL_BYTES_MAX,
+  AttachmentMediaType,
+  FEATURE_DESCRIPTION_MAX,
+  FeatureAttachment,
+  FeatureCreateInput,
+  FeatureDetail,
+  FeatureRepository,
+  FeatureState,
+  FeatureSummary,
+  FeatureUpdateInput,
+  PrePlanningTask,
+  PrePlanningTaskKind,
+  RESEARCH_TOPICS_MAX,
+  ResearchTopic,
+  StartPlanningConflictData,
+  TASK_INPUTS_MAX,
+  TicketUrl,
+} from './feature.ts';
 export { GITHUB_FAILED_MESSAGE_MAX } from './github-failed.ts';
 export {
   GithubAppState,
@@ -39,7 +76,6 @@ export { MeGetOutput, UserRole } from './me.ts';
 export { PageInput } from './pagination.ts';
 export {
   AgentRole,
-  DEFAULT_WORKFLOW_SETTINGS,
   GithubRepositoryId,
   INSTALLABLE_REPOSITORIES_MAX,
   InstallableRepository,
@@ -49,12 +85,9 @@ export {
   RepositoryListInstallableOutput,
   RepositorySummary,
   RepositoryUpdateInput,
-  ReviewRounds,
-  ReviewSettings,
   RoleSetting,
   RoleSettings,
   SetupStartInput,
-  WorkflowSettings,
 } from './repository.ts';
 export {
   CatalogKind,
@@ -80,6 +113,7 @@ export {
   SLOT_LINE_PATTERN,
   UNMOVABLE_CONTENT_MAX,
 } from './repository-setup.ts';
+export { Decisions, ReviewRounds, ReviewSettings, RunMode, WorkflowSettings } from './run-mode.ts';
 export {
   CommitSha,
   GitRef,
@@ -132,6 +166,9 @@ export {
   MAX_EVENTS_MESSAGE_BYTES,
   MAX_EVENTS_PER_MESSAGE,
   MAX_SOCKET_MESSAGE_BYTES,
+  PrePlanningJob,
+  RUNNER_ATTACHMENT_PATH,
+  runnerAttachmentPath,
   RunJob,
   RunnerSocketClose,
   RunnerToServerMessage,
@@ -150,6 +187,14 @@ export const contract = {
     completeGithubApp: instanceCompleteGithubApp,
   },
   me: { get: meGet },
+  feature: {
+    create: featureCreate,
+    list: featureList,
+    get: featureGet,
+    update: featureUpdate,
+    startPlanning: featureStartPlanning,
+  },
+  contextFile: { get: contextFileGet, update: contextFileUpdate, delete: contextFileDelete },
   runner: {
     startLogin: runnerStartLogin,
     pollLogin: runnerPollLogin,

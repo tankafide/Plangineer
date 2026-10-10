@@ -1,28 +1,7 @@
-import { AgentRole, type RepositoryDetail, type ReviewRounds } from '@plangineer/contracts';
+import { AgentRole, type RepositoryDetail } from '@plangineer/contracts';
 import type { ReactNode } from 'react';
-import {
-  FINDINGS_LABELS,
-  PLAN_CHECK_IN_LABELS,
-  REVIEWS,
-  ROLE_LABELS,
-  ROLE_RUNTIME,
-  ROUNDS_LABELS,
-} from './settings-labels';
-
-function roundsText(rounds: ReviewRounds): string {
-  switch (rounds.mode) {
-    case 'ask':
-      return ROUNDS_LABELS.ask;
-    case 'fixed':
-      return `${ROUNDS_LABELS.fixed}, ${rounds.count}`;
-    case 'adaptive':
-      return `${ROUNDS_LABELS.adaptive}, up to ${rounds.max}`;
-    default: {
-      const unknownRounds: never = rounds;
-      throw new Error(`Unknown rounds ${JSON.stringify(unknownRounds)}`);
-    }
-  }
-}
+import { RUN_MODE_HINTS, RUN_MODE_LABELS } from '@/lib/run-modes';
+import { ROLE_LABELS, ROLE_RUNTIME } from './settings-labels';
 
 function Fact({ term, children }: { term: string; children: ReactNode }) {
   return (
@@ -35,7 +14,7 @@ function Fact({ term, children }: { term: string; children: ReactNode }) {
 
 /** The repository's settings as text, for members, who cannot change them. */
 export function RepositorySettingsView({ repository }: { repository: RepositoryDetail }) {
-  const { roleSettings, workflowSettings } = repository;
+  const { roleSettings, defaultRunMode } = repository;
   return (
     <dl className="flex flex-col gap-3">
       <Fact term="Description">{repository.description}</Fact>
@@ -47,12 +26,12 @@ export function RepositorySettingsView({ repository }: { repository: RepositoryD
           </span>
         </Fact>
       ))}
-      <Fact term="Plan check-in">{PLAN_CHECK_IN_LABELS[workflowSettings.planCheckIn]}</Fact>
-      {REVIEWS.map(({ key, title }) => (
-        <Fact key={key} term={title}>
-          {`Findings: ${FINDINGS_LABELS[workflowSettings[key].findings]}. Rounds: ${roundsText(workflowSettings[key].rounds)}.`}
-        </Fact>
-      ))}
+      <Fact term="Default run mode">
+        <span className="flex flex-col">
+          <span>{RUN_MODE_LABELS[defaultRunMode]}</span>
+          <span className="text-muted-foreground">{RUN_MODE_HINTS[defaultRunMode]}</span>
+        </span>
+      </Fact>
     </dl>
   );
 }

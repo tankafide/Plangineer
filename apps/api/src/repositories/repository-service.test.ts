@@ -1,12 +1,12 @@
 import { call } from '@orpc/server';
-import { DEFAULT_WORKFLOW_SETTINGS } from '@plangineer/contracts';
 import { count, eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { repositories, repositorySetups } from '../db/schema.ts';
+import { features, repositories, repositorySetups } from '../db/schema.ts';
 import type { InitialContext } from '../rpc/context.ts';
 import { router } from '../rpc/router.ts';
 import { fakeRepository } from '../test/fake-github-state.ts';
 import { type FakeGithub, startFakeGithub } from '../test/fake-github.ts';
+import { storeFeature } from '../test/features.ts';
 import { storeUser, testAuth, testDeps } from '../test/fixtures.ts';
 import {
   DEFAULT_ROLE_SETTINGS,
@@ -39,6 +39,7 @@ describe('repository procedures', () => {
   });
 
   beforeEach(async () => {
+    await database.db.delete(features);
     await database.db.delete(repositories);
   });
 
@@ -54,9 +55,15 @@ describe('repository procedures', () => {
   const repositoryCount = async () =>
     (await database.db.select({ n: count() }).from(repositories))[0]?.n;
 
-  it('adds an installable repository, which lists with the default role settings', async () => {
+  it('adds an installable repository as Manual on its default branch, with the default role settings', async () => {
     fake.repositories.push(
-      fakeRepository({ id: 77, installationId: 5, owner: 'acme', name: 'web' }),
+      fakeRepository({
+        id: 77,
+        installationId: 5,
+        owner: 'acme',
+        name: 'web',
+        defaultBranch: 'trunk',
+      }),
     );
 
     const added = await call(
@@ -77,17 +84,28 @@ describe('repository procedures', () => {
       name: 'web',
       description: 'The web app',
       roleSettings: DEFAULT_ROLE_SETTINGS,
-      workflowSettings: DEFAULT_WORKFLOW_SETTINGS,
+      defaultRunMode: 'manual',
       setup: null,
     });
+    expect(added).not.toHaveProperty('workflowSettings');
     expect(listed.items).toEqual([
-      { id: added.id, owner: 'acme', name: 'web', description: 'The web app', setupStatus: null },
+      {
+        id: added.id,
+        owner: 'acme',
+        name: 'web',
+        description: 'The web app',
+        defaultRunMode: 'manual',
+        setupStatus: null,
+      },
     ]);
     expect(fetched).toEqual(added);
     const [row] = await database.db
-      .select({ installationId: repositories.githubInstallationId })
+      .select({
+        installationId: repositories.githubInstallationId,
+        defaultBranch: repositories.defaultBranch,
+      })
       .from(repositories);
-    expect(row?.installationId).toBe(5);
+    expect(row).toEqual({ installationId: 5, defaultBranch: 'trunk' });
   });
 
   const add = (githubRepositoryId: number) =>
@@ -143,17 +161,10 @@ describe('repository procedures', () => {
     expect(installable.truncated).toBe(true);
   });
 
-  it('updates the description, one role model and the workflow settings', async () => {
+  it('updates the description, one role model and the default run mode, which the list shows', async () => {
     const repositoryId = await storeRepository(database.db, {
       createdBy: admin.session?.user.id ?? '',
     });
-    const workflowSettings = {
-      ...DEFAULT_WORKFLOW_SETTINGS,
-      implementationReview: {
-        findings: 'fix_all' as const,
-        rounds: { mode: 'fixed' as const, count: 2 },
-      },
-    };
     const roleSettings = {
       ...DEFAULT_ROLE_SETTINGS,
       planning: { ...DEFAULT_ROLE_SETTINGS.planning, model: 'claude-opus-5-5' },
@@ -161,17 +172,25 @@ describe('repository procedures', () => {
 
     const updated = await call(
       router.repository.update,
-      { repositoryId, description: 'New words', roleSettings, workflowSettings },
+      { repositoryId, description: 'New words', roleSettings, defaultRunMode: 'auto_loop' },
       { context: admin },
     );
+    const listed = await call(router.repository.list, {}, { context: member });
 
-    expect(updated).toMatchObject({ description: 'New words', roleSettings, workflowSettings });
+    expect(updated).toMatchObject({
+      description: 'New words',
+      roleSettings,
+      defaultRunMode: 'auto_loop',
+    });
+    expect(listed.items).toEqual([expect.objectContaining({ defaultRunMode: 'auto_loop' })]);
   });
 
-  it('removes a repository and its setup, and refuses while the setup is generating', async () => {
+  it('removes a repository and its setup, and refuses while the setup is generating or a feature involves it', async () => {
     const createdBy = admin.session?.user.id ?? '';
     const idle = await storeRepository(database.db, { createdBy, githubRepositoryId: 1 });
     const busy = await storeRepository(database.db, { createdBy, githubRepositoryId: 2 });
+    const involved = await storeRepository(database.db, { createdBy, githubRepositoryId: 3 });
+    await storeFeature(database.db, { authorId: createdBy, repositoryId: involved });
     await database.db.insert(repositorySetups).values([
       { repositoryId: idle, status: 'scanned', scan: testScan() },
       {
@@ -187,11 +206,12 @@ describe('repository procedures', () => {
 
     await expect(remove(idle)).resolves.toEqual({ repositoryId: idle });
     await expect(remove(busy)).rejects.toMatchObject({ code: 'CONFLICT' });
+    await expect(remove(involved)).rejects.toMatchObject({ code: 'CONFLICT', status: 409 });
     const setups = await database.db
       .select({ repositoryId: repositorySetups.repositoryId })
       .from(repositorySetups);
     expect(setups).toEqual([{ repositoryId: busy }]);
-    expect(await repositoryCount()).toBe(1);
+    expect(await repositoryCount()).toBe(2);
   });
 
   it.each(['listInstallable', 'add'] as const)(
@@ -238,7 +258,7 @@ describe('repository procedures', () => {
     expect(fake.tokenRequests).toEqual([]);
   });
 
-  it('refuses a member removing a repository with FORBIDDEN and keeps it', async () => {
+  it('refuses a member removing a repository or changing its run mode with FORBIDDEN, and keeps it', async () => {
     const repositoryId = await storeRepository(database.db, {
       createdBy: admin.session?.user.id ?? '',
     });
@@ -246,7 +266,17 @@ describe('repository procedures', () => {
     await expect(
       call(router.repository.remove, { repositoryId }, { context: member }),
     ).rejects.toMatchObject({ code: 'FORBIDDEN', status: 403 });
-    expect(await repositoryCount()).toBe(1);
+    await expect(
+      call(
+        router.repository.update,
+        { repositoryId, defaultRunMode: 'auto_loop' },
+        { context: member },
+      ),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN', status: 403 });
+    const rows = await database.db
+      .select({ defaultRunMode: repositories.defaultRunMode })
+      .from(repositories);
+    expect(rows).toEqual([{ defaultRunMode: 'manual' }]);
   });
 
   it('lets a member read a repository', async () => {

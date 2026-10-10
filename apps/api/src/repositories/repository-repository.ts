@@ -4,12 +4,12 @@ import {
   RepositoryScan,
   RepositorySummary,
   RoleSettings,
+  type RunMode,
   SetupSelection,
-  WorkflowSettings,
 } from '@plangineer/contracts';
 import { desc, eq, inArray, lt } from 'drizzle-orm';
 import type { Executor, Transaction } from '../db/client.ts';
-import { repositories, repositorySetups, runs } from '../db/schema.ts';
+import { featureRepositories, repositories, repositorySetups, runs } from '../db/schema.ts';
 
 export interface NewRepository {
   githubRepositoryId: number;
@@ -18,7 +18,8 @@ export interface NewRepository {
   name: string;
   description: string;
   roleSettings: RoleSettings;
-  workflowSettings: WorkflowSettings;
+  defaultRunMode: RunMode;
+  defaultBranch: string;
   createdBy: string;
 }
 
@@ -32,7 +33,6 @@ export async function insertRepository(
     .values({
       ...repository,
       roleSettings: RoleSettings.parse(repository.roleSettings),
-      workflowSettings: WorkflowSettings.parse(repository.workflowSettings),
     })
     .onConflictDoNothing({ target: repositories.githubRepositoryId })
     .returning({ id: repositories.id });
@@ -63,6 +63,7 @@ export async function listRepositorySummaries(
       owner: repositories.owner,
       name: repositories.name,
       description: repositories.description,
+      defaultRunMode: repositories.defaultRunMode,
       setupStatus: repositorySetups.status,
     })
     .from(repositories)
@@ -98,7 +99,7 @@ export async function findRepositoryDetail(
     name: repository.name,
     description: repository.description,
     roleSettings: RoleSettings.parse(repository.roleSettings),
-    workflowSettings: WorkflowSettings.parse(repository.workflowSettings),
+    defaultRunMode: repository.defaultRunMode,
     createdAt: repository.createdAt.toISOString(),
     setup:
       setup === null
@@ -149,6 +150,23 @@ export async function findRepositoryRef(
   return row;
 }
 
+/** The repository's last known owner and name, and the default branch a feature's tasks run on. */
+export async function findRepositoryBranch(
+  executor: Executor,
+  repositoryId: string,
+): Promise<{ id: string; owner: string; name: string; defaultBranch: string } | undefined> {
+  const [row] = await executor
+    .select({
+      id: repositories.id,
+      owner: repositories.owner,
+      name: repositories.name,
+      defaultBranch: repositories.defaultBranch,
+    })
+    .from(repositories)
+    .where(eq(repositories.id, repositoryId));
+  return row;
+}
+
 /** Locks a repository row, which every change to its setup takes first or through the setup. */
 export async function lockRepository(
   tx: Transaction,
@@ -165,9 +183,10 @@ export async function lockRepository(
 export interface RepositoryChanges {
   description?: string | undefined;
   roleSettings?: RoleSettings | undefined;
-  workflowSettings?: WorkflowSettings | undefined;
+  defaultRunMode?: RunMode | undefined;
   owner?: string | undefined;
   name?: string | undefined;
+  defaultBranch?: string | undefined;
 }
 
 /** Sets the given fields, and returns whether the repository exists. */
@@ -181,13 +200,20 @@ export async function updateRepository(
     .set({
       ...changes,
       ...(changes.roleSettings && { roleSettings: RoleSettings.parse(changes.roleSettings) }),
-      ...(changes.workflowSettings && {
-        workflowSettings: WorkflowSettings.parse(changes.workflowSettings),
-      }),
     })
     .where(eq(repositories.id, repositoryId))
     .returning({ id: repositories.id });
   return rows.length > 0;
+}
+
+/** Whether any feature involves the repository. */
+export async function hasFeatures(executor: Executor, repositoryId: string): Promise<boolean> {
+  const [row] = await executor
+    .select({ id: featureRepositories.id })
+    .from(featureRepositories)
+    .where(eq(featureRepositories.repositoryId, repositoryId))
+    .limit(1);
+  return row !== undefined;
 }
 
 export async function deleteRepository(tx: Transaction, repositoryId: string): Promise<void> {

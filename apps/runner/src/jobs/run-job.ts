@@ -1,16 +1,18 @@
 import {
-  FAILURE_MESSAGE_MAX,
   isTerminalRunEvent,
   type RunJob as RunJobSpec,
   type RunnerRunEventBody,
 } from '@plangineer/contracts';
-import type { AgentAdapter } from '../adapters/agent-adapter.ts';
+import type { AgentAccess, AgentAdapter } from '../adapters/agent-adapter.ts';
+import type { Attachments } from '../connection/attachments.ts';
 import { packageVersion } from '../package-version.ts';
+import { finishPrePlanning, preparePrePlanning } from '../pre-planning/pre-planning-job.ts';
 import { finishSetup, prepareSetup } from '../setup/setup-job.ts';
 import type { SkillSnapshot } from '../setup/setup-tree.ts';
 import { checkSkillsMirror } from '../skills/skills-mirror.ts';
 import { GitError } from '../worktrees/git.ts';
 import type { Worktrees } from '../worktrees/worktrees.ts';
+import { runFailed } from './run-failed.ts';
 
 /** Why a job was stopped. The first cause wins and picks the job's terminal event. */
 export type StopCause = 'cancel' | 'shutdown' | 'buffer_full' | 'timeout' | 'invalid';
@@ -21,6 +23,7 @@ export interface RunJobContext {
   job: RunJobSpec;
   adapter: AgentAdapter;
   worktrees: Worktrees;
+  attachments: Attachments;
   timeoutMs: number;
   /** Takes the job's next event, or returns false when its buffer is full. */
   emit(event: RunnerRunEventBody): boolean;
@@ -38,29 +41,19 @@ export interface RunJob {
   stop(cause: StopCause): void;
 }
 
-type RunFailed = Extract<RunnerRunEventBody, { type: 'run.failed' }>;
-
-function failed(
-  reason: RunFailed['reason'],
-  message: string,
-  stderrTail: string[] = [],
-): RunFailed {
-  return { type: 'run.failed', reason, message, exitCode: null, stderrTail };
-}
-
 function stopEvent(cause: StopCause, timeoutMs: number): RunnerRunEventBody | null {
   switch (cause) {
     case 'cancel':
       return { type: 'run.cancelled', reason: 'requested' };
     case 'shutdown':
-      return failed('runner_stopped', 'The runner stopped before the run finished.');
+      return runFailed('runner_stopped', 'The runner stopped before the run finished.');
     case 'buffer_full':
-      return failed(
+      return runFailed(
         'event_buffer_full',
         'The runner holds 10,000 events the server has not acknowledged.',
       );
     case 'timeout':
-      return failed('timeout', `The run passed its time limit of ${timeoutMs} ms.`);
+      return runFailed('timeout', `The run passed its time limit of ${timeoutMs} ms.`);
     case 'invalid':
       return null;
     default: {
@@ -70,12 +63,28 @@ function stopEvent(cause: StopCause, timeoutMs: number): RunnerRunEventBody | nu
   }
 }
 
+/** A setup job writes skills, a research task reaches the web, and every other job only reads. */
+function accessFor(job: RunJobSpec): AgentAccess {
+  switch (job.kind) {
+    case 'setup':
+      return 'write_skills';
+    case 'pre_planning':
+      return job.task === 'research' ? 'research' : 'read_only';
+    case 'test':
+      return 'read_only';
+    default: {
+      const unknownJob: never = job;
+      throw new Error(`Unknown job kind: ${JSON.stringify(unknownJob)}`);
+    }
+  }
+}
+
 /**
- * One assigned run: checkout, the skills check or the setup files, the CLI check, the agent,
- * the setup push for a setup job, then worktree removal.
+ * One assigned run: checkout, the skills check, the setup files or the pre-planning task folder,
+ * the CLI check, the agent, the setup push or the answer check, then worktree removal.
  */
 export function createRunJob(context: RunJobContext): RunJob {
-  const { runId, attempt, job, adapter, worktrees, timeoutMs } = context;
+  const { runId, attempt, job, adapter, worktrees, attachments, timeoutMs } = context;
   const controller = new AbortController();
   let stopCause: StopCause | null = null;
   let started = false;
@@ -117,34 +126,53 @@ export function createRunJob(context: RunJobContext): RunJob {
 
   /**
    * Readies the worktree for the job's kind. A setup job skips the mirror check, since setup is
-   * what repairs the mirror, and writes its files before the agent runs.
+   * what repairs the mirror, and writes its files before the agent runs. A pre-planning job
+   * writes its task folder after the check.
    */
-  async function prepareKind(worktree: string): Promise<SkillSnapshot | null | 'failed'> {
+  async function prepareKind(worktree: {
+    path: string;
+    commit: string;
+  }): Promise<SkillSnapshot | null | 'failed'> {
     if (job.kind === 'setup') {
-      const prepared = await prepareSetup(worktree, job);
+      const prepared = await prepareSetup(worktree.path, job);
       if (prepared.ok) return prepared.value;
       send(prepared.event);
       return 'failed';
     }
-    const drift = await checkSkillsMirror(worktree);
-    if (drift.ok) return null;
-    send(failed('skills_drift', drift.message));
+    const drift = await checkSkillsMirror(worktree.path);
+    if (!drift.ok) {
+      send(runFailed('skills_drift', drift.message));
+      return 'failed';
+    }
+    if (job.kind !== 'pre_planning') return null;
+    const failure = await preparePrePlanning(
+      worktree.path,
+      worktree.commit,
+      job,
+      attachments,
+      controller.signal,
+    );
+    if (failure === null) return null;
+    send(failure);
     return 'failed';
   }
 
-  /** Runs the agent. A setup job holds back its success until the branch is pushed. */
+  /**
+   * Runs the agent. A setup job holds back its success until the branch is pushed, and a
+   * pre-planning job until its answer is checked.
+   */
   async function runAgentTo(worktree: string, snapshot: SkillSnapshot | null): Promise<void> {
-    const access = job.kind === 'setup' ? 'write_skills' : 'read_only';
-    let succeeded: RunnerRunEventBody | null = null;
+    let succeeded: Extract<RunnerRunEventBody, { type: 'run.succeeded' }> | null = null;
     for await (const event of adapter.run(
-      { prompt: job.prompt, cwd: worktree, access },
+      { prompt: job.prompt, cwd: worktree, access: accessFor(job) },
       controller.signal,
     )) {
-      if (job.kind === 'setup' && event.type === 'run.succeeded') succeeded = event;
+      if (job.kind !== 'test' && event.type === 'run.succeeded') succeeded = event;
       else send(event);
     }
-    if (job.kind !== 'setup' || snapshot === null || succeeded === null) return;
-    if (controller.signal.aborted) return;
+    if (succeeded === null || controller.signal.aborted) return;
+    if (job.kind === 'pre_planning') return send(finishPrePlanning(succeeded));
+    if (job.kind !== 'setup' || snapshot === null) return;
     const published = await finishSetup(worktree, job, snapshot, packageVersion());
     if (!published.ok) return send(published.event);
     send(published.value);
@@ -159,19 +187,17 @@ export function createRunJob(context: RunJobContext): RunJob {
       worktree = await worktrees.prepareWorktree({ repository, ref, runId, attempt });
     } catch (error) {
       if (!(error instanceof GitError)) throw error;
-      send(
-        failed('checkout_failed', error.message.slice(0, FAILURE_MESSAGE_MAX), error.stderrTail),
-      );
+      send(runFailed('checkout_failed', error.message, error.stderrTail));
       return;
     }
     if (controller.signal.aborted) return;
-    const snapshot = await prepareKind(worktree.path);
+    const snapshot = await prepareKind(worktree);
     if (snapshot === 'failed') return;
     const cli = await adapter.detect();
     if (!cli.available || cli.version === null) {
       const found = cli.version === null ? 'no version' : cli.version;
       return send(
-        failed(
+        runFailed(
           'cli_unavailable',
           `Claude Code ${cli.minimumVersion} or later is needed, found ${found}.`,
         ),
@@ -194,12 +220,7 @@ export function createRunJob(context: RunJobContext): RunJob {
       await runAgent();
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
-      send(
-        failed(
-          'runner_stopped',
-          `The runner failed this run: ${reason}`.slice(0, FAILURE_MESSAGE_MAX),
-        ),
-      );
+      send(runFailed('runner_stopped', `The runner failed this run: ${reason}`));
       throw error;
     } finally {
       clearTimeout(timer);

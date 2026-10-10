@@ -1,9 +1,10 @@
-import {
-  DEFAULT_WORKFLOW_SETTINGS,
-  type RepositoryDetail,
-  type Run,
-  type RunEvent,
-  type Runner,
+import type {
+  ContextFile,
+  FeatureDetail,
+  RepositoryDetail,
+  Run,
+  RunEvent,
+  Runner,
 } from '@plangineer/contracts';
 
 export const RUNNER_ID = '0199c1a2-7b3c-7d4e-8f90-a1b2c3d4e5f6';
@@ -143,9 +144,62 @@ export function repositoryFixture(overrides: Partial<RepositoryDetail> = {}): Re
       implementation_review: role,
       verification: role,
     },
-    workflowSettings: DEFAULT_WORKFLOW_SETTINGS,
+    defaultRunMode: 'manual',
     setup: null,
     createdAt: '2026-10-08T12:00:00.000Z',
+    ...overrides,
+  };
+}
+
+export const FEATURE_ID = '0199c1a6-4444-7d4e-8f90-a1b2c3d4e5f6';
+const TASK_ID = '0199c1a7-5555-7d4e-8f90-a1b2c3d4e5f6';
+export const CONTEXT_FILE_ID = '0199c1a8-6666-7d4e-8f90-a1b2c3d4e5f6';
+
+export function featureFixture(overrides: Partial<FeatureDetail> = {}): FeatureDetail {
+  const repository = { id: REPOSITORY_ID, owner: 'acme', name: 'app' };
+  return {
+    id: FEATURE_ID,
+    title: 'Export invoices as CSV',
+    state: 'pre_planning',
+    runMode: 'manual',
+    createdAt: '2026-10-09T10:00:00.000Z',
+    description: 'Export invoices as CSV from the billing page.',
+    ticketUrl: null,
+    exploreCodebase: false,
+    workflowSettings: {
+      decisions: 'ask',
+      planCheckIn: 'pause',
+      planReview: { findings: 'ask', rounds: { mode: 'ask' } },
+      implementationReview: { findings: 'ask', rounds: { mode: 'ask' } },
+    },
+    repositories: [repository],
+    attachments: [],
+    tasks: [
+      {
+        id: TASK_ID,
+        kind: 'intake',
+        repository,
+        topic: null,
+        runId: RUN_ID,
+        status: 'queued',
+        commit: null,
+      },
+    ],
+    contextFiles: [],
+    updatedAt: '2026-10-09T10:00:00.000Z',
+    ...overrides,
+  };
+}
+
+export function contextFileFixture(overrides: Partial<ContextFile> = {}): ContextFile {
+  return {
+    id: CONTEXT_FILE_ID,
+    taskId: TASK_ID,
+    featureId: FEATURE_ID,
+    title: 'Feature brief',
+    ticked: true,
+    content: '# Feature brief\n\nExport invoices as CSV.',
+    updatedAt: '2026-10-09T10:05:00.000Z',
     ...overrides,
   };
 }

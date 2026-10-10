@@ -50,6 +50,26 @@ describe('claudeArgs', () => {
     expect(args).not.toContain('--bare');
   });
 
+  it('lets a research job read, search and fetch only from GitHub, with no shell or writes', () => {
+    expect(claudeArgs('research')).toEqual([
+      '-p',
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--permission-mode',
+      'dontAsk',
+      '--permission-prompts',
+      'none',
+      '--tools',
+      'Read,Glob,Grep,Skill,WebSearch,WebFetch',
+      '--allowedTools',
+      'Read Glob Grep Skill WebSearch WebFetch(domain:github.com) WebFetch(domain:raw.githubusercontent.com)',
+      '--strict-mcp-config',
+      '--settings',
+      SETTINGS,
+    ]);
+  });
+
   it('lets a setup job write only under .agents/skills, search, fetch from GitHub and start subagents', () => {
     expect(claudeArgs('write_skills')).toEqual([
       '-p',

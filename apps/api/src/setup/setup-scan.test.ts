@@ -61,6 +61,18 @@ describe('repositorySetup.scan', () => {
     return row;
   }
 
+  it('stores the scanned default branch on the repository, so a renamed branch is picked up', async () => {
+    fake.repositories.push(fakeRepository({ defaultBranch: 'trunk' }));
+
+    await scan();
+
+    const [row] = await database.db
+      .select({ defaultBranch: repositories.defaultBranch })
+      .from(repositories)
+      .where(eq(repositories.id, repositoryId));
+    expect(row?.defaultBranch).toBe('trunk');
+  });
+
   it('stores the skills, instruction files and recommendations with status scanned', async () => {
     fake.repositories.push(
       repositoryWith(
