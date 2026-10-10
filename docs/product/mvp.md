@@ -495,16 +495,16 @@ Each diamond is an exit gate: the next phase starts only when its condition is m
 | Phase | Scope | Exit gate | Rough size |
 | --- | --- | --- | --- |
 | 0. Prove the loop | Hand-write the four orchestrators and the triage rules in one repo. Run the full loop from the command line, including the confirm step and the deviation check. Write the skill specification and the baseline catalog | Engineers judge the reviews useful on 3 to 5 real features, and the finding format and skill specification are settled | 2 to 3 weeks |
-| 1. Setup and plan | Repository configuration and per-repository setup, the four cross-repository orchestrators, the feature intake with repository selection and the Jira connection flow, feature tabs with parallel pre-planning tasks and context files on Claude Code, the local runner on the engineer's Claude Code login, GitHub sign-in, the plan workspace with staleness warnings, the plan review pipeline with the workflow settings, the plan thread, peer approval and amendments, all responsive and built on the same API a mobile app will use | Plans for real features are approved through the app, with the local runner working on Windows, macOS and Linux | 7 to 10 weeks |
-| 2. Automated runs | The Codex adapter, so review can run on a different model, run dispatch and hosted runners, isolated workspaces, pull request creation, the implementation review pipeline with deviation detection, the plan audit, and the run timeline | An approved plan becomes a reviewed pull request with nobody driving the agent | 5 to 7 weeks |
-| 3. Verification | Deploy webhook, API checks, Playwright CLI web checks, evidence storage and the report | Every feature gets an evidence report | 2 to 3 weeks |
+| 1. Setup and plan | Repository configuration and per-repository setup, the feature intake with the Jira connection flow, feature tabs with parallel pre-planning tasks and context files on Claude Code, the local runner on the engineer's Claude Code login, GitHub sign-in, the plan workspace with staleness warnings, the plan review pipeline with the workflow settings, and approval by the engineer, all responsive and built on the same API a mobile app will use | Plans for real features are approved through the app, with the local runner working on Windows, macOS and Linux | 7 to 10 weeks |
+| 2. Automated runs | Run dispatch to the desktop's runner, isolated workspaces, amendments, pull request creation, the implementation review pipeline on a different Claude model with deviation detection, the plan audit, and the run timeline | An approved plan becomes a reviewed pull request with nobody driving the agent | 5 to 7 weeks |
+| 3. Verification | A Verify button per environment, API checks, Playwright CLI web checks, evidence files and the report | Every feature gets an evidence report | 2 to 3 weeks |
 | 4. Auto-fix and rollout | Revertible fix commits, roles and permissions, push notifications, cost and cycle-time metrics | A team runs implementation review with `findings` at `fix_all` and rarely reverts a fix | 3 to 4 weeks |
 
 Sizes are rough estimates for one or two engineers, 19 to 27 weeks in total, and should be re-cut after Phase 0.
 
-**Desktop app, outside the phases:** the desktop app described under Architecture is how Plangineer ships. It is built next, so the remaining Phase 1 work is built and tested inside it.
+**Desktop app, outside the phases:** the desktop app described under Architecture is how Plangineer ships. It was built on Oct 9, 2026, and the remaining work is built and tested inside it. The [MVP roadmap](../plans/mvp-roadmap.md) splits Phases 1 to 3 into chunks for one engineer on one machine. Features across repositories, with the four cross-repository orchestrators, come as the last chunk, once the stages work on one repository.
 
-**Left for later:** skill auditing and line-level provenance, testing of mobile apps, alternative approaches in the plan workspace, the Cursor CLI, the team-hosted server, and the phone app itself.
+**Left for later:** skill auditing and line-level provenance, testing of mobile apps, alternative approaches in the plan workspace, the Codex adapter, the Cursor CLI, the phone app itself, and the team-hosted server with the features that need a second person or a public URL: peer approval, the plan thread, the review queue, webhooks, hosted runners and object storage.
 
 ## Risks
 
@@ -532,12 +532,12 @@ The two risks most likely to sink adoption are noisy reviews and slow plan appro
 
 These choices are still open, and the first one shapes the architecture more than any other.
 
-- [ ] **Where agents run.** This proposal assumes shared background runners for implementation, review and verification, plus a local runner on the engineer's machine. The local runner can serve every stage on the engineer's own subscription, so what is open is which stages default to hosted runners.
+- [x] **Where agents run.** Decided on Oct 9, 2026: the runner the desktop app bundles serves every stage on the engineer's own subscription. Which stages default to hosted runners is settled with the team server.
 - [ ] **Git host.** This proposal assumes GitHub.
 - [ ] **Agent and model for each role.** Which CLI and model fills each of planner, plan reviewer, implementer and implementation reviewer, Claude Code is supported first and Codex second.
 - [ ] **Verification environment.** Recommended: a preview environment before merge where one exists, otherwise staging after merge.
 - [ ] **What counts as trivial.** Recommended: the author proposes it, and named paths such as migrations always need peer approval.
-- [ ] **Runner base.** Recommended: CI runners first. The alternative is an open-source background agent framework such as [Open-Inspect](https://github.com/ColeMurray/background-agents/wiki) or [Open SWE](https://github.com/langchain-ai/open-swe).
+- [ ] **Hosted runner base.** Settled with the team server. Recommended: CI runners first. The alternative is an open-source background agent framework such as [Open-Inspect](https://github.com/ColeMurray/background-agents/wiki) or [Open SWE](https://github.com/langchain-ai/open-swe).
 - [x] **Review round limit.** Decided: the `adaptive` rounds setting stops at a maximum the engineer sets from 1 to 5. At the default `ask` setting the engineer decides each time.
 - [x] **Internal tool or product.** Decided: an open-source desktop app that each engineer installs, with a team-hosted server from the same code later. There is no tenancy, the runner is bundled in the app and also ships through npm for second machines, and the app never holds a vendor login.
 - [x] **Desktop shell and packaging.** Decided on Oct 8, 2026 in the [desktop app plan](../plans/2026-10-08-desktop-app.md): Electron 44 with electron-builder, Postgres 18 binaries from theseus-rs run with `pg_ctl`, and unsigned installers on GitHub Releases. Updates install themselves on Windows and Linux and are offered as a download on macOS. Built on Oct 9, 2026, and the [desktop app guide](../engineering/desktop-app.md) covers installing it.
