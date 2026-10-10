@@ -42,8 +42,7 @@ The [run modes](../product/mvp.md#run-modes) grow the same way. Chunk 3 adds the
 ### 3. Feature intake and pre-planning
 
 - **Feature tabs.** One tab per feature, each showing its status.
-- **Intake form.** Description, ticket link, attachments, the exploration checkbox, research topics and the run mode. The repository picker lists the configured repositories and takes one. Several repositories and **Not sure** come in chunk 9.
-- **Jira connection.** Appears only when a ticket link needs it. The app adds the Jira MCP server to the engineer's Claude Code, which runs on the same machine, and walks them through sign-in.
+- **Intake form.** Description, ticket link as a reference only, attachments, the exploration checkbox, research topics and the run mode. The repository picker lists the configured repositories and takes one. Several repositories and **Not sure** come in chunk 9.
 - **Pre-planning tasks.** Intake, exploration and one research task per topic, running in parallel. Each records the commit it ran against.
 - **Context files.** Open, edit, rename, delete and tick.
 - **Plan ready.** Reached when the tasks finish. A failed task does not block it. Under Manual and Manual plan, planning starts when the engineer clicks Start planning. Under Auto loop it starts by itself, once chunk 4 exists.
@@ -172,6 +171,8 @@ These questions were raised while building the desktop app and are settled when 
 - How to reach `pg_dump` inside the Linux AppImage. The guide's `--appimage-extract` route is untested.
 
 **Custom run modes.** A team sets each stop point itself and saves the set as its own mode.
+
+**Ticket trackers.** Reading a ticket from its link, starting with Jira through Atlassian's MCP server. Taken out of chunk 3 on Oct 10, 2026.
 
 **Codex adapter.** `codex exec` produces the same run events as the Claude Code adapter, so review can run on a different vendor.
 

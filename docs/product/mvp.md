@@ -48,6 +48,7 @@ The goal is a workflow where the plan is the unit of engineering review, and cod
 - Shipping a phone app. The UI is designed for one, and the app itself comes later.
 - Shipping a team-hosted server. The desktop app runs the same server code, so one can follow.
 - Supporting the Cursor CLI. The adapter design allows it later.
+- Reading tickets from Jira or any other tracker. A ticket link is kept as a reference only.
 - Running a hosted, multi-tenant service. Each deployment serves one team.
 
 ## Workflow stages
@@ -119,7 +120,7 @@ The plan workspace is where the product has to stand out: making a strong plan s
 | Field | Required | What it does |
 | --- | --- | --- |
 | Description | Yes, any length | Becomes the feature brief and scopes the exploration. A full brain dump is encouraged: the more the engineer says up front, the better the context and the fewer questions later |
-| Ticket link | No | The ticket's contents are pulled into the brief |
+| Ticket link | No | Recorded in the brief as a reference. The app does not read the ticket, so the engineer pastes what matters from it into the description |
 | Documents, screenshots, links | No | Attached to the brief |
 | Repositories | Yes, shown only when more than one repository is configured | The repositories the feature touches, or **Not sure**. See below |
 | Explore the codebase | Ticked by default | Starts an exploration task on submit, one per selected repository |
@@ -130,15 +131,13 @@ On submit, the exploration and every research task run in parallel in the backgr
 
 **Choosing repositories.** With one configured repository the picker is hidden and that repository is used. With several, the engineer ticks the ones involved. If they pick **Not sure**, a quick exploration runs across every configured repository, guided by each one's description, and proposes which are involved. The engineer confirms the list before the full exploration runs. Repositories can be added or removed while the plan is a draft. After approval, adding one is a scope amendment, because it adds steps.
 
-**Connecting Jira.** A ticket link is only useful if the app can read the ticket, so Jira is connected through its MCP server. The connection flow appears only when an engineer supplies a ticket link and Jira access is not set up yet: the app adds the MCP server to their agent CLI and walks them through sign-in, then reads the ticket. Atlassian's official [Rovo MCP Server](https://github.com/atlassian/atlassian-mcp-server) is hosted, signs in through the browser with OAuth, and covers Jira Cloud only, so self-hosted Jira needs a different server.
-
 &#91;embedded content: one feature tab · 3 tasks, 3 context files, 1 plan\]
 
 **Pre-planning tasks** load up context before any plan is written. Each task is an agent session with a goal, and it ends in one context file.
 
 | Task | What the agent does | Context file it produces |
 | --- | --- | --- |
-| Intake | Reads the description, ticket and attachments the engineer submitted | The feature brief |
+| Intake | Reads the description and attachments the engineer submitted, and records the ticket link | The feature brief |
 | Explore the codebase | Reads each selected repo through Claude Code or Codex to find how the affected area works today. One task and one context file per repo | Findings, with the files and functions involved, the open questions it could not settle, and risk flags such as performance or scale |
 | Research | Looks into one requested topic outside the repo, such as a library, an API or an approach | A summary with its sources |
 
@@ -523,7 +522,7 @@ Each diamond is an exit gate: the next phase starts only when its condition is m
 | Phase | Scope | Exit gate | Rough size |
 | --- | --- | --- | --- |
 | 0. Prove the loop | Hand-write the four orchestrators and the triage rules in one repo. Run the full loop from the command line, including the confirm step and the deviation check. Write the skill specification and the baseline catalog | Engineers judge the reviews useful on 3 to 5 real features, and the finding format and skill specification are settled | 2 to 3 weeks |
-| 1. Setup and plan | Repository configuration and per-repository setup, the feature intake with the Jira connection flow, feature tabs with parallel pre-planning tasks and context files on Claude Code, the local runner on the engineer's Claude Code login, GitHub sign-in, the plan workspace with staleness warnings, the plan review pipeline, run modes, and approval by the engineer, all responsive and built on the same API a mobile app will use | Plans for real features are approved through the app, with the local runner working on Windows, macOS and Linux | 7 to 10 weeks |
+| 1. Setup and plan | Repository configuration and per-repository setup, the feature intake, feature tabs with parallel pre-planning tasks and context files on Claude Code, the local runner on the engineer's Claude Code login, GitHub sign-in, the plan workspace with staleness warnings, the plan review pipeline, run modes, and approval by the engineer, all responsive and built on the same API a mobile app will use | Plans for real features are approved through the app, with the local runner working on Windows, macOS and Linux | 7 to 10 weeks |
 | 2. Automated runs | Run dispatch to the desktop's runner, isolated workspaces, amendments, pull request creation, the implementation review pipeline on a different Claude model with deviation detection, the plan audit, and the run timeline | An approved plan becomes a reviewed pull request with nobody driving the agent | 5 to 7 weeks |
 | 3. Verification | A Verify button per environment, API checks, Playwright CLI web checks, evidence files and the report | Every feature gets an evidence report | 2 to 3 weeks |
 | 4. Auto-fix and rollout | Revertible fix commits, roles and permissions, push notifications, cost and cycle-time metrics | A team runs features under the Auto loop run mode and rarely reverts a fix | 3 to 4 weeks |
@@ -581,7 +580,7 @@ These choices are still open, and the first one shapes the architecture more tha
 - [ ] **Cross-repository orchestrators' home.** Proposed: the app keeps them, since they belong to no single repository. The alternative is a dedicated workspace repository.
 - [ ] **Roles for multi-repository work.** Proposed: the cross-repository orchestrators use roles set once for them, and each repository's own orchestrator runs with that repository's settings.
 - [ ] **Merge and deploy order across repositories.** Proposed: the plan's phases set the order, and the app shows it. Whether the app should enforce it is open.
-- [ ] **Ticket tracker integration.** Jira through its MCP server comes first. Which trackers follow is open, as is support for self-hosted Jira. Pasting the ticket text remains the fallback.
+- [x] **Ticket tracker integration.** Decided on Oct 10, 2026: after the MVP. In the MVP a ticket link is only a reference, and the engineer pastes the ticket text into the description. Jira through its MCP server is the first candidate afterwards.
 - [x] **Deviation handling.** Decided: every deviation and extra needs an engineer's decision unless the run mode sets implementation review's `findings` to `fix_all`. The authoring agent then applies the recommended Accept or Revert to each one. Triage rules never accept or skip them.
 - [x] **Run modes.** Decided on Oct 9, 2026: three fixed modes, Manual, Manual plan and Auto loop, chosen per feature and preset per repository. Merge stays with the engineer in every mode. Custom run modes come later.
 - [ ] **Amendment levels.** Proposed: three levels set by which sections changed. Whether a decision-only amendment should need an approver is open.
