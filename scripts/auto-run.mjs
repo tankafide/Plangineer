@@ -35,6 +35,7 @@ function settingsBlock({ planRounds, implementationRounds }) {
 }
 
 const FINISH = [
+  "Start every subagent in the foreground, with the Agent tool's run_in_background set to false, and start parallel subagents in one message. Never end a turn to wait for background work: the output schema makes the first turn that ends return the report.",
   "Start a long-running process, such as a dev server, only with the Bash tool's run_in_background, never with &, nohup, setsid or Start-Process, and stop it before you finish.",
   'Finish once the last review round is committed, then return the report the output schema describes.',
 ];

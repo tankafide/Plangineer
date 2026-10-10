@@ -184,6 +184,14 @@ describe('autoRun', () => {
     }
   });
 
+  it('tells each session to wait for its subagents inside the turn', async () => {
+    await run({ plan: success(planReport), implementation: success(implementationReport) });
+
+    for (const { prompt } of await calls()) {
+      expect(prompt).toContain('Start every subagent in the foreground');
+    }
+  });
+
   it('writes the outcome beside the logs', async () => {
     const outcome = await run({
       plan: success(planReport),
