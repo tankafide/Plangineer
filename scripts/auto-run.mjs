@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { execa } from 'execa';
@@ -8,8 +8,18 @@ import { isEntryPoint, reportFailure, repoRoot } from './script-entry.mjs';
 
 const DEFAULT_ROUNDS = 2;
 const LOG_DIR = 'logs/auto';
+
 /** The run's outcome, written beside the session logs when the run ends. */
 export const OUTCOME_FILE = 'outcome.json';
+/** The run's result, or the error that ended it. */
+export const Outcome = z.union([
+  z.strictObject({ error: z.string() }),
+  z.looseObject({ ready: z.boolean(), reasons: z.array(z.string()) }),
+]);
+
+/** Facts about the run that a watcher needs, written when its log folder is created. */
+export const RUN_FILE = 'run.json';
+export const RunFile = z.strictObject({ baseCommit: z.string().min(1) });
 
 const autoReview = (count) => ({ findings: 'fix_all', rounds: { mode: 'fixed', count } });
 
@@ -25,7 +35,7 @@ function settingsBlock({ planRounds, implementationRounds }) {
 }
 
 const FINISH = [
-  'Stop every process you started in the background, such as a dev server, before you finish.',
+  "Start a long-running process, such as a dev server, only with the Bash tool's run_in_background, never with &, nohup, setsid or Start-Process, and stop it before you finish.",
   'Finish once the last review round is committed, then return the report the output schema describes.',
 ];
 
@@ -100,7 +110,10 @@ function phaseOf(resumeLog) {
   return phase;
 }
 
-/** Creates a new run's log folder with its settings, or reuses the resumed run's folder. */
+/**
+ * Creates a new run's log folder with its settings and base commit, or reuses the resumed run's
+ * folder.
+ */
 async function prepareLogDir({ cwd, resumeLog, planRounds, implementationRounds }) {
   const mainCheckout = await mainCheckoutOf(cwd, { clean: resumeLog === undefined });
   if (resumeLog !== undefined) {
@@ -115,7 +128,16 @@ async function prepareLogDir({ cwd, resumeLog, planRounds, implementationRounds 
     path.join(logDir, 'settings.md'),
     settingsBlock({ planRounds, implementationRounds }),
   );
+  const run = RunFile.parse({ baseCommit: await git(cwd, 'rev-parse', 'HEAD') });
+  await writeFile(path.join(logDir, RUN_FILE), JSON.stringify(run));
   return logDir;
+}
+
+/** Writes the outcome whole, so a watcher never reads half of it. */
+async function writeOutcome(logDir, outcome) {
+  const file = path.join(logDir, OUTCOME_FILE);
+  await writeFile(`${file}.tmp`, JSON.stringify(outcome, null, 2));
+  await rename(`${file}.tmp`, file);
 }
 
 async function runPhases({ session, request, planPath, resume }) {
@@ -157,7 +179,6 @@ export async function autoRun({
   resumeLog,
   planRounds,
   implementationRounds,
-  processPollMs,
 }) {
   const resume =
     resumeLog === undefined
@@ -169,16 +190,14 @@ export async function autoRun({
   const session = (name, prompt, schema, resumeId) => {
     const logFile = path.join(logDir, `${name}.jsonl`);
     console.error(`Running the ${name} session. Its log is ${logFile}`);
-    const options = { command, cwd, prompt, settingsFile, schema, logFile };
-    return runSession({ ...options, resumeId, processPollMs });
+    return runSession({ command, cwd, prompt, settingsFile, schema, logFile, resumeId });
   };
-  const outcomeFile = path.join(logDir, OUTCOME_FILE);
   try {
     const outcome = await runPhases({ session, request, planPath, resume });
-    await writeFile(outcomeFile, JSON.stringify(outcome, null, 2));
+    await writeOutcome(logDir, outcome);
     return outcome;
   } catch (error) {
-    await writeFile(outcomeFile, JSON.stringify({ error: error.message }, null, 2));
+    await writeOutcome(logDir, { error: error.message });
     throw error;
   }
 }

@@ -1,4 +1,4 @@
-import { readFile, stat } from 'node:fs/promises';
+import { readFile, truncate } from 'node:fs/promises';
 import { execa } from 'execa';
 import { z } from 'zod';
 import { trackSessionProcesses } from './session-processes.mjs';
@@ -60,7 +60,7 @@ export const ImplementationReport = z.discriminatedUnion('outcome', [
 ]);
 
 /** The fields Claude Code's stream-json result event carries that this script reads. */
-const ResultEvent = z.looseObject({
+export const ResultEvent = z.looseObject({
   type: z.literal('result'),
   subtype: z.string(),
   is_error: z.boolean(),
@@ -70,7 +70,7 @@ const ResultEvent = z.looseObject({
 
 const StreamEvent = z.looseObject({ type: z.string() });
 
-const InitEvent = z.looseObject({
+export const InitEvent = z.looseObject({
   type: z.literal('system'),
   subtype: z.literal('init'),
   session_id: z.string().min(1),
@@ -80,7 +80,7 @@ const InitEvent = z.looseObject({
  * The output schema wraps the report in an object, because a tool's input schema cannot be a
  * union at its top level.
  */
-const reportOutput = (schema) => z.strictObject({ report: schema });
+export const reportOutput = (schema) => z.strictObject({ report: schema });
 
 function parseEvent(line, logFile) {
   let event;
@@ -105,14 +105,31 @@ function events(log, logFile) {
     .map((line) => parseEvent(line, logFile));
 }
 
+/** A log's bytes up to its last full line, leaving out a line a killed session cut short. */
+async function completeLog(logFile) {
+  const log = await readFile(logFile);
+  return log.subarray(0, log.lastIndexOf(0x0a) + 1);
+}
+
 /** The id of the session a log holds, which `claude --resume` takes. */
 export async function sessionIdOf(logFile) {
-  const init = events(await readFile(logFile, 'utf8'), logFile).findLast(
+  const log = (await completeLog(logFile)).toString('utf8');
+  const init = events(log, logFile).findLast(
     (event) => event.type === 'system' && event.subtype === 'init',
   );
   const parsed = InitEvent.safeParse(init);
   if (!parsed.success) throw new Error(`${logFile} holds no session to resume`);
   return parsed.data.session_id;
+}
+
+/**
+ * Cuts a resumed session's log back to its last full line, so the resumed run's events start on
+ * a line of their own, and returns where they start.
+ */
+async function endAtFullLine(logFile) {
+  const { length } = await completeLog(logFile);
+  await truncate(logFile, length);
+  return length;
 }
 
 /** What the session wrote after offset bytes, so a resumed log ignores the earlier run. */
@@ -138,7 +155,7 @@ export async function runSession({
 }) {
   const [file, ...prefix] = command;
   const output = reportOutput(schema);
-  const offset = resumeId === undefined ? 0 : (await stat(logFile)).size;
+  const offset = resumeId === undefined ? 0 : await endAtFullLine(logFile);
   const args = [
     ...prefix,
     '-p',
@@ -167,10 +184,11 @@ export async function runSession({
   });
   const processes = trackSessionProcesses(session.pid, { pollMs: processPollMs });
   const run = await session;
-  const leftRunning = await processes.stop();
-  if (leftRunning.length > 0) {
-    console.error(`Stopped processes the session left running: ${leftRunning.join(', ')}`);
+  const cleanup = await processes.stop();
+  if (cleanup.stopped.length > 0) {
+    console.error(`Stopped processes the session left running: ${cleanup.stopped.join(', ')}`);
   }
+  for (const failure of cleanup.failures) console.error(failure);
   const last = events(await logSince(logFile, offset), logFile).findLast(
     (event) => event.type === 'result',
   );

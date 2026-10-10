@@ -185,6 +185,15 @@ describe('runSession', () => {
     ]);
   });
 
+  it('drops a line a killed session cut short before resuming it', async () => {
+    await writeFile(logFile, `${init('plan-session')}\n{"type":"assis`);
+
+    expect(await sessionIdOf(logFile)).toBe('plan-session');
+    await session(success(planReport), { resumeId: 'plan-session' });
+    const log = (await readFile(logFile, 'utf8')).split('\n').filter(Boolean);
+    expect(log.map((line) => JSON.parse(line).type)).toEqual(['system', 'system', 'result']);
+  });
+
   it('reads only what a resumed session wrote, not the earlier result', async () => {
     await writeFile(logFile, `${JSON.stringify(success(planReport))}\n`);
 

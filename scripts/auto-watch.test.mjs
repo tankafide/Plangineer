@@ -6,26 +6,41 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { runMilestone, sessionMilestone, startWatch } from './auto-watch.mjs';
 
 const init = { type: 'system', subtype: 'init', session_id: 'abc' };
+const planReport = {
+  outcome: 'done',
+  branch: 'feat/thing',
+  commits: [],
+  reviewRounds: [],
+  decisions: [],
+  engineerActions: [],
+  planPath: 'docs/plans/thing.md',
+};
 const ended = (report) => ({
   type: 'result',
   subtype: 'success',
   is_error: false,
   structured_output: { report },
 });
+const line = (event) => `${JSON.stringify(event)}\n`;
 
 describe('sessionMilestone', () => {
   it.each([
     ['a start', init, 'Session started: plan'],
-    ['a finished session', ended({ outcome: 'done' }), 'Session ended: plan: done'],
+    ['a finished session', ended(planReport), 'Session ended: plan: done'],
     [
       'a stopped session, with its reason',
-      ended({ outcome: 'stopped', stopReason: 'Cut off' }),
+      ended({ ...planReport, outcome: 'stopped', stopReason: 'Cut off' }),
       'Session ended: plan: stopped: Cut off',
     ],
     [
       'a failed session',
       { type: 'result', subtype: 'success', is_error: true, result: 'Not signed in' },
       'Session failed: plan: success: Not signed in',
+    ],
+    [
+      'a report that does not match its schema',
+      ended({ outcome: 'done' }),
+      'Session failed: plan: its report does not match its schema',
     ],
   ])('names %s', (_, event, milestone) => {
     expect(sessionMilestone('plan', event)).toBe(milestone);
@@ -52,55 +67,70 @@ describe('runMilestone', () => {
 describe('startWatch', () => {
   let root;
   let logDir;
+  let logFile;
 
   const git = (...args) => execa('git', args, { cwd: root });
   const commit = (message) =>
     git('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '--allow-empty', '-qm', message);
+  const watch = () => startWatch({ cwd: root, logDir });
 
   beforeEach(async () => {
     root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'auto-watch-')));
     logDir = path.join(root, 'logs');
+    logFile = path.join(logDir, 'plan.jsonl');
     await mkdir(logDir);
     await git('init', '--quiet');
     await commit('Start');
+    const { stdout: baseCommit } = await git('rev-parse', 'HEAD');
+    await writeFile(path.join(logDir, 'run.json'), JSON.stringify({ baseCommit }));
   });
 
   afterEach(async () => {
     await rm(root, { recursive: true, force: true, maxRetries: 5 });
   });
 
-  it('reports each milestone after it starts, then the end of the run', async () => {
-    const logFile = path.join(logDir, 'implementation.jsonl');
-    const earlier = ended({ outcome: 'stopped', stopReason: 'Old' });
-    await writeFile(logFile, `${JSON.stringify(earlier)}\n`);
-    const watch = await startWatch({ cwd: root, logDir });
+  it('reports what happened since the run began, even when it starts late', async () => {
+    await writeFile(logFile, line(init));
+    await commit('Plan the thing');
 
-    await appendFile(logFile, `${JSON.stringify(init)}\n`);
-    expect(await watch.poll()).toEqual({
-      lines: ['Session started: implementation'],
+    expect(await (await watch()).poll()).toEqual({
+      lines: [expect.stringMatching(/^Commit: [0-9a-f]+ Plan the thing$/), 'Session started: plan'],
       ended: false,
     });
-    await commit('Build the thing');
-    await appendFile(logFile, `${JSON.stringify(ended({ outcome: 'done' }))}\n`);
+  });
+
+  it('reports each milestone once, then the end of the run', async () => {
+    const watcher = await watch();
+    await writeFile(logFile, line(init));
+    expect((await watcher.poll()).lines).toEqual(['Session started: plan']);
+
+    await appendFile(logFile, line(ended(planReport)));
     await writeFile(path.join(logDir, 'outcome.json'), '{"ready":true,"reasons":[]}');
-    expect(await watch.poll()).toEqual({
-      lines: [
-        expect.stringMatching(/^Commit: [0-9a-f]+ Build the thing$/),
-        'Session ended: implementation: done',
-        'Run finished: ready to land',
-      ],
+    expect(await watcher.poll()).toEqual({
+      lines: ['Session ended: plan: done', 'Run finished: ready to land'],
       ended: true,
     });
   });
 
-  it('waits for a line the session is still writing', async () => {
-    const logFile = path.join(logDir, 'plan.jsonl');
-    const watch = await startWatch({ cwd: root, logDir });
+  it('carries on where an earlier watcher of the run stopped', async () => {
+    await writeFile(logFile, line(init));
+    await (await watch()).poll();
+    await commit('Plan the thing');
+    await appendFile(logFile, line(ended(planReport)));
 
+    expect((await (await watch()).poll()).lines).toEqual([
+      expect.stringMatching(/^Commit: [0-9a-f]+ Plan the thing$/),
+      'Session ended: plan: done',
+    ]);
+  });
+
+  it('waits for a line the session is still writing', async () => {
+    const watcher = await watch();
     const event = JSON.stringify(init);
+
     await writeFile(logFile, event.slice(0, 10));
-    expect(await watch.poll()).toEqual({ lines: [], ended: false });
+    expect(await watcher.poll()).toEqual({ lines: [], ended: false });
     await appendFile(logFile, `${event.slice(10)}\n`);
-    expect((await watch.poll()).lines).toEqual(['Session started: plan']);
+    expect((await watcher.poll()).lines).toEqual(['Session started: plan']);
   });
 });

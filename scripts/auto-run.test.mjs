@@ -171,15 +171,16 @@ describe('autoRun', () => {
       'outcome.json',
       'plan.jsonl',
       'request.md',
+      'run.json',
       'settings.md',
     ]);
   });
 
-  it('tells each session to stop the processes it started', async () => {
+  it('tells each session how to start and stop long-running processes', async () => {
     await run({ plan: success(planReport), implementation: success(implementationReport) });
 
     for (const { prompt } of await calls()) {
-      expect(prompt).toContain('Stop every process you started in the background');
+      expect(prompt).toContain("only with the Bash tool's run_in_background");
     }
   });
 

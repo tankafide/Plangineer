@@ -50,21 +50,29 @@ export async function listProcesses() {
 }
 
 /**
- * Adds to tracked (pid to start time) each process in table that a tracked process started after
- * since. A tracked parent whose pid now belongs to a newer process was reused, so its pid no
- * longer counts. Docker processes and their children are left out.
+ * Updates tracked (pid to `{ started, goneAt }`) from table, read at now. A tracked pid that now
+ * belongs to another process was reused, so it is dropped. A tracked pid that is gone is stamped
+ * with the first read that missed it, and only a process started before then can be its child.
+ * Then each process a tracked one started after since is added, except Docker and what it starts.
  */
-export function addDescendants(tracked, table, since) {
+export function updateTracked(tracked, table, { since, now }) {
   const alive = new Map(table.map((row) => [row.pid, row.started]));
-  const isParent = (pid) =>
-    tracked.has(pid) && (!alive.has(pid) || tracked.get(pid) === alive.get(pid));
+  for (const [pid, entry] of tracked) {
+    if (!alive.has(pid)) entry.goneAt ??= now;
+    else if (alive.get(pid) !== entry.started) tracked.delete(pid);
+  }
+  const startedByTracked = (row) => {
+    const parent = tracked.get(row.ppid);
+    if (parent === undefined) return false;
+    return alive.has(row.ppid) || row.started < parent.goneAt + CLOCK_SLACK_MS;
+  };
   let grew = true;
   while (grew) {
     grew = false;
     for (const row of table) {
-      if (tracked.has(row.pid) || !isParent(row.ppid)) continue;
+      if (tracked.has(row.pid) || !startedByTracked(row)) continue;
       if (row.started < since - CLOCK_SLACK_MS || KEEP.test(row.name)) continue;
-      tracked.set(row.pid, row.started);
+      tracked.set(row.pid, { started: row.started, goneAt: undefined });
       grew = true;
     }
   }
@@ -86,40 +94,57 @@ async function stopProcess(pid) {
 
 /**
  * Tracks every process a session starts, by reading the process table while it runs, since an
- * orphan loses its parent on macOS and Linux. `stop` ends the watch and stops each tracked process
- * still running, then returns their pids.
+ * orphan loses its parent on macOS and Linux. A process launched through a shell that exits
+ * between two reads is missed, so sessions start background processes as children that stay.
+ * `stop` ends the watch and stops each tracked process still running. It returns their pids and
+ * every failure to read or stop, which never stops the cleanup.
  */
-export function trackSessionProcesses(rootPid, { pollMs = POLL_MS } = {}) {
+export function trackSessionProcesses(
+  rootPid,
+  { pollMs = POLL_MS, listProcesses: list = listProcesses } = {},
+) {
   const since = Date.now();
   const tracked = new Map();
+  const failures = [];
   const ended = new AbortController();
   const read = async () => {
-    const table = await listProcesses();
+    const table = await list();
     if (!tracked.has(rootPid)) {
-      tracked.set(rootPid, table.find((row) => row.pid === rootPid)?.started);
+      const root = table.find((row) => row.pid === rootPid);
+      tracked.set(rootPid, { started: root?.started, goneAt: undefined });
     }
-    addDescendants(tracked, table, since);
+    updateTracked(tracked, table, { since, now: Date.now() });
     return table;
   };
+  const readOrRecord = () =>
+    read().catch((error) => {
+      failures.push(`Could not read the process table: ${error.message}`);
+      return [];
+    });
   const polling = (async () => {
     while (!ended.signal.aborted) {
-      await read();
+      await readOrRecord();
       await delay(pollMs, undefined, { signal: ended.signal }).catch(() => {});
     }
   })();
-  // A failed read surfaces from stop, not as an unhandled rejection while the session runs.
-  polling.catch(() => {});
 
   return {
     async stop() {
       ended.abort();
       await polling;
-      const table = await read();
-      const running = table.filter(
-        (row) => row.pid !== rootPid && tracked.get(row.pid) === row.started,
+      const running = (await readOrRecord()).filter(
+        (row) => row.pid !== rootPid && tracked.get(row.pid)?.started === row.started,
       );
-      for (const row of running) await stopProcess(row.pid);
-      return running.map((row) => row.pid);
+      const stopped = [];
+      for (const { pid } of running) {
+        try {
+          await stopProcess(pid);
+          stopped.push(pid);
+        } catch (error) {
+          failures.push(`Could not stop process ${pid}: ${error.message}`);
+        }
+      }
+      return { stopped, failures };
     },
   };
 }
